@@ -1,0 +1,77 @@
+# =============================================================================
+# AquaVerse AI — Training Dataset Manifest
+# DOI / URL / version / date-accessed per dataset
+# =============================================================================
+#
+# RULE: Every training run must use datasets listed here.
+# SHA-256 hashes are required and are logged to MLflow as `dataset_hash`.
+# Add a new entry for each new dataset version — never modify existing entries.
+# =============================================================================
+
+datasets:
+  - id: wq_tnfd_nagapattinam_2019_2023
+    name: "Tamil Nadu Fisheries Dept — Water Quality Records Nagapattinam 2019–2023"
+    description: "Hourly water quality logs from government-installed sensors, Nagapattinam district"
+    url: "https://tnfisheries.gov.in/open-data/wq-2019-2023"
+    doi: null
+    version: "2023-12-01"
+    date_accessed: "2024-03-15"
+    format: csv
+    sha256: "PLACEHOLDER_HASH_REPLACE_AFTER_DOWNLOAD"
+    license: "Government Open Data License India v1.0"
+    splits:
+      train_end: "2022-12-31"
+      val_start: "2023-01-01"
+      val_end: "2023-06-30"
+      test_start: "2023-07-01"
+      # RULE: Splits are pond-wise AND time-wise — never random.
+
+  - id: disease_outbreak_mpeda_2018_2023
+    name: "MPEDA — Disease Outbreak Records Tamil Nadu 2018–2023"
+    description: "EMS/AHPND/WSD outbreak events from MPEDA surveillance reports"
+    url: "https://mpeda.gov.in/data/disease-surveillance"
+    doi: null
+    version: "2023-Q4"
+    date_accessed: "2024-02-01"
+    format: xlsx
+    sha256: "PLACEHOLDER_HASH_REPLACE_AFTER_DOWNLOAD"
+    license: "Government Open Data License India v1.0"
+    splits:
+      train_end: "2022-12-31"
+      val_start: "2023-01-01"
+      test_start: "2023-07-01"
+
+  - id: weather_imd_coastal_tn_2018_2023
+    name: "IMD — Coastal Tamil Nadu Weather Station Data 2018–2023"
+    description: "Temperature, rainfall, wind, humidity from IMD coastal stations"
+    url: "https://mausam.imd.gov.in/open-data"
+    doi: null
+    version: "2023-12-31"
+    date_accessed: "2024-01-20"
+    format: csv
+    sha256: "PLACEHOLDER_HASH_REPLACE_AFTER_DOWNLOAD"
+    license: "National Data Sharing and Accessibility Policy (NDSAP)"
+
+  - id: aquaculture_census_tn_2022
+    name: "Tamil Nadu Aquaculture Census 2022"
+    description: "Farm-level metadata: pond area, species, stocking density, district"
+    url: "https://tnfisheries.gov.in/census/2022"
+    doi: null
+    version: "2022"
+    date_accessed: "2024-01-10"
+    format: xlsx
+    sha256: "PLACEHOLDER_HASH_REPLACE_AFTER_DOWNLOAD"
+    license: "Government Open Data License India v1.0"
+
+# =============================================================================
+# Notes on time-series train/test splits
+# =============================================================================
+# RULE (non-negotiable): All train/test splits are pond-wise AND time-wise.
+# Random splits are FORBIDDEN for time-series data. This prevents data leakage
+# across ponds and across time.
+#
+# Standard split used in this project:
+#   Training:   data BEFORE train_end date
+#   Validation: data BETWEEN val_start and val_end
+#   Test:       data AFTER test_start date
+#   Held-out:   last 2 months of available data (never touched during development)

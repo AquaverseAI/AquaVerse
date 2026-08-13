@@ -1,0 +1,39 @@
+{
+  ":443": {
+    "automatic_https": {
+      "disable_redirects": false
+    }
+  }
+}
+
+# AquaVerse AI — Caddy reverse proxy config
+# Replace aquaverse.example.com with your real domain
+
+aquaverse.example.com {
+    reverse_proxy app:8000
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Rate limit /v1/auth and /v1/ask (Caddy rate_limit plugin required)
+    # @auth_or_ask {
+    #     path /v1/auth/* /v1/ask
+    # }
+    # rate_limit @auth_or_ask 10r/m
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# Local development (no TLS)
+:8080 {
+    reverse_proxy app:8000
+}

@@ -1,0 +1,2976 @@
+openapi: 3.1.0
+info:
+  title: AquaVerse AI
+  description: 'Predictive analytics platform for fish/shrimp aquaculture in Tamil
+    Nadu. Two-layer architecture: quantitative core (LightGBM/EBM + temporal models)
+    and reasoning layer (Qwen3-8B + LoRA adapters via vLLM). All numbers originate
+    from the quantitative layer; the reasoning layer is architecturally forbidden
+    from emitting any numeral it did not receive.'
+  contact:
+    name: AquaVerse AI Engineering
+    email: engineering@aquaverse.example.com
+  license:
+    name: Proprietary
+  version: 0.1.0
+paths:
+  /v1/auth/otp/request:
+    post:
+      tags:
+      - Auth
+      summary: Request an OTP for farmer login/registration
+      description: Sends a 6-digit OTP to the farmer's registered phone number via
+        SMS. Rate-limited to 5 requests/minute per phone number.
+      operationId: otp_request_v1_auth_otp_request_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpRequestIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpRequestOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/auth/otp/verify:
+    post:
+      tags:
+      - Auth
+      summary: Verify OTP and receive a JWT
+      description: 'Phase 1: return fixture JWT.
+
+        Phase 3: verify HMAC hash from Redis, issue pond-scoped JWT.'
+      operationId: otp_verify_v1_auth_otp_verify_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpVerifyOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/auth/token:
+    post:
+      tags:
+      - Auth
+      summary: Staff/admin token via Keycloak credentials or code exchange
+      description: 'Phase 1: return fixture token.
+
+        Phase 3: verify against Keycloak, embed district claims.'
+      operationId: token_v1_auth_token_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/logs:
+    post:
+      tags:
+      - Ingest
+      summary: Submit a water quality log entry
+      description: Submit a water quality measurement for a pond. Accepts a `client_log_id`
+        for idempotency — replays return `200` with the original record.
+      operationId: create_log_v1_logs_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Ingest
+      summary: List water quality logs
+      description: 'Phase 1: return empty cursor page fixture.'
+      operationId: list_logs_v1_logs_get
+      parameters:
+      - name: pond_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Pond Id
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_LogOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/media/upload-url:
+    post:
+      tags:
+      - Ingest
+      summary: Request a presigned upload URL
+      description: Returns a presigned S3/R2 PUT URL. The client uploads directly
+        to object storage, then calls POST /v1/media/{media_id}/commit to finalise.
+      operationId: media_upload_url_v1_media_upload_url_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaUploadUrlIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaUploadUrlOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/media/{media_id}/commit:
+    post:
+      tags:
+      - Ingest
+      summary: Commit an uploaded media file
+      description: Mark an upload as committed after the client has PUT the file to
+        the presigned URL.
+      operationId: media_commit_v1_media__media_id__commit_post
+      parameters:
+      - name: media_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Media Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaCommitIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds:
+    get:
+      tags:
+      - Ponds & ML
+      summary: List accessible ponds
+      operationId: list_ponds_v1_ponds_get
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_PondOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds/{pond_id}:
+    get:
+      tags:
+      - Ponds & ML
+      summary: Get pond details
+      operationId: get_pond_v1_ponds__pond_id__get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PondOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds/{pond_id}/timeseries:
+    get:
+      tags:
+      - Ponds & ML
+      summary: Get time-series data for a pond parameter
+      description: Returns hourly aggregated time-series for a single water quality
+        parameter. 12-month, 6-parameter hourly queries must return in <300ms p95.
+      operationId: get_pond_timeseries_v1_ponds__pond_id__timeseries_get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      - name: parameter
+        in: query
+        required: false
+        schema:
+          type: string
+          default: dissolved_oxygen_mgl
+          title: Parameter
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: To Ts
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 200
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PondTimeseriesOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds/{pond_id}/events:
+    get:
+      tags:
+      - Ponds & ML
+      summary: Get event timeline for a pond
+      operationId: get_pond_events_v1_ponds__pond_id__events_get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_PondEventOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds/{pond_id}/risk:
+    get:
+      tags:
+      - Ponds & ML
+      summary: Get current risk score for a pond
+      description: Returns a composite risk score (0–1) produced by the LightGBM/EBM
+        quantitative layer, with per-feature SHAP attributions. Suppression state
+        is always visible.
+      operationId: get_pond_risk_v1_ponds__pond_id__risk_get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/risk/worklist:
+    get:
+      tags:
+      - Ponds & ML
+      summary: Risk worklist for staff — all ponds ranked by risk
+      operationId: get_risk_worklist_v1_risk_worklist_get
+      parameters:
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      - name: risk_level
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Level
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_WorklistItem_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds/{pond_id}/forecast/do:
+    get:
+      tags:
+      - Ponds & ML
+      summary: Dissolved oxygen forecast with uncertainty bands
+      description: 'Returns a 24-hour dissolved oxygen forecast with 10th/50th/90th
+        percentile bands from the temporal model (TCN/TFT/PatchTST). RULE: Bare point
+        estimates are forbidden — bands are always returned.'
+      operationId: get_do_forecast_v1_ponds__pond_id__forecast_do_get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      - name: horizon_hours
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 168
+          minimum: 1
+          default: 24
+          title: Horizon Hours
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/models:
+    get:
+      tags:
+      - Ponds & ML
+      - Models
+      summary: List registered ML models
+      operationId: list_models_v1_models_get
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_ModelOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/models/metrics:
+    get:
+      tags:
+      - Ponds & ML
+      - Models
+      summary: Operational metrics for the model serving layer
+      description: Exposes `rejected_attempts` — the count of LLM responses that were
+        rejected because they contained a numeral not present in the quantitative
+        tool-call payload. This MUST read 0 in steady state.
+      operationId: get_model_metrics_v1_models_metrics_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelMetricsOut'
+  /v1/models/drift:
+    get:
+      tags:
+      - Ponds & ML
+      - Models
+      summary: Model drift reports
+      operationId: get_model_drift_v1_models_drift_get
+      parameters:
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_DriftReport_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/data-quality:
+    get:
+      tags:
+      - Ponds & ML
+      - Data Quality
+      summary: Data quality signals across all ponds
+      operationId: get_data_quality_v1_data_quality_get
+      parameters:
+      - name: pond_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Pond Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataQualityOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/alerts:
+    get:
+      tags:
+      - Alerts
+      summary: List alerts
+      description: Returns alerts with their suppression state always visible. If
+        suppressed=True, suppression_reason explains why (e.g. 'Sensor offline > 4h').
+      operationId: list_alerts_v1_alerts_get
+      parameters:
+      - name: pond_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Pond Id
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+      - name: acked
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Acked
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_AlertOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/alerts/{alert_id}/ack:
+    post:
+      tags:
+      - Alerts
+      summary: Acknowledge an alert
+      operationId: ack_alert_v1_alerts__alert_id__ack_post
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertAckIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAckOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/alerts/{alert_id}/feedback:
+    post:
+      tags:
+      - Alerts
+      summary: Submit feedback on an alert
+      operationId: alert_feedback_v1_alerts__alert_id__feedback_post
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertFeedbackIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertFeedbackOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/reason:
+    post:
+      tags:
+      - Advisory
+      summary: '[INTERNAL] Generate a reasoned advisory from the LLM layer'
+      description: Internal-only endpoint (requires X-Internal-Token header). The
+        LLM output is validated by number_validator.py before being returned. Any
+        numeral in the LLM response that was not present in the tool_call_payload
+        causes rejection and regeneration (server-side, in the request path).
+      operationId: reason_v1_reason_post
+      parameters:
+      - name: X-Internal-Token
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: X-Internal-Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReasonOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ask:
+    post:
+      tags:
+      - Advisory
+      summary: Ask a question about your pond (farmer-facing)
+      description: 'Farmer-facing conversational Q&A. Routes through the full two-layer
+        pipeline: quantitative scores are fetched first, then the reasoning layer
+        generates an explanation using only those numbers. Rate-limited to 30 requests/minute.'
+      operationId: ask_v1_ask_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/advisories:
+    get:
+      tags:
+      - Advisory
+      summary: List published advisories
+      operationId: list_advisories_v1_advisories_get
+      parameters:
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursorPage_AdvisoryOut_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/advisories/broadcast:
+    post:
+      tags:
+      - Advisory
+      summary: Broadcast an advisory to farmers (staff only)
+      operationId: broadcast_advisory_v1_advisories_broadcast_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BroadcastIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdvisoryOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/twin/{pond_id}/state:
+    get:
+      tags:
+      - Digital Twin
+      summary: Get the current digital twin state for a pond
+      description: 'Returns the current state vector. RULE: The response is identical
+        whether backed by real sensors or the simulator. The source is never revealed
+        in the response schema.'
+      operationId: get_twin_state_v1_twin__pond_id__state_get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateVector'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/twin/{pond_id}/whatif:
+    post:
+      tags:
+      - Digital Twin
+      summary: Run a what-if simulation
+      description: Applies the given scenario deltas to the current twin state and
+        returns the simulated outcome. Risk delta indicates how much the risk score
+        would change.
+      operationId: whatif_v1_twin__pond_id__whatif_post
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhatIfScenario'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhatIfOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/geo/ponds:
+    get:
+      tags:
+      - Geo
+      summary: GeoJSON FeatureCollection of all accessible ponds
+      description: Returns a GeoJSON FeatureCollection. Properties include risk_score
+        and suppressed flag. Spatial queries use PostGIS — 'ponds within 2km of shared
+        water source' returns in <200ms.
+      operationId: geo_ponds_v1_geo_ponds_get
+      parameters:
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      - name: risk_level
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Level
+      - name: within_km
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: Filter ponds within this many km of a given point (requires
+            lat/lon params)
+          title: Within Km
+        description: Filter ponds within this many km of a given point (requires lat/lon
+          params)
+      - name: lat
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            maximum: 90
+            minimum: -90
+          - type: 'null'
+          title: Lat
+      - name: lon
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+            maximum: 180
+            minimum: -180
+          - type: 'null'
+          title: Lon
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Geo Ponds V1 Geo Ponds Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/geo/clusters:
+    get:
+      tags:
+      - Geo
+      summary: Space-time outbreak clusters
+      description: Returns detected outbreak clusters using a space-time scan statistic.
+        Each cluster includes the bounding polygon and affected pond IDs.
+      operationId: geo_clusters_v1_geo_clusters_get
+      parameters:
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      - name: days_back
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 365
+          minimum: 1
+          default: 30
+          title: Days Back
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Geo Clusters V1 Geo Clusters Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/translate:
+    post:
+      tags:
+      - i18n
+      summary: Translate text using IndicTrans2 / Bhashini
+      description: Translate text between Indian languages using IndicTrans2 (via
+        Bhashini API). Results are cached in Redis by hash of (source_lang, target_lang,
+        text) with ~90% hit rate target.
+      operationId: translate_v1_translate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/reports/export:
+    get:
+      tags:
+      - Reports
+      summary: Export pond data as PDF or XLSX
+      description: Triggers an async export job. Returns a job_id and a download_url
+        once the export is ready (polled by the client or delivered via SSE).
+      operationId: export_report_v1_reports_export_get
+      parameters:
+      - name: pond_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Pond Id
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          description: pdf | xlsx
+          default: pdf
+          title: Format
+        description: pdf | xlsx
+      - name: from_date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: YYYY-MM-DD
+          title: From Date
+        description: YYYY-MM-DD
+      - name: to_date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: YYYY-MM-DD
+          title: To Date
+        description: YYYY-MM-DD
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/health:
+    get:
+      tags:
+      - Utility
+      summary: Health check
+      operationId: health_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health V1 Health Get
+components:
+  schemas:
+    AdvisoryOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        title:
+          type: string
+          title: Title
+        body:
+          type: string
+          title: Body
+        language:
+          type: string
+          title: Language
+        target_district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target District
+        target_species:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target Species
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        issued_at:
+          type: string
+          format: date-time
+          title: Issued At
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+      type: object
+      required:
+      - id
+      - title
+      - body
+      - language
+      - issued_at
+      title: AdvisoryOut
+    AlertAckIn:
+      properties:
+        note:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Note
+      type: object
+      title: AlertAckIn
+    AlertAckOut:
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+          title: Alert Id
+        acked:
+          type: boolean
+          title: Acked
+        acked_at:
+          type: string
+          format: date-time
+          title: Acked At
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - alert_id
+      - acked
+      - acked_at
+      - message
+      title: AlertAckOut
+    AlertFeedbackIn:
+      properties:
+        useful:
+          type: boolean
+          title: Useful
+        comment:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Comment
+        false_positive:
+          type: boolean
+          title: False Positive
+          default: false
+      type: object
+      required:
+      - useful
+      title: AlertFeedbackIn
+    AlertFeedbackOut:
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+          title: Alert Id
+        feedback_recorded:
+          type: boolean
+          title: Feedback Recorded
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - alert_id
+      - feedback_recorded
+      - message
+      title: AlertFeedbackOut
+    AlertOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        pond_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pond Name
+        alert_type:
+          type: string
+          title: Alert Type
+        severity:
+          type: string
+          title: Severity
+        title:
+          type: string
+          title: Title
+        message:
+          type: string
+          title: Message
+        parameter:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parameter
+        measured_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Measured Value
+        threshold_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Threshold Value
+        suppressed:
+          type: boolean
+          title: Suppressed
+          description: True if this alert is suppressed due to blind state (e.g. sensor
+            offline). Always surfaced — never hidden from the client.
+        suppression_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suppression Reason
+          description: Why the alert is suppressed. Always provided when suppressed=True.
+        acked:
+          type: boolean
+          title: Acked
+        acked_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Acked At
+        risk_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Risk Score
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - pond_id
+      - alert_type
+      - severity
+      - title
+      - message
+      - suppressed
+      - acked
+      - created_at
+      title: AlertOut
+    AskIn:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        question:
+          type: string
+          maxLength: 1000
+          title: Question
+        language:
+          type: string
+          title: Language
+          description: BCP-47 language code
+          default: ta
+        include_tts:
+          type: boolean
+          title: Include Tts
+          description: Return TTS audio URL in response
+          default: false
+      type: object
+      required:
+      - pond_id
+      - question
+      title: AskIn
+    AskOut:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        question:
+          type: string
+          title: Question
+        answer:
+          type: string
+          title: Answer
+        language:
+          type: string
+          title: Language
+        tts_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tts Url
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        rejected_attempts_this_request:
+          type: integer
+          title: Rejected Attempts This Request
+      type: object
+      required:
+      - pond_id
+      - question
+      - answer
+      - language
+      - generated_at
+      - rejected_attempts_this_request
+      title: AskOut
+    BroadcastIn:
+      properties:
+        title:
+          type: string
+          maxLength: 500
+          title: Title
+        body:
+          type: string
+          maxLength: 5000
+          title: Body
+        language:
+          type: string
+          title: Language
+          default: ta
+        target_district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target District
+        target_species:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target Species
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+          description: info | warning | critical
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+      type: object
+      required:
+      - title
+      - body
+      title: BroadcastIn
+    CursorPage_AdvisoryOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AdvisoryOut'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[AdvisoryOut]
+    CursorPage_AlertOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AlertOut'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[AlertOut]
+    CursorPage_DriftReport_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/DriftReport'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[DriftReport]
+    CursorPage_LogOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/LogOut'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[LogOut]
+    CursorPage_ModelOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ModelOut'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[ModelOut]
+    CursorPage_PondEventOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PondEventOut'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[PondEventOut]
+    CursorPage_PondOut_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/PondOut'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[PondOut]
+    CursorPage_WorklistItem_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/WorklistItem'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Opaque cursor for the next page. None when this is the last
+            page.
+        total_hint:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Total Hint
+          description: Optional approximate total — use for progress bars only, not
+            for exact counts (may be stale).
+      type: object
+      required:
+      - items
+      title: CursorPage[WorklistItem]
+    DataQualityOut:
+      properties:
+        pond_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Pond Id
+        total_logs_last_7d:
+          type: integer
+          title: Total Logs Last 7D
+        missing_parameter_rates:
+          additionalProperties:
+            type: number
+          type: object
+          title: Missing Parameter Rates
+        sensor_offline_ponds:
+          type: integer
+          title: Sensor Offline Ponds
+        stale_threshold_hours:
+          type: integer
+          title: Stale Threshold Hours
+        evaluated_at:
+          type: string
+          format: date-time
+          title: Evaluated At
+      type: object
+      required:
+      - total_logs_last_7d
+      - missing_parameter_rates
+      - sensor_offline_ponds
+      - stale_threshold_hours
+      - evaluated_at
+      title: DataQualityOut
+    DriftReport:
+      properties:
+        model_name:
+          type: string
+          title: Model Name
+        model_version:
+          type: string
+          title: Model Version
+        feature_drift:
+          additionalProperties:
+            type: number
+          type: object
+          title: Feature Drift
+        label_drift:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Label Drift
+        alert_threshold:
+          type: number
+          title: Alert Threshold
+        drift_detected:
+          type: boolean
+          title: Drift Detected
+        evaluated_at:
+          type: string
+          format: date-time
+          title: Evaluated At
+      type: object
+      required:
+      - model_name
+      - model_version
+      - feature_drift
+      - alert_threshold
+      - drift_detected
+      - evaluated_at
+      title: DriftReport
+    ForecastOut:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        parameter:
+          type: string
+          title: Parameter
+        horizon_hours:
+          type: integer
+          title: Horizon Hours
+        points:
+          items:
+            $ref: '#/components/schemas/ForecastPoint'
+          type: array
+          title: Points
+        model_version:
+          type: string
+          title: Model Version
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        uncertainty_note:
+          type: string
+          title: Uncertainty Note
+          default: Forecast bands represent the 10th–90th percentile range from the
+            ensemble. Do not use the median alone for management decisions.
+      type: object
+      required:
+      - pond_id
+      - parameter
+      - horizon_hours
+      - points
+      - model_version
+      - generated_at
+      title: ForecastOut
+    ForecastPoint:
+      properties:
+        forecasted_at:
+          type: string
+          format: date-time
+          title: Forecasted At
+        p10:
+          type: number
+          title: P10
+          description: 10th percentile (lower bound)
+        p50:
+          type: number
+          title: P50
+          description: Median forecast
+        p90:
+          type: number
+          title: P90
+          description: 90th percentile (upper bound)
+      type: object
+      required:
+      - forecasted_at
+      - p10
+      - p50
+      - p90
+      title: ForecastPoint
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LogIn:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        recorded_at:
+          type: string
+          format: date-time
+          title: Recorded At
+          description: ISO 8601 with timezone offset
+        client_log_id:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Client Log Id
+          description: Client-generated idempotency key. Replays with the same key
+            return the original record with HTTP 200 instead of creating a duplicate.
+        temperature_c:
+          anyOf:
+          - type: number
+            maximum: 50.0
+            minimum: 0.0
+          - type: 'null'
+          title: Temperature C
+        dissolved_oxygen_mgl:
+          anyOf:
+          - type: number
+            maximum: 30.0
+            minimum: 0.0
+          - type: 'null'
+          title: Dissolved Oxygen Mgl
+        ph:
+          anyOf:
+          - type: number
+            maximum: 14.0
+            minimum: 0.0
+          - type: 'null'
+          title: Ph
+        salinity_ppt:
+          anyOf:
+          - type: number
+            maximum: 60.0
+            minimum: 0.0
+          - type: 'null'
+          title: Salinity Ppt
+        ammonia_nh3_mgl:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Ammonia Nh3 Mgl
+        turbidity_ntu:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Turbidity Ntu
+        nitrite_mgl:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Nitrite Mgl
+        nitrate_mgl:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Nitrate Mgl
+        alkalinity_mgl:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Alkalinity Mgl
+        hardness_mgl:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Hardness Mgl
+        notes:
+          anyOf:
+          - type: string
+            maxLength: 1000
+          - type: 'null'
+          title: Notes
+      type: object
+      required:
+      - pond_id
+      - recorded_at
+      title: LogIn
+    LogOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        recorded_at:
+          type: string
+          format: date-time
+          title: Recorded At
+        temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Temperature C
+        dissolved_oxygen_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Dissolved Oxygen Mgl
+        ph:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ph
+        salinity_ppt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Salinity Ppt
+        ammonia_nh3_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ammonia Nh3 Mgl
+        turbidity_ntu:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Turbidity Ntu
+        nitrite_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Nitrite Mgl
+        nitrate_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Nitrate Mgl
+        alkalinity_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Alkalinity Mgl
+        hardness_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Hardness Mgl
+        source:
+          type: string
+          title: Source
+        client_log_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Log Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - pond_id
+      - recorded_at
+      - source
+      - created_at
+      title: LogOut
+    MediaCommitIn:
+      properties:
+        client_log_id:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Client Log Id
+      type: object
+      title: MediaCommitIn
+    MediaOut:
+      properties:
+        media_id:
+          type: string
+          format: uuid
+          title: Media Id
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        filename:
+          type: string
+          title: Filename
+        mime_type:
+          type: string
+          title: Mime Type
+        size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Size Bytes
+        status:
+          type: string
+          title: Status
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - media_id
+      - pond_id
+      - filename
+      - mime_type
+      - status
+      - created_at
+      title: MediaOut
+    MediaUploadUrlIn:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        filename:
+          type: string
+          maxLength: 500
+          title: Filename
+        mime_type:
+          type: string
+          title: Mime Type
+          description: e.g. image/jpeg, video/mp4
+        size_bytes:
+          anyOf:
+          - type: integer
+            minimum: 1.0
+          - type: 'null'
+          title: Size Bytes
+        client_log_id:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Client Log Id
+      type: object
+      required:
+      - pond_id
+      - filename
+      - mime_type
+      title: MediaUploadUrlIn
+    MediaUploadUrlOut:
+      properties:
+        media_id:
+          type: string
+          format: uuid
+          title: Media Id
+        upload_url:
+          type: string
+          title: Upload Url
+          description: Presigned S3/R2 PUT URL, valid for 15 minutes
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+      type: object
+      required:
+      - media_id
+      - upload_url
+      - expires_at
+      title: MediaUploadUrlOut
+    ModelMetricsOut:
+      properties:
+        rejected_attempts:
+          type: integer
+          title: Rejected Attempts
+          description: Count of LLM responses rejected due to numeral mismatch. Non-zero
+            values indicate a problem with the reasoning layer.
+        total_requests:
+          type: integer
+          title: Total Requests
+        avg_latency_ms:
+          type: number
+          title: Avg Latency Ms
+        p95_latency_ms:
+          type: number
+          title: P95 Latency Ms
+        p99_latency_ms:
+          type: number
+          title: P99 Latency Ms
+        cache_hit_rate:
+          type: number
+          title: Cache Hit Rate
+        as_of:
+          type: string
+          format: date-time
+          title: As Of
+      type: object
+      required:
+      - rejected_attempts
+      - total_requests
+      - avg_latency_ms
+      - p95_latency_ms
+      - p99_latency_ms
+      - cache_hit_rate
+      - as_of
+      title: ModelMetricsOut
+      description: 'Operational metrics for the serving layer.
+
+
+        rejected_attempts: number of LLM responses rejected because they contained
+
+        a numeral not present in the quantitative tool-call payload.
+
+        MUST read 0 in steady state.'
+    ModelOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        model_type:
+          type: string
+          title: Model Type
+        version:
+          type: string
+          title: Version
+        is_active:
+          type: boolean
+          title: Is Active
+        dataset_hash:
+          type: string
+          title: Dataset Hash
+        metrics:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metrics
+        promoted_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Promoted At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - model_type
+      - version
+      - is_active
+      - dataset_hash
+      - created_at
+      title: ModelOut
+    OtpRequestIn:
+      properties:
+        phone:
+          type: string
+          title: Phone
+          description: E.164 format phone number, e.g. +919876543210
+        purpose:
+          type: string
+          title: Purpose
+          description: login | register
+          default: login
+      type: object
+      required:
+      - phone
+      title: OtpRequestIn
+    OtpRequestOut:
+      properties:
+        message:
+          type: string
+          title: Message
+        expires_in_seconds:
+          type: integer
+          title: Expires In Seconds
+        request_id:
+          type: string
+          title: Request Id
+      type: object
+      required:
+      - message
+      - expires_in_seconds
+      - request_id
+      title: OtpRequestOut
+    OtpVerifyIn:
+      properties:
+        request_id:
+          type: string
+          title: Request Id
+        phone:
+          type: string
+          title: Phone
+        otp:
+          type: string
+          maxLength: 8
+          minLength: 4
+          title: Otp
+      type: object
+      required:
+      - request_id
+      - phone
+      - otp
+      title: OtpVerifyIn
+    OtpVerifyOut:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+        role:
+          type: string
+          title: Role
+        is_new_user:
+          type: boolean
+          title: Is New User
+      type: object
+      required:
+      - access_token
+      - expires_in
+      - role
+      - is_new_user
+      title: OtpVerifyOut
+    PondEventOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        event_type:
+          type: string
+          title: Event Type
+        title:
+          type: string
+          title: Title
+        occurred_at:
+          type: string
+          format: date-time
+          title: Occurred At
+        severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
+      type: object
+      required:
+      - id
+      - event_type
+      - title
+      - occurred_at
+      title: PondEventOut
+    PondOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        district:
+          type: string
+          title: District
+        taluk:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Taluk
+        village:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Village
+        area_hectares:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Area Hectares
+        depth_meters:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Depth Meters
+        species:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Species
+        owner_user_id:
+          type: string
+          format: uuid
+          title: Owner User Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - name
+      - district
+      - owner_user_id
+      - created_at
+      - updated_at
+      title: PondOut
+    PondTimeseriesOut:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        parameter:
+          type: string
+          title: Parameter
+        points:
+          items:
+            $ref: '#/components/schemas/PondTimeseriesPoint'
+          type: array
+          title: Points
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+      type: object
+      required:
+      - pond_id
+      - parameter
+      - points
+      title: PondTimeseriesOut
+    PondTimeseriesPoint:
+      properties:
+        recorded_at:
+          type: string
+          format: date-time
+          title: Recorded At
+        temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Temperature C
+        dissolved_oxygen_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Dissolved Oxygen Mgl
+        ph:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ph
+        salinity_ppt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Salinity Ppt
+        ammonia_nh3_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ammonia Nh3 Mgl
+        turbidity_ntu:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Turbidity Ntu
+      type: object
+      required:
+      - recorded_at
+      title: PondTimeseriesPoint
+    ReasonIn:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        adapter:
+          type: string
+          title: Adapter
+          description: 'LoRA adapter to use: m1_chemistry | m2_health | m3_production'
+        tool_call_payload:
+          $ref: '#/components/schemas/ToolCallPayload'
+        context:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Context
+          description: Additional context text (farmer's question, recent observations)
+        language:
+          type: string
+          title: Language
+          description: BCP-47 language code
+          default: ta
+        max_retries:
+          type: integer
+          maximum: 5.0
+          minimum: 1.0
+          title: Max Retries
+          default: 3
+      type: object
+      required:
+      - pond_id
+      - adapter
+      - tool_call_payload
+      title: ReasonIn
+    ReasonOut:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        adapter:
+          type: string
+          title: Adapter
+        explanation:
+          type: string
+          title: Explanation
+          description: Explanation from the reasoning layer. Health/disease language
+            uses 'consistent with X, confirm by Y' phrasing — never a confident diagnosis.
+        rejected_attempts_this_request:
+          type: integer
+          title: Rejected Attempts This Request
+          description: Number of times the validator rejected a response for this
+            request.
+        model_version:
+          type: string
+          title: Model Version
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - pond_id
+      - adapter
+      - explanation
+      - rejected_attempts_this_request
+      - model_version
+      - generated_at
+      title: ReasonOut
+    RiskOut:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        risk_score:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Risk Score
+          description: 0–1 composite risk score
+        risk_level:
+          type: string
+          title: Risk Level
+        components:
+          additionalProperties:
+            type: number
+          type: object
+          title: Components
+          description: 'Per-component risk scores: chemistry, health, production'
+        shap_contributions:
+          items:
+            $ref: '#/components/schemas/ShapContribution'
+          type: array
+          title: Shap Contributions
+        model_version:
+          type: string
+          title: Model Version
+        scored_at:
+          type: string
+          format: date-time
+          title: Scored At
+        suppressed:
+          type: boolean
+          title: Suppressed
+          description: True if sensor data is stale / in blind state. Score may be
+            unreliable — always surface this to the user.
+        suppression_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suppression Reason
+      type: object
+      required:
+      - pond_id
+      - risk_score
+      - risk_level
+      - components
+      - shap_contributions
+      - model_version
+      - scored_at
+      - suppressed
+      title: RiskOut
+    ShapContribution:
+      properties:
+        feature:
+          type: string
+          title: Feature
+        value:
+          type: number
+          title: Value
+        shap_value:
+          type: number
+          title: Shap Value
+        direction:
+          type: string
+          title: Direction
+      type: object
+      required:
+      - feature
+      - value
+      - shap_value
+      - direction
+      title: ShapContribution
+    StateVector:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        as_of:
+          type: string
+          format: date-time
+          title: As Of
+        temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Temperature C
+        dissolved_oxygen_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Dissolved Oxygen Mgl
+        ph:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ph
+        salinity_ppt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Salinity Ppt
+        ammonia_nh3_mgl:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ammonia Nh3 Mgl
+        turbidity_ntu:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Turbidity Ntu
+        biomass_kg_estimated:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Biomass Kg Estimated
+        fcr_estimated:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Fcr Estimated
+        suppressed:
+          type: boolean
+          title: Suppressed
+          description: True if the state vector is in blind state. Always surfaced
+            — never hidden.
+        suppression_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suppression Reason
+      type: object
+      required:
+      - pond_id
+      - as_of
+      - suppressed
+      title: StateVector
+      description: 'Current state of the digital twin for a pond.
+
+        Schema is identical whether backed by real sensors or the simulator.'
+    TokenIn:
+      properties:
+        grant_type:
+          type: string
+          title: Grant Type
+          description: password | refresh_token | keycloak_code
+          default: password
+        username:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Username
+        password:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Password
+        refresh_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refresh Token
+        code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Code
+      type: object
+      title: TokenIn
+    TokenOut:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        refresh_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refresh Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+        role:
+          type: string
+          title: Role
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      type: object
+      required:
+      - access_token
+      - expires_in
+      - role
+      title: TokenOut
+    ToolCallPayload:
+      properties:
+        risk_score:
+          type: number
+          title: Risk Score
+        risk_level:
+          type: string
+          title: Risk Level
+        components:
+          additionalProperties:
+            type: number
+          type: object
+          title: Components
+        shap_contributions:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Shap Contributions
+        forecast_p10:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Forecast P10
+        forecast_p50:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Forecast P50
+        forecast_p90:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Forecast P90
+        raw_measurements:
+          additionalProperties:
+            anyOf:
+            - type: number
+            - type: 'null'
+          type: object
+          title: Raw Measurements
+      type: object
+      required:
+      - risk_score
+      - risk_level
+      - components
+      - shap_contributions
+      title: ToolCallPayload
+      description: 'Quantitative output that must be passed to the reasoning layer.
+
+        Every numeral the LLM is allowed to mention must appear here.'
+    TranslateIn:
+      properties:
+        text:
+          type: string
+          maxLength: 5000
+          title: Text
+        source_lang:
+          type: string
+          title: Source Lang
+          description: BCP-47 language code, e.g. 'en', 'ta'
+          default: en
+        target_lang:
+          type: string
+          title: Target Lang
+          description: BCP-47 language code, e.g. 'ta', 'te', 'ml'
+        include_tts:
+          type: boolean
+          title: Include Tts
+          description: Return TTS audio URL for translated text
+          default: false
+      type: object
+      required:
+      - text
+      - target_lang
+      title: TranslateIn
+    TranslateOut:
+      properties:
+        source_lang:
+          type: string
+          title: Source Lang
+        target_lang:
+          type: string
+          title: Target Lang
+        source_text:
+          type: string
+          title: Source Text
+        translated_text:
+          type: string
+          title: Translated Text
+        cached:
+          type: boolean
+          title: Cached
+          description: True if served from Redis translation cache
+        tts_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tts Url
+          description: URL to TTS audio file (if requested)
+        translated_at:
+          type: string
+          format: date-time
+          title: Translated At
+      type: object
+      required:
+      - source_lang
+      - target_lang
+      - source_text
+      - translated_text
+      - cached
+      - translated_at
+      title: TranslateOut
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    WhatIfOut:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        scenario:
+          $ref: '#/components/schemas/WhatIfScenario'
+        simulated_state:
+          $ref: '#/components/schemas/StateVector'
+        risk_delta:
+          type: number
+          title: Risk Delta
+          description: Change in risk score relative to current baseline (positive
+            = more risk)
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - pond_id
+      - scenario
+      - simulated_state
+      - risk_delta
+      - generated_at
+      title: WhatIfOut
+      description: Simulated state after applying the scenario.
+    WhatIfScenario:
+      properties:
+        delta_temperature_c:
+          anyOf:
+          - type: number
+            maximum: 10.0
+            minimum: -10.0
+          - type: 'null'
+          title: Delta Temperature C
+        delta_dissolved_oxygen_mgl:
+          anyOf:
+          - type: number
+            maximum: 10.0
+            minimum: -10.0
+          - type: 'null'
+          title: Delta Dissolved Oxygen Mgl
+        delta_salinity_ppt:
+          anyOf:
+          - type: number
+            maximum: 20.0
+            minimum: -20.0
+          - type: 'null'
+          title: Delta Salinity Ppt
+        delta_feed_rate_pct:
+          anyOf:
+          - type: number
+            maximum: 200.0
+            minimum: -100.0
+          - type: 'null'
+          title: Delta Feed Rate Pct
+        horizon_hours:
+          type: integer
+          maximum: 168.0
+          minimum: 1.0
+          title: Horizon Hours
+          default: 24
+      type: object
+      title: WhatIfScenario
+      description: What-if simulation inputs.
+    WorklistItem:
+      properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        pond_name:
+          type: string
+          title: Pond Name
+        district:
+          type: string
+          title: District
+        risk_score:
+          type: number
+          title: Risk Score
+        risk_level:
+          type: string
+          title: Risk Level
+        suppressed:
+          type: boolean
+          title: Suppressed
+        suppression_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Suppression Reason
+        last_log_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Last Log At
+      type: object
+      required:
+      - pond_id
+      - pond_name
+      - district
+      - risk_score
+      - risk_level
+      - suppressed
+      title: WorklistItem

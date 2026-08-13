@@ -32,7 +32,7 @@ def test_rejects_mismatched_numeral() -> None:
         print("      This means the guardrail is BROKEN. Do not deploy.")
         sys.exit(1)
     except NumberMismatchError as e:
-        print(f"PASS: Validator correctly REJECTED output containing 0.85")
+        print("PASS: Validator correctly REJECTED output containing 0.85")
         print(f"      Error: {e}")
 
     assert get_rejected_attempts() == 1, (

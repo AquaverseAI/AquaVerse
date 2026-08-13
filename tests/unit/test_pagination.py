@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.core.pagination import CursorPage, clamp_limit, decode_cursor, encode_cursor
 
 
+@pytest.mark.unit
 class TestCursorEncoding:
     def test_roundtrip_string(self) -> None:
         val = "00000000-0000-0000-0000-000000000001"
@@ -26,6 +29,7 @@ class TestCursorEncoding:
         assert decode_cursor("not-valid-base64!!") is None
 
 
+@pytest.mark.unit
 class TestClampLimit:
     def test_default(self) -> None:
         assert clamp_limit(None) == 50
@@ -43,6 +47,7 @@ class TestClampLimit:
         assert clamp_limit(25) == 25
 
 
+@pytest.mark.unit
 class TestCursorPage:
     def test_empty_page(self) -> None:
         page: CursorPage[str] = CursorPage(items=[], next_cursor=None)

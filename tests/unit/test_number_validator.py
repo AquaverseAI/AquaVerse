@@ -27,6 +27,7 @@ def reset_counter() -> None:
 # ---------------------------------------------------------------------------
 # extract_numerals
 # ---------------------------------------------------------------------------
+@pytest.mark.unit
 class TestExtractNumerals:
     def test_integers(self) -> None:
         assert extract_numerals("score is 72 out of 100") == ["72", "100"]
@@ -50,6 +51,7 @@ class TestExtractNumerals:
 # ---------------------------------------------------------------------------
 # build_allowed_set
 # ---------------------------------------------------------------------------
+@pytest.mark.unit
 class TestBuildAllowedSet:
     def test_nested_dict(self) -> None:
         payload = {
@@ -70,6 +72,7 @@ class TestBuildAllowedSet:
 # ---------------------------------------------------------------------------
 # validate_llm_output — the guardrail
 # ---------------------------------------------------------------------------
+@pytest.mark.unit
 class TestValidateLLMOutput:
     def test_valid_output_passes(self) -> None:
         """Output that only uses numbers from the payload should pass."""

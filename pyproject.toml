@@ -117,8 +117,6 @@ select = [
     "PT",       # flake8-pytest-style
 ]
 ignore = [
-    "ANN101",   # self type annotation not required
-    "ANN102",   # cls type annotation not required
     "S101",     # assert allowed in tests
     "B008",     # do not perform function calls in default args (FastAPI Depends)
     "E501",     # line too long

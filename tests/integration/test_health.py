@@ -16,6 +16,7 @@ os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
 os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_health_check(client: AsyncClient) -> None:
     response = await client.get("/v1/health")
@@ -25,6 +26,7 @@ async def test_health_check(client: AsyncClient) -> None:
     assert "version" in data
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_openapi_json_reachable(client: AsyncClient) -> None:
     response = await client.get("/openapi.json")
@@ -34,6 +36,7 @@ async def test_openapi_json_reachable(client: AsyncClient) -> None:
     assert "info" in data
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_all_stub_endpoints_return_non_500(client: AsyncClient) -> None:
     """Smoke test every GET stub endpoint — none should 500."""

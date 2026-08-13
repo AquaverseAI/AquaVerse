@@ -21,6 +21,7 @@ from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
 from app.deps import InternalOnly
 
+
 if TYPE_CHECKING:
     pass
 

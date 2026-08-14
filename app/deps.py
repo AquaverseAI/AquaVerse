@@ -86,13 +86,13 @@ async def get_current_user(
     district = claims.get("district")
 
     # pond_ids may be a list of UUID strings
+    from contextlib import suppress
+
     raw_pond_ids: list[object] = claims.get("pond_ids", [])  # type: ignore[assignment]
     pond_ids: list[UUID] = []
     for pid in raw_pond_ids:
-        try:
+        with suppress(ValueError):
             pond_ids.append(UUID(str(pid)))
-        except ValueError:
-            pass
 
     return TokenPayload(
         sub=sub,

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    pass
 
 from app.config import get_settings
 from app.core.security import create_access_token
@@ -37,10 +41,10 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 # ---------------------------------------------------------------------------
 # Redis helper — lazy singleton
 # ---------------------------------------------------------------------------
-_redis_client = None
+_redis_client: object = None
 
 
-async def _get_redis():  # type: ignore[return]
+async def _get_redis() -> object:
     """Return a shared Redis async client."""
     global _redis_client
     if _redis_client is None:
@@ -88,7 +92,7 @@ async def otp_request(body: OtpRequestIn) -> OtpRequestOut:
         )
 
     try:
-        request_id, raw_otp = await create_otp(body.phone, redis)
+        request_id, raw_otp = await create_otp(body.phone, redis)  # type: ignore[arg-type]
     except RateLimitExceeded as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -117,7 +121,7 @@ async def otp_verify(body: OtpVerifyIn) -> OtpVerifyOut:
     redis = await _get_redis()
 
     try:
-        await verify_otp(body.request_id, body.phone, body.otp, redis)
+        await verify_otp(body.request_id, body.phone, body.otp, redis)  # type: ignore[arg-type]
     except OtpExpiredOrNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

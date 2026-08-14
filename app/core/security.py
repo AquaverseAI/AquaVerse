@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import structlog
 from jose import JWTError, jwt
@@ -62,7 +63,7 @@ def create_access_token(
         "exp": now + timedelta(seconds=expires_in),
         "iss": "aquaverse-backend",
     }
-    return jwt.encode(payload, settings.app_secret_key, algorithm=ALGORITHM_STUB)
+    return cast(str, jwt.encode(payload, settings.app_secret_key, algorithm=ALGORITHM_STUB))
 
 
 def verify_token(token: str) -> dict[str, object]:
@@ -74,7 +75,7 @@ def verify_token(token: str) -> dict[str, object]:
     settings = get_settings()
     try:
         decoded = jwt.decode(token, settings.app_secret_key, algorithms=[ALGORITHM_STUB])
-        return decoded
+        return cast(dict[str, object], decoded)
     except JWTError as exc:
         log.warning("jwt.verification_failed", error=str(exc))
         raise

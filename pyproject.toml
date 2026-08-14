@@ -158,6 +158,8 @@ module = [
     "schemathesis.*",
     "arq.*",
     "geoalchemy2.*",
+    "jose.*",
+    "passlib.*",
 ]
 ignore_missing_imports = true
 

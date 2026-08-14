@@ -51,15 +51,15 @@ run-prod: ## Start the production server (2 workers, no reload)
 
 .PHONY: migrate
 migrate: ## Run all pending Alembic migrations
-	$(ALEMBIC) upgrade head
+	set -a; [ -f .env ] && . ./.env; set +a; $(ALEMBIC) upgrade head
 
 .PHONY: migrate-down
 migrate-down: ## Roll back the last migration
-	$(ALEMBIC) downgrade -1
+	set -a; [ -f .env ] && . ./.env; set +a; $(ALEMBIC) downgrade -1
 
 .PHONY: seed
 seed: ## Seed the database with test users and sample data
-	$(PYTHON) scripts/seed_db.py
+	set -a; [ -f .env ] && . ./.env; set +a; $(PYTHON) scripts/seed_db.py
 
 .PHONY: db-setup
 db-setup: migrate seed ## Run migrations + seed in one step

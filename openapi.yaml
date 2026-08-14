@@ -1,0 +1,598 @@
+openapi: 3.0.3
+info:
+  title: AquaVerse AI API Contract
+  version: 1.0.0
+  description: Executable API contract for AquaVerse AI analyst dashboard, mobile client, digital twin, and M1/M2/M3 reasoning adapters.
+paths:
+  /v1/auth/token:
+    post:
+      summary: Staff login
+      operationId: loginToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Keycloak role-scoped JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string }
+                  role: { type: string }
+
+  /v1/ponds:
+    get:
+      summary: Paginated list of ponds
+      operationId: listPonds
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: district
+          in: query
+          schema: { type: string }
+        - name: taluk
+          in: query
+          schema: { type: string }
+        - name: species
+          in: query
+          schema: { type: string }
+        - name: doc_band
+          in: query
+          schema: { type: string }
+        - name: risk_band
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated pond list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PondRecord' }
+                  next_cursor: { type: string, nullable: true }
+
+  /v1/ponds/{pond_id}:
+    get:
+      summary: Full pond detail
+      operationId: getPondDetail
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Full pond record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PondRecord' }
+
+  /v1/ponds/{pond_id}/timeseries:
+    get:
+      summary: Multi-parameter timeseries
+      operationId: getPondTimeseries
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string }
+        - name: to
+          in: query
+          schema: { type: string }
+        - name: params
+          in: query
+          schema: { type: string }
+        - name: agg
+          in: query
+          schema: { type: string, enum: [raw, hourly, daily] }
+      responses:
+        '200':
+          description: Multi-parameter series payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timestamps: { type: array, items: { type: string } }
+                  series:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: { type: number, nullable: true }
+
+  /v1/ponds/{pond_id}/events:
+    get:
+      summary: Annotation events stream
+      operationId: getPondEvents
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of pond events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PondEvent' }
+
+  /v1/ponds/{pond_id}/risk:
+    get:
+      summary: Current calibrated risk with explanation payload
+      operationId: getPondRisk
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Calibrated risk & explanation payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExplanationPayload' }
+
+  /v1/risk/worklist:
+    get:
+      summary: Fleet triage list sorted by risk x biomass-at-stake
+      operationId: getRiskWorklist
+      responses:
+        '200':
+          description: Sorted triage list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TriageItem' }
+
+  /v1/ponds/{pond_id}/forecast/do:
+    get:
+      summary: Dissolved oxygen forecast with 24-72h quantile ribbon
+      operationId: getDOForecast
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Forecast series with 04:00 minimum
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DOForecast' }
+
+  /v1/geo/ponds:
+    get:
+      summary: GeoJSON FeatureCollection of pond markers
+      operationId: getGeoPonds
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/geo/clusters:
+    get:
+      summary: Outbreak clusters with water-source topology
+      operationId: getGeoClusters
+      responses:
+        '200':
+          description: Outbreak cluster features and topology edges
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/twin/{pond_id}/state:
+    get:
+      summary: Digital twin state vector at time t
+      operationId: getTwinState
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Twin state vector
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TwinState' }
+
+  /v1/twin/{pond_id}/whatif:
+    post:
+      summary: Re-run simulator server-side under intervention
+      operationId: runTwinWhatIf
+      parameters:
+        - name: pond_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                water_exchange_rate: { type: number }
+                aeration_hours: { type: number }
+                feed_reduction_pct: { type: number }
+      responses:
+        '200':
+          description: Updated state series under intervention
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TwinState' }
+
+  /v1/reason:
+    post:
+      summary: Internal reasoning call using hot-swapped LoRA adapters
+      operationId: getReasoning
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pond_id, adapter]
+              properties:
+                pond_id: { type: string }
+                adapter:
+                  type: string
+                  enum: [m1_chemistry, m2_health, m3_production]
+      responses:
+        '200':
+          description: M1/M2/M3 reasoning response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  explanation: { type: string }
+                  reasoning_trace: { type: string }
+                  recommendations: { type: array, items: { type: string } }
+
+  /v1/alerts:
+    get:
+      summary: Alert feed including suppressed alerts
+      operationId: getAlerts
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AlertItem' }
+
+  /v1/alerts/{alert_id}/ack:
+    post:
+      summary: Acknowledge an alert
+      operationId: ackAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ack status
+          content:
+            application/json:
+              schema: { type: object, properties: { success: { type: boolean } } }
+
+  /v1/alerts/{alert_id}/feedback:
+    post:
+      summary: Ground truth feedback (correct | incorrect)
+      operationId: alertFeedback
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [feedback]
+              properties:
+                feedback: { type: string, enum: [correct, incorrect] }
+      responses:
+        '200':
+          description: Feedback recorded
+          content:
+            application/json:
+              schema: { type: object, properties: { recorded: { type: boolean } } }
+
+  /v1/advisories:
+    get:
+      summary: Advisory history
+      operationId: getAdvisories
+      responses:
+        '200':
+          description: Advisory log
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AdvisoryItem' }
+
+  /v1/advisories/broadcast:
+    post:
+      summary: Broadcast advisory after human approval
+      operationId: broadcastAdvisory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_segment, text_en, approved_by]
+              properties:
+                target_segment: { type: string }
+                text_en: { type: string }
+                approved_by: { type: string }
+      responses:
+        '200':
+          description: Advisory broadcast status
+          content:
+            application/json:
+              schema: { type: object, properties: { broadcast_id: { type: string }, status: { type: string } } }
+
+  /v1/models:
+    get:
+      summary: Model registry and changelog
+      operationId: getModels
+      responses:
+        '200':
+          description: Model registry state
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/models/metrics:
+    get:
+      summary: Calibration curves and performance metrics
+      operationId: getModelMetrics
+      responses:
+        '200':
+          description: Calibration & metric payload
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/models/drift:
+    get:
+      summary: Population stability index (PSI) feature & concept drift
+      operationId: getModelDrift
+      responses:
+        '200':
+          description: Drift payload
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/data-quality:
+    get:
+      summary: Per-pond data quality, stuck values, and blind-state register
+      operationId: getDataQuality
+      responses:
+        '200':
+          description: Data quality summary
+          content:
+            application/json:
+              schema: { type: object }
+
+  /v1/translate:
+    post:
+      summary: IndicTrans2 translation service (English -> Tamil/Telugu/Hindi)
+      operationId: translateText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, target_lang]
+              properties:
+                text: { type: string }
+                target_lang: { type: string, enum: [ta, te, hi] }
+      responses:
+        '200':
+          description: Translated output with cache status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  translated_text: { type: string }
+                  cached: { type: boolean }
+
+  /v1/reports/export:
+    get:
+      summary: Export PDF or XLSX in official government letterhead format
+      operationId: exportReport
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [pdf, xlsx], default: pdf }
+        - name: district
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: File download trigger
+          content:
+            application/json:
+              schema: { type: object, properties: { download_url: { type: string } } }
+
+components:
+  schemas:
+    PondRecord:
+      type: object
+      properties:
+        pond_id: { type: string }
+        farmer_name: { type: string }
+        district: { type: string }
+        taluk: { type: string }
+        species: { type: string }
+        doc: { type: integer }
+        area_ha: { type: number }
+        depth_m: { type: number }
+        water_source: { type: string }
+        biomass_kg: { type: number }
+        current_risk: { type: number }
+        risk_band: { type: string }
+
+    PondEvent:
+      type: object
+      properties:
+        event_id: { type: string }
+        timestamp: { type: string }
+        type: { type: string, enum: [feed, water_exchange, rain, mortality, treatment] }
+        title: { type: string }
+        details: { type: string }
+
+    ExplanationPayload:
+      type: object
+      required: [pond_id, as_of, model_version, risk, risk_delta_24h, blind_state]
+      properties:
+        pond_id: { type: string }
+        as_of: { type: string }
+        model_version:
+          type: object
+          properties:
+            numeric: { type: string }
+            adapter: { type: string }
+        risk: { type: number }
+        risk_delta_24h: { type: number }
+        calibration:
+          type: object
+          properties:
+            brier_1m: { type: number }
+            reliability: { type: string }
+        modality_gate:
+          type: object
+          properties:
+            timeseries: { type: number }
+            image: { type: number }
+            static: { type: number }
+        top_temporal_features:
+          type: array
+          items:
+            type: object
+            properties:
+              feature: { type: string }
+              value: { type: number }
+              unit: { type: string }
+              attribution: { type: number }
+              window: { type: string }
+        concepts:
+          type: object
+          additionalProperties: { type: number }
+        image_age_hours: { type: number }
+        nearest_cases:
+          type: array
+          items:
+            type: object
+            properties:
+              pond: { type: string }
+              outcome: { type: string }
+              similarity: { type: number }
+        blind_state: { type: boolean }
+        suppression_reason: { type: string, nullable: true }
+
+    TriageItem:
+      type: object
+      properties:
+        pond_id: { type: string }
+        farmer_name: { type: string }
+        district: { type: string }
+        species: { type: string }
+        doc: { type: integer }
+        biomass_kg: { type: number }
+        risk: { type: number }
+        risk_delta_24h: { type: number }
+        risk_biomass_score: { type: number }
+        top_driver: { type: string }
+        last_contact: { type: string }
+        data_health: { type: string }
+        blind_state: { type: boolean }
+
+    DOForecast:
+      type: object
+      properties:
+        pond_id: { type: string }
+        timestamps: { type: array, items: { type: string } }
+        forecast_p50: { type: array, items: { type: number } }
+        forecast_p10: { type: array, items: { type: number } }
+        forecast_p90: { type: array, items: { type: number } }
+        overnight_minimum_0400: { type: number }
+        confidence_level: { type: string }
+
+    TwinState:
+      type: object
+      properties:
+        pond_id: { type: string }
+        timestamp: { type: string }
+        do_mg_l: { type: number }
+        ph: { type: number }
+        temp_c: { type: number }
+        tan_mg_l: { type: number }
+        no2_mg_l: { type: number }
+        salinity_ppt: { type: number }
+        alkalinity_mg_l: { type: number }
+        biomass_kg: { type: number }
+        water_clarity_cm: { type: number }
+
+    AlertItem:
+      type: object
+      properties:
+        alert_id: { type: string }
+        pond_id: { type: string }
+        district: { type: string }
+        timestamp: { type: string }
+        severity: { type: string }
+        title: { type: string }
+        message: { type: string }
+        suppressed: { type: boolean }
+        suppression_reason: { type: string, nullable: true }
+        acknowledged: { type: boolean }
+
+    AdvisoryItem:
+      type: object
+      properties:
+        advisory_id: { type: string }
+        timestamp: { type: string }
+        target_segment: { type: string }
+        text_en: { type: string }
+        text_ta: { type: string }
+        approved_by: { type: string }
+        delivered_count: { type: integer }
+        read_count: { type: integer }

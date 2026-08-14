@@ -60,6 +60,12 @@ def get_engine() -> AsyncEngine:
     return _engine
 
 
+def get_async_session() -> AsyncSession:
+    if AsyncSessionLocal is None:
+        raise RuntimeError("Database not initialised. Call init_db() first.")
+    return AsyncSessionLocal()
+
+
 def _redact_url(url: str) -> str:
     """Hide password from log output."""
     from urllib.parse import urlparse, urlunparse

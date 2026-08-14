@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 from app.config import get_settings
 from app.core.security import create_access_token
 from app.db.models.user import User
-from app.db.session import AsyncSessionLocal
 from app.deps import CurrentUser
 from app.identity.otp import (
     OtpExpiredOrNotFound,
@@ -74,7 +73,9 @@ async def otp_request(body: OtpRequestIn) -> OtpRequestOut:
     redis = await _get_redis()
 
     # Check user exists
-    async with AsyncSessionLocal() as db:
+    from app.db.session import get_async_session
+
+    async with get_async_session() as db:
         result = await db.execute(select(User).where(User.phone == body.phone))
         user = result.scalar_one_or_none()
 
@@ -134,7 +135,9 @@ async def otp_verify(body: OtpVerifyIn) -> OtpVerifyOut:
         ) from exc
 
     # Load user after successful verification
-    async with AsyncSessionLocal() as db:
+    from app.db.session import get_async_session
+
+    async with get_async_session() as db:
         result = await db.execute(select(User).where(User.phone == body.phone))
         user = result.scalar_one_or_none()
 
@@ -184,7 +187,9 @@ async def token(body: TokenIn) -> TokenOut:
             detail="grant_type must be 'password' and username + password are required.",
         )
 
-    async with AsyncSessionLocal() as db:
+    from app.db.session import get_async_session
+
+    async with get_async_session() as db:
         result = await db.execute(
             select(User).where(User.username == body.username)
         )

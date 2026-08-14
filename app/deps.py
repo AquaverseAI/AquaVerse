@@ -8,7 +8,6 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
-from app.db.session import AsyncSessionLocal
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -20,7 +19,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async DB session and close it when the request finishes."""
-    async with AsyncSessionLocal() as session:
+    from app.db.session import get_async_session
+
+    async with get_async_session() as session:
         try:
             yield session
             await session.commit()

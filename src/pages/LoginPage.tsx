@@ -8,11 +8,58 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'light', onToggleTheme }) => {
+  const [authMode, setAuthMode] = useState<'keycloak' | 'otp'>('keycloak');
   const [username, setUsername] = useState('suchit.analyst@aquaverse.gov.tn');
   const [password, setPassword] = useState('••••••••••••');
-  const [role, setRole] = useState<'analyst' | 'extension_officer' | 'department_admin'>('analyst');
+  const [phone, setPhone] = useState('9876543210');
+  const [otpCode, setOtpCode] = useState('');
+  const [txnId, setTxnId] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [role, setRole] = useState<'analyst' | 'extension_officer' | 'farmer'>('analyst');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleRequestOtp = async () => {
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/v1/auth/otp/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      setTxnId(data.txn_id || `txn_${Date.now()}`);
+      setOtpSent(true);
+    } catch (err: any) {
+      setErrorMsg('Failed to send OTP code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/v1/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp: otpCode, txn_id: txnId }),
+      });
+      const data = await res.json();
+      onLoginSuccess({
+        username: data.farmer_name || `Farmer (${phone})`,
+        role: 'farmer',
+        token: data.access_token || 'mock-jwt-farmer-token',
+      });
+    } catch (err: any) {
+      setErrorMsg('Invalid OTP code. Try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleFillDemo = () => {
     setUsername('suchit.analyst@aquaverse.gov.tn');
@@ -84,6 +131,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
           </p>
         </div>
 
+        {/* Auth Mode Toggle Tabs */}
+        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-950 p-1 border border-slate-200 dark:border-slate-800 text-xs font-semibold">
+          <button
+            onClick={() => setAuthMode('keycloak')}
+            className={`flex-1 py-2 rounded-lg transition-all ${
+              authMode === 'keycloak'
+                ? 'bg-blue-600 text-white shadow-sm font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            Keycloak RBAC (Staff)
+          </button>
+          <button
+            onClick={() => setAuthMode('otp')}
+            className={`flex-1 py-2 rounded-lg transition-all ${
+              authMode === 'otp'
+                ? 'bg-blue-600 text-white shadow-sm font-bold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            Farmer Mobile OTP
+          </button>
+        </div>
+
         {/* Error Callout */}
         {errorMsg && (
           <div className="p-3 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/80 rounded-lg text-xs text-red-700 dark:text-red-300 font-mono text-center">
@@ -91,23 +162,65 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Username / Staff Email */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Staff Email / Keycloak ID</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+        {authMode === 'otp' ? (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Mobile Phone Number</label>
               <input
-                type="email"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="name@aquaverse.gov.tn"
-                className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-xs focus:outline-none focus:border-blue-600 font-mono transition-all"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-xs font-mono"
+                placeholder="+91 98765 43210"
               />
             </div>
-          </div>
+            {otpSent ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">6-Digit OTP Code</label>
+                <input
+                  type="text"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-xs font-mono tracking-widest text-center font-bold text-blue-600 dark:text-cyan-400 text-base"
+                  placeholder="1 2 3 4 5 6"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleRequestOtp}
+                disabled={isLoading}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                Send Verification OTP Code
+              </button>
+            )}
+            {otpSent && (
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                Verify &amp; Login as Farmer <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+          </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Staff Email / Keycloak ID</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="email"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="name@aquaverse.gov.tn"
+                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-xs focus:outline-none focus:border-blue-600 font-mono transition-all"
+                />
+              </div>
+            </div>
 
           {/* Password */}
           <div className="space-y-1.5">
@@ -155,6 +268,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
             )}
           </button>
         </form>
+        )}
 
         {/* Demo Fill Helper */}
         <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">

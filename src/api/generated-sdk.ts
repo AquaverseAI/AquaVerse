@@ -16,6 +16,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/otp/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request OTP for farmer phone login */
+        post: operations["requestOTP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/otp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify OTP code and issue JWT token */
+        post: operations["verifyOTP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ponds": {
         parameters: {
             query?: never;
@@ -84,6 +118,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Water-quality telemetry & manual log ingestion */
+        post: operations["ingestLog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/presign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate MinIO / R2 presigned URL for pond imagery & sensor uploads */
+        post: operations["presignMediaUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/media/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit uploaded media asset to pond metadata */
+        post: operations["commitMediaUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/ponds/{pond_id}/risk": {
         parameters: {
             query?: never;
@@ -127,6 +212,23 @@ export interface paths {
         };
         /** Dissolved oxygen forecast with 24-72h quantile ribbon */
         get: operations["getDOForecast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/forecast/temporal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Multi-variable temporal forecast (TFT / TCN / PatchTST) */
+        get: operations["getTemporalForecast"];
         put?: never;
         post?: never;
         delete?: never;
@@ -214,6 +316,23 @@ export interface paths {
         put?: never;
         /** Internal reasoning call using hot-swapped LoRA adapters */
         post: operations["getReasoning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Farmer-facing conversational Q&A endpoint powered by vLLM (Qwen3-8B) */
+        post: operations["askFarmerAssistant"];
         delete?: never;
         options?: never;
         head?: never;
@@ -529,6 +648,66 @@ export interface components {
             delivered_count?: number;
             read_count?: number;
         };
+        WaterQualityLog: {
+            pond_id: string;
+            timestamp?: string;
+            do_mg_l: number;
+            ph: number;
+            temp_c: number;
+            tan_mg_l?: number;
+            salinity_ppt?: number;
+            notes?: string;
+            /** @enum {string} */
+            source?: "manual" | "iot_sensor" | "drone_flyover";
+        };
+        PresignRequest: {
+            pond_id: string;
+            filename: string;
+            content_type: string;
+            /** @enum {string} */
+            category?: "water_sample" | "microscopic_slide" | "pond_perimeter" | "disease_observation";
+        };
+        PresignResponse: {
+            upload_url?: string;
+            asset_key?: string;
+            expires_at?: string;
+        };
+        MediaCommit: {
+            pond_id: string;
+            asset_key: string;
+            caption?: string;
+        };
+        TemporalForecastPayload: {
+            pond_id?: string;
+            model_family?: string;
+            horizon_hours?: number;
+            timestamps?: string[];
+            forecast_do?: number[];
+            forecast_ph?: number[];
+            forecast_temp?: number[];
+            confidence_interval?: {
+                do_p10?: number[];
+                do_p90?: number[];
+            };
+        };
+        AskQuery: {
+            question: string;
+            pond_id?: string;
+            /**
+             * @default en
+             * @enum {string}
+             */
+            lang: "en" | "ta" | "te" | "hi";
+            /** @default false */
+            voice_tts: boolean;
+        };
+        AskResponse: {
+            answer?: string;
+            translated_answer?: string;
+            audio_url?: string | null;
+            confidence?: number;
+            sources?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -564,6 +743,68 @@ export interface operations {
                         access_token?: string;
                         token_type?: string;
                         role?: string;
+                    };
+                };
+            };
+        };
+    };
+    requestOTP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    phone: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OTP request sent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        status?: string;
+                        txn_id?: string;
+                    };
+                };
+            };
+        };
+    };
+    verifyOTP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    phone: string;
+                    otp: string;
+                    txn_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verified farmer JWT token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        access_token?: string;
+                        token_type?: string;
+                        role?: string;
+                        farmer_name?: string;
                     };
                 };
             };
@@ -676,6 +917,85 @@ export interface operations {
             };
         };
     };
+    ingestLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaterQualityLog"];
+            };
+        };
+        responses: {
+            /** @description Log ingested successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        log_id?: string;
+                        status?: string;
+                        timestamp?: string;
+                    };
+                };
+            };
+        };
+    };
+    presignMediaUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresignRequest"];
+            };
+        };
+        responses: {
+            /** @description Presigned upload URL generated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresignResponse"];
+                };
+            };
+        };
+    };
+    commitMediaUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaCommit"];
+            };
+        };
+        responses: {
+            /** @description Media committed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        asset_id?: string;
+                        status?: string;
+                    };
+                };
+            };
+        };
+    };
     getPondRisk: {
         parameters: {
             query?: never;
@@ -736,6 +1056,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DOForecast"];
+                };
+            };
+        };
+    };
+    getTemporalForecast: {
+        parameters: {
+            query: {
+                pond_id: string;
+                model_family?: "TFT" | "TCN" | "PatchTST";
+                horizon_hours?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Temporal multi-variable forecast payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporalForecastPayload"];
                 };
             };
         };
@@ -860,6 +1204,30 @@ export interface operations {
                         reasoning_trace?: string;
                         recommendations?: string[];
                     };
+                };
+            };
+        };
+    };
+    askFarmerAssistant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskQuery"];
+            };
+        };
+        responses: {
+            /** @description Farmer assistant response with optional Indic translation & audio TTS */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskResponse"];
                 };
             };
         };

@@ -30,6 +30,58 @@ paths:
                   token_type: { type: string }
                   role: { type: string }
 
+  /v1/auth/otp/request:
+    post:
+      summary: Request OTP for farmer phone login
+      operationId: requestOTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string }
+      responses:
+        '200':
+          description: OTP request sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  txn_id: { type: string }
+
+  /v1/auth/otp/verify:
+    post:
+      summary: Verify OTP code and issue JWT token
+      operationId: verifyOTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp, txn_id]
+              properties:
+                phone: { type: string }
+                otp: { type: string }
+                txn_id: { type: string }
+      responses:
+        '200':
+          description: Verified farmer JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token: { type: string }
+                  token_type: { type: string }
+                  role: { type: string }
+                  farmer_name: { type: string }
+
   /v1/ponds:
     get:
       summary: Paginated list of ponds
@@ -139,6 +191,63 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/PondEvent' }
 
+  /v1/logs:
+    post:
+      summary: Water-quality telemetry & manual log ingestion
+      operationId: ingestLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WaterQualityLog' }
+      responses:
+        '201':
+          description: Log ingested successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  log_id: { type: string }
+                  status: { type: string }
+                  timestamp: { type: string }
+
+  /v1/media/presign:
+    post:
+      summary: Generate MinIO / R2 presigned URL for pond imagery & sensor uploads
+      operationId: presignMediaUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PresignRequest' }
+      responses:
+        '200':
+          description: Presigned upload URL generated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PresignResponse' }
+
+  /v1/media/commit:
+    post:
+      summary: Commit uploaded media asset to pond metadata
+      operationId: commitMediaUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MediaCommit' }
+      responses:
+        '200':
+          description: Media committed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  asset_id: { type: string }
+                  status: { type: string }
+
   /v1/ponds/{pond_id}/risk:
     get:
       summary: Current calibrated risk with explanation payload
@@ -183,6 +292,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DOForecast' }
+
+  /v1/forecast/temporal:
+    get:
+      summary: Multi-variable temporal forecast (TFT / TCN / PatchTST)
+      operationId: getTemporalForecast
+      parameters:
+        - name: pond_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: model_family
+          in: query
+          schema: { type: string, enum: [TFT, TCN, PatchTST], default: TFT }
+        - name: horizon_hours
+          in: query
+          schema: { type: integer, default: 72 }
+      responses:
+        '200':
+          description: Temporal multi-variable forecast payload
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemporalForecastPayload' }
 
   /v1/geo/ponds:
     get:
@@ -275,6 +406,22 @@ paths:
                   explanation: { type: string }
                   reasoning_trace: { type: string }
                   recommendations: { type: array, items: { type: string } }
+
+  /v1/ask:
+    post:
+      summary: Farmer-facing conversational Q&A endpoint powered by vLLM (Qwen3-8B)
+      operationId: askFarmerAssistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AskQuery' }
+      responses:
+        '200':
+          description: Farmer assistant response with optional Indic translation & audio TTS
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AskResponse' }
 
   /v1/alerts:
     get:
@@ -596,3 +743,75 @@ components:
         approved_by: { type: string }
         delivered_count: { type: integer }
         read_count: { type: integer }
+
+    WaterQualityLog:
+      type: object
+      required: [pond_id, do_mg_l, ph, temp_c]
+      properties:
+        pond_id: { type: string }
+        timestamp: { type: string }
+        do_mg_l: { type: number }
+        ph: { type: number }
+        temp_c: { type: number }
+        tan_mg_l: { type: number }
+        salinity_ppt: { type: number }
+        notes: { type: string }
+        source: { type: string, enum: [manual, iot_sensor, drone_flyover] }
+
+    PresignRequest:
+      type: object
+      required: [pond_id, filename, content_type]
+      properties:
+        pond_id: { type: string }
+        filename: { type: string }
+        content_type: { type: string }
+        category: { type: string, enum: [water_sample, microscopic_slide, pond_perimeter, disease_observation] }
+
+    PresignResponse:
+      type: object
+      properties:
+        upload_url: { type: string }
+        asset_key: { type: string }
+        expires_at: { type: string }
+
+    MediaCommit:
+      type: object
+      required: [pond_id, asset_key]
+      properties:
+        pond_id: { type: string }
+        asset_key: { type: string }
+        caption: { type: string }
+
+    TemporalForecastPayload:
+      type: object
+      properties:
+        pond_id: { type: string }
+        model_family: { type: string }
+        horizon_hours: { type: integer }
+        timestamps: { type: array, items: { type: string } }
+        forecast_do: { type: array, items: { type: number } }
+        forecast_ph: { type: array, items: { type: number } }
+        forecast_temp: { type: array, items: { type: number } }
+        confidence_interval:
+          type: object
+          properties:
+            do_p10: { type: array, items: { type: number } }
+            do_p90: { type: array, items: { type: number } }
+
+    AskQuery:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string }
+        pond_id: { type: string }
+        lang: { type: string, enum: [en, ta, te, hi], default: en }
+        voice_tts: { type: boolean, default: false }
+
+    AskResponse:
+      type: object
+      properties:
+        answer: { type: string }
+        translated_answer: { type: string }
+        audio_url: { type: string, nullable: true }
+        confidence: { type: number }
+        sources: { type: array, items: { type: string } }

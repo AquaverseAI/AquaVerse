@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import ReactECharts from 'echarts-for-react';
-import { Activity, Sliders, Wind } from 'lucide-react';
+import { Activity, Sliders, Wind, MessageSquare, Database, Sparkles } from 'lucide-react';
 import { ExplanationCard } from '../components/common/ExplanationCard';
+import { LogIngestionModal } from '../components/common/LogIngestionModal';
+import { AskFarmerModal } from '../components/common/AskFarmerModal';
 
 interface PondDeepDiveProps {
   pondId: string;
@@ -11,6 +13,10 @@ interface PondDeepDiveProps {
 
 export const PondDeepDive: React.FC<PondDeepDiveProps> = ({ pondId, theme = 'light' }) => {
   const isDark = theme === 'dark';
+
+  // Modal Visibility States
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [isAskModalOpen, setIsAskModalOpen] = useState(false);
 
   // What-If Intervention State
   const [aerationHours, setAerationHours] = useState(8);
@@ -205,19 +211,41 @@ export const PondDeepDive: React.FC<PondDeepDiveProps> = ({ pondId, theme = 'lig
   return (
     <div className="space-y-4">
       {/* Header Banner */}
-      <div className="glass-panel p-4 rounded-xl border border-blue-200 dark:border-cyan-900/40 bg-white dark:bg-slate-900 flex items-center justify-between shadow-sm">
+      <div className="glass-panel p-4 rounded-xl border border-blue-200 dark:border-cyan-900/40 bg-white dark:bg-slate-900 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 font-mono">Pond Deep Dive: {pondId}</h2>
             <span className="text-xs px-2.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-800 font-mono font-bold">
-              Nagapattinam District | P. vannamei | DOC 45
+              Coimbatore District | Noyyal Basin | P. vannamei
             </span>
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 font-sans">
-            Synchronized multi-parameter sensor curves with overlaid event annotations, 24–72h DO forecast uncertainty ribbon, and Digital Twin what-if simulator.
+            Synchronized multi-parameter sensor curves, 24–72h DO forecast ribbon, and Digital Twin what-if simulator.
           </p>
         </div>
+
+        {/* Action Triggers */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsLogModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm font-mono"
+          >
+            <Database className="w-3.5 h-3.5" />
+            Ingest Telemetry Log (/v1/logs)
+          </button>
+          <button
+            onClick={() => setIsAskModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm font-mono"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Ask AI Assistant (/v1/ask)
+          </button>
+        </div>
       </div>
+
+      {/* Modals */}
+      <LogIngestionModal pondId={pondId} isOpen={isLogModalOpen} onClose={() => setIsLogModalOpen(false)} />
+      <AskFarmerModal pondId={pondId} isOpen={isAskModalOpen} onClose={() => setIsAskModalOpen(false)} />
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">

@@ -26,6 +26,11 @@ class OtpRequestOut(BaseModel):
     message: str
     expires_in_seconds: int
     request_id: str  # opaque ID used to correlate verify call
+    # Dev-mode only — None in production
+    dev_otp: str | None = Field(
+        default=None,
+        description="Only present in development mode. Use this OTP to test without SMS.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -42,21 +47,21 @@ class OtpVerifyOut(BaseModel):
     token_type: str = "bearer"
     expires_in: int  # seconds
     role: str
+    name: str
     is_new_user: bool
 
 
 # ---------------------------------------------------------------------------
-# Token (staff / Keycloak exchange)
+# Token (staff / admin password login)
 # ---------------------------------------------------------------------------
 class TokenIn(BaseModel):
     grant_type: str = Field(
         default="password",
-        description="password | refresh_token | keycloak_code",
+        description="password | refresh_token",
     )
     username: str | None = None
     password: str | None = None
     refresh_token: str | None = None
-    code: str | None = None  # Keycloak authorization code
 
 
 class TokenOut(BaseModel):
@@ -65,4 +70,15 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     role: str
+    name: str
+    district: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Current user info
+# ---------------------------------------------------------------------------
+class UserMeOut(BaseModel):
+    sub: str
+    role: str
+    name: str | None = None
     district: str | None = None

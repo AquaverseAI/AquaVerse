@@ -103,4 +103,33 @@
 - `flutter analyze`: **0 errors, 0 warnings** (9 pre-existing info hints).
 - `flutter test`: **9/9 tests passed.**
 
+---
+
+## 2026-08-17 — Task 5: Select Language Screen Rebuild (AquaVerse Teal/Sea-Green Light Theme)
+
+### 1. Design Tokens Added
+- Added centralized `AppColors.lang*` design tokens in **[app_colors.dart](file:///home/techpark-6/Music/AquaVerse/lib/core/theme/app_colors.dart)**:
+  - `langBgPrimary`: `#FFFFFF`
+  - `langBgSurface`: `#F4FBF9`
+  - `langBgSelected`: `#E4F6F1`
+  - `langBorderDefault`: `#E0EEEA`
+  - `langBorderSelected`: `#14B8A6`
+  - `langAccentPrimary`: `#0E9488`
+  - `langAccentSeagreen`: `#2E8B77`
+  - `langCtaGradient`: `LinearGradient(colors: [#2E8B77, #14B8A6])`
+  - `langTextPrimary`: `#0B2B27`
+  - `langTextSecondary`: `#5B7A75`
+
+### 2. Screen Layout & Architecture ([language_select_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/language_select_screen.dart))
+- **Header Badge**: 64dp circular gradient icon badge (`#2E8B77` → `#14B8A6`) with globe icon (`Icons.language_rounded`).
+- **Title & Subtitle**: "Select Language" + "Choose your preferred language to continue" + `SpeakerButton` voice prompt.
+- **Search Bar**: Full-width rounded input (`#F0F7F5`) with live real-time filtering across native names, English names, and country codes.
+- **Scrollable List**: ~64dp tiles with country/language code badges, native script titles, English subtitles, and selected-state checkmarks.
+- **Sticky CTA**: Full-width gradient "Continue" button (`#2E8B77` → `#14B8A6`).
+
+### 3. Verification Results
+- `flutter analyze`: **0 errors, 0 warnings** (9 pre-existing info hints).
+- `flutter test`: **9/9 tests passed.**
+
+
 

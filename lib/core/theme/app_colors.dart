@@ -56,6 +56,28 @@ abstract class AppColors {
   static const Color infoSurface = Color(0xFFEEF7FF);
   static const Color infoBorder = Color(0xFFC6E0F5);
 
+  // ── Language Select Tokens (PRD-AV Language Picker Palette) ──────────────
+  static const Color langBgPrimary = Color(0xFFFFFFFF);
+  static const Color langBgSurface = Color(0xFFF4FBF9);
+  static const Color langBgSelected = Color(0xFFE4F6F1);
+  static const Color langBorderDefault = Color(0xFFE0EEEA);
+  static const Color langBorderSelected = Color(0xFF14B8A6);
+  static const Color langAccentPrimary = Color(0xFF0E9488);
+  static const Color langAccentSeagreen = Color(0xFF2E8B77);
+  static const Color langTextPrimary = Color(0xFF0B2B27);
+  static const Color langTextSecondary = Color(0xFF5B7A75);
+  static const Color langTextOnAccent = Color(0xFFFFFFFF);
+  static const Color langCheckIcon = Color(0xFF0E9488);
+  static const Color langSearchBg = Color(0xFFF0F7F5);
+  static const Color langSearchPlaceholder = Color(0xFF7C948F);
+  static const Color langFlagCodeText = Color(0xFF5B7A75);
+
+  static const LinearGradient langCtaGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Color(0xFF2E8B77), Color(0xFF14B8A6)],
+  );
+
   // ===========================================================================
   // LEGACY ALIASES (Do not use for new UI, mapped to prevent compilation errors)
   // ===========================================================================

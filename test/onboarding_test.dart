@@ -84,7 +84,7 @@ void main() {
       expect(find.text('தமிழ்'), findsOneWidget);
       expect(find.text('हिंदी'), findsOneWidget);
       expect(find.text('తెలుగు'), findsOneWidget);
-      expect(find.text('Next'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
     });
 
     testWidgets('PhoneEntryScreen renders fixed +91 prefix and Send OTP button', (WidgetTester tester) async {

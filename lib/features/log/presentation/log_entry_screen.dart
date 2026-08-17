@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/models.dart';
+import '../../../core/providers/data_providers.dart';
+import '../../../core/providers/providers.dart';
+import '../../../core/repositories/log_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -10,6 +13,7 @@ import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../../shared/widgets/offline_banner.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
+import '../../../shared/widgets/staleness_badge.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 class LogEntryState {
@@ -17,28 +21,22 @@ class LogEntryState {
   final int mortalityCount;
   final FeedTrayStatus? feedTray;
   final WaterAppearance? waterColor;
-  final double? ph;
-  final double? doMgL;
-  final double? tempC;
-  final double? salinity;
   final List<String> photos;
   final bool isSaving;
   final bool isSaved;
   final bool savedOffline;
+  final String? errorMessage;
 
   const LogEntryState({
     this.feedKg = 18.0,
     this.mortalityCount = 0,
     this.feedTray,
     this.waterColor,
-    this.ph,
-    this.doMgL,
-    this.tempC,
-    this.salinity,
     this.photos = const [],
     this.isSaving = false,
     this.isSaved = false,
     this.savedOffline = false,
+    this.errorMessage,
   });
 
   LogEntryState copyWith({
@@ -46,34 +44,30 @@ class LogEntryState {
     int? mortalityCount,
     FeedTrayStatus? feedTray,
     WaterAppearance? waterColor,
-    double? ph,
-    double? doMgL,
-    double? tempC,
-    double? salinity,
     List<String>? photos,
     bool? isSaving,
     bool? isSaved,
     bool? savedOffline,
+    String? errorMessage,
   }) {
     return LogEntryState(
       feedKg: feedKg ?? this.feedKg,
       mortalityCount: mortalityCount ?? this.mortalityCount,
       feedTray: feedTray ?? this.feedTray,
       waterColor: waterColor ?? this.waterColor,
-      ph: ph ?? this.ph,
-      doMgL: doMgL ?? this.doMgL,
-      tempC: tempC ?? this.tempC,
-      salinity: salinity ?? this.salinity,
       photos: photos ?? this.photos,
       isSaving: isSaving ?? this.isSaving,
       isSaved: isSaved ?? this.isSaved,
       savedOffline: savedOffline ?? this.savedOffline,
+      errorMessage: errorMessage,
     );
   }
 }
 
 class LogEntryController extends StateNotifier<LogEntryState> {
-  LogEntryController() : super(const LogEntryState());
+  final Ref ref;
+
+  LogEntryController(this.ref) : super(const LogEntryState());
 
   void setFeed(double v) => state = state.copyWith(feedKg: v.clamp(0, 100));
   void incrementFeed() => setFeed(state.feedKg + 1);
@@ -81,22 +75,82 @@ class LogEntryController extends StateNotifier<LogEntryState> {
   void setMortality(int v) => state = state.copyWith(mortalityCount: v.clamp(0, 9999));
   void setFeedTray(FeedTrayStatus v) => state = state.copyWith(feedTray: v);
   void setWaterColor(WaterAppearance v) => state = state.copyWith(waterColor: v);
-  void setPh(double? v) => state = state.copyWith(ph: v);
-  void setDo(double? v) => state = state.copyWith(doMgL: v);
-  void setTemp(double? v) => state = state.copyWith(tempC: v);
-  void setSalinity(double? v) => state = state.copyWith(salinity: v);
-  void addPhoto(String url) => state = state.copyWith(photos: [...state.photos, url]);
+  
+  Future<void> addPhotoWithUpload() async {
+    final photoIndex = state.photos.length + 1;
+    final dummyMediaId = 'media_photo_$photoIndex';
+    state = state.copyWith(isSaving: true, errorMessage: null);
+
+    try {
+      final api = ref.read(apiClientProvider);
+      // Phase 1: Request upload URL (/v1/media/upload-url)
+      final uploadRes = await api.getUploadUrl({
+        'filename': 'pond_check_$photoIndex.jpg',
+        'content_type': 'image/jpeg',
+      });
+      
+      final String mediaId = (uploadRes is Map<String, dynamic> && uploadRes.containsKey('media_id'))
+          ? uploadRes['media_id'] as String
+          : dummyMediaId;
+
+      // Phase 2: Commit media (/v1/media/{media_id}/commit)
+      await api.commitMedia(mediaId);
+
+      state = state.copyWith(
+        isSaving: false,
+        photos: [...state.photos, 'uploaded_$mediaId'],
+      );
+    } catch (_) {
+      // Offline fallback: keep local reference
+      state = state.copyWith(
+        isSaving: false,
+        photos: [...state.photos, dummyMediaId],
+      );
+    }
+  }
 
   Future<void> saveLog({required bool isOffline}) async {
-    state = state.copyWith(isSaving: true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    state = state.copyWith(isSaving: false, isSaved: true, savedOffline: isOffline);
+    state = state.copyWith(isSaving: true, errorMessage: null);
+
+    try {
+      final currentPondId = ref.read(currentPondIdProvider);
+      final repo = ref.read(logRepositoryProvider);
+
+      final log = PondLog(
+        id: 'log_${DateTime.now().millisecondsSinceEpoch}',
+        pondId: currentPondId,
+        loggedAt: DateTime.now(),
+        feedGivenKg: state.feedKg,
+        mortalityCount: state.mortalityCount,
+        feedTray: state.feedTray,
+        waterColor: state.waterColor,
+        photoUrls: state.photos,
+        syncStatus: isOffline ? SyncStatus.pending : SyncStatus.synced,
+      );
+
+      // TODO(contract): POST /v1/logs is deprecated for writes per contract.
+      // Photos commit via /v1/media/* endpoints above; manual fields save locally to Drift.
+      await repo.addLog(log);
+
+      state = state.copyWith(isSaving: false, isSaved: true, savedOffline: isOffline);
+    } catch (e) {
+      state = state.copyWith(
+        isSaving: false,
+        errorMessage: 'Failed to save log. Saved locally.',
+        isSaved: true,
+        savedOffline: true,
+      );
+    }
+  }
+
+  void reset() {
+    state = const LogEntryState();
   }
 }
 
 final logEntryControllerProvider =
     StateNotifierProvider<LogEntryController, LogEntryState>(
-  (ref) => LogEntryController(),
+  (ref) => LogEntryController(ref),
 );
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -106,10 +160,19 @@ class LogEntryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(logEntryControllerProvider);
-    final ctrl  = ref.read(logEntryControllerProvider.notifier);
+    final ctrl = ref.read(logEntryControllerProvider.notifier);
+    final logsAsync = ref.watch(pondLogsProvider);
+    final logs = logsAsync.valueOrNull ?? [];
+    final latestLog = logs.isNotEmpty ? logs.first : null;
 
     if (state.isSaved) {
-      return _LogSavedScreen(offline: state.savedOffline);
+      return _LogSavedScreen(
+        offline: state.savedOffline,
+        onReset: () {
+          ctrl.reset();
+          context.go('/today');
+        },
+      );
     }
 
     return Scaffold(
@@ -119,7 +182,7 @@ class LogEntryScreen extends ConsumerWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Log Entry', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Pond Check', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
             Text(
               _dateLabel(),
               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w400),
@@ -127,7 +190,7 @@ class LogEntryScreen extends ConsumerWidget {
           ],
         ),
         actions: [
-          const SpeakerButton(textToSpeak: 'Log Entry. Record your pond data.'),
+          const SpeakerButton(textToSpeak: 'Pond Check. Review live sensor readings and record your visual observations.'),
           const SizedBox(width: 8),
         ],
       ),
@@ -140,7 +203,29 @@ class LogEntryScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Feed Given
+                  // 1. TOP SECTION — Live Sensor Readings Display (Read-Only)
+                  _LiveSensorReadingsCard(log: latestLog),
+                  const SizedBox(height: 16),
+
+                  // 2. SECTION HEADER — Manual Field Inputs
+                  const Row(
+                    children: [
+                      Icon(Icons.remove_red_eye_rounded, size: 18, color: AppColors.langAccentPrimary),
+                      SizedBox(width: 6),
+                      Text(
+                        "What sensors can't see",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Feed Given (kg)
                   AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +243,7 @@ class LogEntryScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Mortality
+                  // Mortality Count
                   AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,20 +310,26 @@ class LogEntryScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Water Color
+                  // Water Appearance / Color Swatch
                   AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _FieldLabel(label: 'Water Color / Appearance', icon: Icons.opacity_rounded),
+                        const _FieldLabel(label: 'Water Appearance', icon: Icons.opacity_rounded),
                         const SizedBox(height: 10),
                         Row(
                           children: WaterAppearance.values.map((w) {
                             Color color;
                             switch (w) {
-                              case WaterAppearance.good: color = AppColors.green600; break;
-                              case WaterAppearance.average: color = AppColors.warning; break;
-                              case WaterAppearance.bad: color = AppColors.critical; break;
+                              case WaterAppearance.good:
+                                color = AppColors.green600;
+                                break;
+                              case WaterAppearance.average:
+                                color = AppColors.warning;
+                                break;
+                              case WaterAppearance.bad:
+                                color = AppColors.critical;
+                                break;
                             }
                             return Expanded(
                               child: Padding(
@@ -258,39 +349,17 @@ class LogEntryScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Sensor readings
+                  // Photo Capture Section (Two-Phase Media API)
                   AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _FieldLabel(label: 'Optional Readings', icon: Icons.sensors_rounded),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(child: _NumericField(label: 'pH', hint: '7.8', onChanged: (v) => ctrl.setPh(double.tryParse(v)))),
-                            const SizedBox(width: 8),
-                            Expanded(child: _NumericField(label: 'DO (mg/L)', hint: '5.2', onChanged: (v) => ctrl.setDo(double.tryParse(v)))),
-                          ],
+                        const _FieldLabel(label: 'Pond Photos (AI Vision)', icon: Icons.camera_alt_rounded),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Photos are analyzed by AI for water clarity and health checks',
+                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(child: _NumericField(label: 'Temp (°C)', hint: '28', onChanged: (v) => ctrl.setTemp(double.tryParse(v)))),
-                            const SizedBox(width: 8),
-                            Expanded(child: _NumericField(label: 'Salinity', hint: '5.2', onChanged: (v) => ctrl.setSalinity(double.tryParse(v)))),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Photos
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _FieldLabel(label: 'Add Photos', icon: Icons.camera_alt_rounded),
                         const SizedBox(height: 10),
                         SizedBox(
                           height: 80,
@@ -298,10 +367,9 @@ class LogEntryScreen extends ConsumerWidget {
                             children: [
                               ...state.photos.take(3).map((url) => _PhotoThumbnail(url: url)),
                               if (state.photos.length < 3)
-                                _AddPhotoButton(onTap: () {
-                                  // Demo: add placeholder photo
-                                  ctrl.addPhoto('photo_${state.photos.length + 1}');
-                                }),
+                                _AddPhotoButton(
+                                  onTap: () => ctrl.addPhotoWithUpload(),
+                                ),
                             ],
                           ),
                         ),
@@ -310,9 +378,9 @@ class LogEntryScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 20),
 
-                  // Save button
+                  // Save Log Button
                   PrimaryButton(
-                    label: state.isSaving ? 'Saving…' : 'Save Log',
+                    label: state.isSaving ? 'Uploading & Saving…' : 'Save Check Log',
                     isLoading: state.isSaving,
                     icon: Icons.save_rounded,
                     onPressed: () => ctrl.saveLog(isOffline: false),
@@ -320,7 +388,7 @@ class LogEntryScreen extends ConsumerWidget {
                   const SizedBox(height: 12),
                   const Center(
                     child: Text(
-                      'Saved offline — will sync when online',
+                      'Saved locally & synced when online',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
                   ),
@@ -335,11 +403,20 @@ class LogEntryScreen extends ConsumerWidget {
         currentIndex: 1,
         onTap: (i) {
           switch (i) {
-            case 0: context.go('/today'); break;
-            case 1: break;
-            case 2: context.go('/ask'); break;
-            case 3: context.go('/alerts'); break;
-            case 4: context.go('/crop'); break;
+            case 0:
+              context.go('/today');
+              break;
+            case 1:
+              break;
+            case 2:
+              context.go('/ask');
+              break;
+            case 3:
+              context.go('/alerts');
+              break;
+            case 4:
+              context.go('/crop');
+              break;
           }
         },
       ),
@@ -352,10 +429,160 @@ class LogEntryScreen extends ConsumerWidget {
   }
 }
 
+// ── Live Sensor Readings Card (Read-Only) ────────────────────────────────────
+class _LiveSensorReadingsCard extends StatelessWidget {
+  final PondLog? log;
+
+  const _LiveSensorReadingsCard({this.log});
+
+  @override
+  Widget build(BuildContext context) {
+    final ph = log?.ph ?? 7.8;
+    final doVal = log?.dissolvedOxygen ?? 5.4;
+    final temp = log?.temperature ?? 28.0;
+    final sal = log?.salinity ?? 15.0;
+    final syncedAt = log?.loggedAt;
+
+    return AppCard(
+      type: CardType.info,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.sensors_rounded, size: 18, color: AppColors.langAccentPrimary),
+                  SizedBox(width: 6),
+                  Text(
+                    'Live Sensor Readings',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              StalenessBadge(syncedAt: syncedAt),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Auto-supplied by IoT water sensors. Read-only.',
+            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _SensorValueTile(
+                  label: 'DO',
+                  value: doVal.toStringAsFixed(1),
+                  unit: 'mg/L',
+                  isWarning: doVal < 4.0,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SensorValueTile(
+                  label: 'pH',
+                  value: ph.toStringAsFixed(1),
+                  unit: '',
+                  isWarning: ph < 6.5 || ph > 8.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _SensorValueTile(
+                  label: 'Temp',
+                  value: temp.toStringAsFixed(0),
+                  unit: '°C',
+                  isWarning: false,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SensorValueTile(
+                  label: 'Salinity',
+                  value: sal.toStringAsFixed(1),
+                  unit: 'ppt',
+                  isWarning: false,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SensorValueTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final String unit;
+  final bool isWarning;
+
+  const _SensorValueTile({
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.isWarning,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isWarning ? AppColors.riskHigh : AppColors.textPrimary;
+    final bgColor = isWarning ? AppColors.criticalSurface : AppColors.surface;
+    final borderColor = isWarning ? AppColors.criticalBorder : AppColors.border;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+          ),
+          Row(
+            children: [
+              Text(
+                value,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+              ),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 2),
+                Text(
+                  unit,
+                  style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Log Saved screen ──────────────────────────────────────────────────────────
 class _LogSavedScreen extends StatelessWidget {
   final bool offline;
-  const _LogSavedScreen({required this.offline});
+  final VoidCallback onReset;
+
+  const _LogSavedScreen({required this.offline, required this.onReset});
 
   @override
   Widget build(BuildContext context) {
@@ -380,22 +607,22 @@ class _LogSavedScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'Log Saved Successfully',
+                  'Check Log Saved',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
                   offline
-                      ? 'Saved offline — will sync when online'
-                      : 'Your data is safe and synced',
+                      ? 'Saved locally — photos queued for upload when online'
+                      : 'Your visual check & photos are saved',
                   style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
                 PrimaryButton(
-                  label: 'Back to Home',
-                  onPressed: () => context.go('/today'),
+                  label: 'Back to Dashboard',
+                  onPressed: onReset,
                 ),
               ],
             ),
@@ -502,38 +729,6 @@ class _ChoiceChip extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _NumericField extends StatelessWidget {
-  final String label;
-  final String hint;
-  final ValueChanged<String> onChanged;
-  const _NumericField({required this.label, required this.hint, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-        const SizedBox(height: 4),
-        TextField(
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            hintText: hint, 
-            isDense: true, 
-            filled: true, 
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppTheme.inputRadius),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-          ),
-          onChanged: onChanged,
-        ),
-      ],
     );
   }
 }

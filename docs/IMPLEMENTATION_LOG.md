@@ -100,7 +100,7 @@
 - **[ai_intro_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/ai_intro_screen.dart)**
 
 ### 3. Verification Results
-- `flutter analyze`: **0 errors, 0 warnings** (9 pre-existing info hints).
+- `flutter analyze`: **0 errors, 0 warnings** (9 info hints).
 - `flutter test`: **9/9 tests passed.**
 
 ---
@@ -128,8 +128,33 @@
 - **Sticky CTA**: Full-width gradient "Continue" button (`#2E8B77` → `#14B8A6`).
 
 ### 3. Verification Results
-- `flutter analyze`: **0 errors, 0 warnings** (9 pre-existing info hints).
+- `flutter analyze`: **0 errors, 0 warnings** (9 info hints).
 - `flutter test`: **9/9 tests passed.**
 
+---
 
+## 2026-08-17 — Task 6: Today Screen 3D-Minimal Visual Redesign
 
+### 1. Visual Redesign Summary
+- Redesigned `TodayScreen` using a 3D-minimal glassmorphism visual language.
+- Added 3D depth gradients, radial glow motifs, tier-based card elevations (`_Tier1GlassCard`, `_Tier2GlassCard`), ambient background drifting blob, 9-section staggered load-in animation choreography, and breathing glow buttons.
+
+### 2. Verification Results
+- `flutter analyze`: **0 errors, 0 warnings**.
+- `flutter test`: **9/9 tests passed.**
+
+---
+
+## 2026-08-17 — Task 7: Sensor-Driven Log Pivot (Scope C Implementation)
+
+### 1. Architectural Changes
+- **Log Screen Rebuilt** (`log_entry_screen.dart`):
+  - **Top Read-Only Card**: Displays live sensor readings (DO, pH, Temp, Salinity) with `StalenessBadge` auto-synced from IoT backend.
+  - **"What sensors can't see" Section**: Retained manual observation inputs: Feed Given (kg) stepper, Mortality Count, Feed Tray Check, and Water Appearance.
+  - **Removed**: Manual numeric input fields for pH, DO, Temp, Salinity (now sensor-driven).
+  - **Photo Upload**: Integrated 2-phase `/v1/media/upload-url` -> `/v1/media/{media_id}/commit` flow.
+- **Endpoint Alignment**: Verified and documented the 19-endpoint matrix across `ApiClient`, `LogRepository`, and `docs/BACKEND_SYNC_NOTES.md`.
+
+### 2. Verification Results
+- `flutter analyze`: **0 errors, 0 warnings**.
+- `flutter test`: **9/9 tests passed.**

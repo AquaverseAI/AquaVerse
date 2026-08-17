@@ -49,14 +49,13 @@ class LanguageSelectScreen extends ConsumerWidget {
             children: [
               const SizedBox(height: 20),
 
-              // ── Top Icon Badge (Centered 64dp gradient circle with globe icon)
+              // ── Top Icon Badge (Exact Translate Icon Badge)
               Center(
                 child: Container(
-                  width: 64,
-                  height: 64,
+                  width: 68,
+                  height: 68,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppColors.langCtaGradient,
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.langAccentPrimary.withValues(alpha: 0.25),
@@ -65,10 +64,14 @@ class LanguageSelectScreen extends ConsumerWidget {
                       )
                     ],
                   ),
-                  child: const Icon(
-                    Icons.g_translate_rounded,
-                    color: AppColors.langTextOnAccent,
-                    size: 30,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Image.asset(
+                      'assets/images/translate_badge.png',
+                      width: 68,
+                      height: 68,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),

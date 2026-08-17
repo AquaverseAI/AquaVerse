@@ -149,9 +149,15 @@ async def require_district_claim(
     district: str,
     user: CurrentStaff,
 ) -> None:
-    """Verify a staff user has a claim for the requested district."""
-    if user.district and user.district != district:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access to district '{district}' denied for your token.",
-        )
+    """
+    Verify a staff user has a claim for the requested district.
+
+    Not currently wired into any route as a dependency — every call site
+    added under P0.1 calls `rbac.require_district` directly instead. Kept
+    for now in case a future route wants it as a path/query dependency;
+    delegates to the (fixed) rbac.require_district so there is exactly one
+    implementation of the district-scoping rule.
+    """
+    from app.core import rbac
+
+    rbac.require_district(user.district, district, user.role)

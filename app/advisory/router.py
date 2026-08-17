@@ -194,7 +194,7 @@ async def list_advisories(
     from datetime import timedelta
 
     if district is not None and user.role in ("staff", "admin"):
-        rbac.require_district(user.district, district)
+        rbac.require_district(user.district, district, user.role)
 
     now = utcnow()
     stub = AdvisoryOut(
@@ -221,6 +221,8 @@ async def list_advisories(
     summary="Broadcast an advisory to farmers (staff only)",
 )
 async def broadcast_advisory(body: BroadcastIn, user: CurrentStaff) -> AdvisoryOut:
+    if body.target_district is not None:
+        rbac.require_district(user.district, body.target_district, user.role)
     now = utcnow()
     return AdvisoryOut(
         id=uuid4(),

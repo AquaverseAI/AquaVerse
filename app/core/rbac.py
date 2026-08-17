@@ -7,6 +7,12 @@ from enum import StrEnum
 from fastapi import HTTPException, status
 
 
+# NOTE: this enum/hierarchy does not match the roles actually issued or
+# checked anywhere in the codebase — real tokens carry role="farmer"/"staff"
+# /"admin" (see deps.py, db/models/user.py). require_role() below is
+# currently unused; route protection is done via deps.py's CurrentStaff/
+# CurrentFarmer dependencies instead. Left as-is for now — a future pass
+# should either wire this up for real or delete it, not silently drift.
 class Role(StrEnum):
     FARMER = "farmer"
     FIELD_OFFICER = "field_officer"
@@ -34,14 +40,28 @@ def require_role(user_role: str, minimum_role: Role) -> None:
         )
 
 
-def require_district(user_district: str | None, requested_district: str) -> None:
+def require_district(
+    user_district: str | None, requested_district: str, role: str
+) -> None:
     """
     Verify the user has access to the requested district.
-    Admin users pass through regardless of their district claim.
+
+    Only genuine admin-role tokens bypass district scoping. `district` is a
+    nullable column for every role (farmer/staff/admin alike), so a missing
+    claim on a non-admin token must fail closed rather than be treated as
+    "unrestricted".
     """
-    if user_district is None:
+    if role == "admin":
         # Admin — no district restriction
         return
+    if user_district is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your token has no district claim; "
+                f"cannot access district '{requested_district}'."
+            ),
+        )
     if user_district != requested_district:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

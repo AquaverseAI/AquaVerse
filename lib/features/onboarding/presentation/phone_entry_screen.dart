@@ -7,12 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
-/// Phone Entry Screen with centered content layout.
-/// Features:
-/// - Top-left back arrow button.
-/// - Top-right speaker accessibility button.
-/// - Centered title, subtitle, field label, and mobile input row.
-/// - Single primary "Send OTP" pill CTA button at bottom (Secondary email button removed per request).
+/// Phone Entry Screen with vertically centered layout and enlarged input box.
 class PhoneEntryScreen extends ConsumerStatefulWidget {
   const PhoneEntryScreen({super.key});
 
@@ -105,33 +100,34 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 16),
+                        // Vertical centering spacer
+                        const Spacer(flex: 2),
 
                         // Centered Title & Subtitle
                         const Text(
                           'Welcome back',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 28,
+                            fontSize: 30,
                             fontWeight: FontWeight.bold,
                             color: AppColors.textPrimary,
                             letterSpacing: -0.4,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         const Text(
                           'Enter your mobile number to continue',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.w400,
                             color: AppColors.textSecondary,
                           ),
                         ),
 
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 40),
 
-                        // Centered Form: Underline-style Mobile Input
+                        // Centered Form: Enlarged Underline-style Mobile Input
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -140,23 +136,23 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                               'MOBILE NUMBER',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                letterSpacing: 0.8,
+                                letterSpacing: 1.0,
                                 color: AppColors.textSecondary,
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 16),
 
-                            // Underline Input Container
+                            // Enlarged Underline Input Container
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.only(bottom: 12),
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
                                     color: currentBorderColor,
-                                    width: _isFocused || state.isMobileValid || state.errorMessage != null ? 2.0 : 1.2,
+                                    width: _isFocused || state.isMobileValid || state.errorMessage != null ? 2.5 : 1.5,
                                   ),
                                 ),
                               ),
@@ -164,24 +160,24 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  // Fixed +91 Country Prefix
+                                  // Fixed +91 Country Prefix (Enlarged)
                                   const Text(
                                     '+91',
                                     style: TextStyle(
-                                      fontSize: 18,
+                                      fontSize: 22,
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.textPrimary,
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 14),
                                   Container(
-                                    width: 1,
-                                    height: 20,
+                                    width: 1.5,
+                                    height: 24,
                                     color: currentBorderColor,
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 14),
 
-                                  // 10-Digit Mobile Text Field
+                                  // 10-Digit Mobile Text Field (Enlarged)
                                   Expanded(
                                     child: TextField(
                                       controller: _phoneController,
@@ -192,15 +188,15 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                         LengthLimitingTextInputFormatter(10),
                                       ],
                                       style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1.5,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 2.0,
                                         color: AppColors.textPrimary,
                                       ),
                                       decoration: const InputDecoration(
                                         hintText: 'Enter mobile number',
                                         hintStyle: TextStyle(
-                                          fontSize: 16,
+                                          fontSize: 18,
                                           fontWeight: FontWeight.w400,
                                           letterSpacing: 0.2,
                                           color: AppColors.textMuted,
@@ -225,7 +221,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                             ),
 
                             if (state.errorMessage != null) ...[
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Text(
                                 state.errorMessage!,
                                 textAlign: TextAlign.center,
@@ -239,7 +235,8 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                           ],
                         ),
 
-                        const Spacer(),
+                        // Bottom Spacer for vertical balance
+                        const Spacer(flex: 3),
 
                         // Primary Pill Gradient CTA Button ("Send OTP")
                         Container(

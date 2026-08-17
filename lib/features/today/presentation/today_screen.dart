@@ -127,10 +127,7 @@ class _DashboardAmbientBackgroundState extends State<_DashboardAmbientBackground
                         stops: const [0.0, 0.85],
                       ),
                     ),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                      child: const SizedBox.expand(),
-                    ),
+                    child: const SizedBox.expand(),
                   ),
                 ),
               );
@@ -1529,34 +1526,28 @@ class _StickyFooterBarState extends State<_StickyFooterBar>
               child: AnimatedScale(
                 scale: _micPressed ? 0.94 : 1.0,
                 duration: const Duration(milliseconds: 100),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(50),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: AppColors.gradientCardGlass,
-                        border: Border.all(
-                          color: AppColors.riskLow.withValues(alpha: 0.5),
-                          width: 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.shadowTier2,
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.mic_rounded,
-                        color: AppColors.langAccentPrimary,
-                        size: 22,
-                      ),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppColors.gradientCardGlass,
+                    border: Border.all(
+                      color: AppColors.riskLow.withValues(alpha: 0.5),
+                      width: 1.5,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.shadowTier2,
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.mic_rounded,
+                    color: AppColors.langAccentPrimary,
+                    size: 22,
                   ),
                 ),
               ),
@@ -1587,33 +1578,27 @@ class _Tier1GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: AppColors.gradientCardGlass,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-                color: AppColors.border.withValues(alpha: 0.7), width: 0.8),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadowTier1,
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.gradientCardGlass,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+            color: AppColors.border.withValues(alpha: 0.7), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadowTier1,
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
-          child: onTap != null
-              ? InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Padding(padding: padding, child: child),
-                )
-              : Padding(padding: padding, child: child),
-        ),
+        ],
       ),
+      child: onTap != null
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(padding: padding, child: child),
+            )
+          : Padding(padding: padding, child: child),
     );
   }
 }
@@ -1656,34 +1641,28 @@ class _Tier2GlassCard extends StatelessWidget {
               ),
             ),
           ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientCardGlass,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: AppColors.langAccentPrimary.withValues(alpha: 0.2),
-                    width: 1.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.shadowTier2,
-                    blurRadius: 32,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
+        Container(
+          decoration: BoxDecoration(
+            gradient: AppColors.gradientCardGlass,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: AppColors.langAccentPrimary.withValues(alpha: 0.2),
+                width: 1.0),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.shadowTier2,
+                blurRadius: 32,
+                offset: const Offset(0, 12),
               ),
-              child: onTap != null
-                  ? InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Padding(padding: padding, child: child),
-                    )
-                  : Padding(padding: padding, child: child),
-            ),
+            ],
           ),
+          child: onTap != null
+              ? InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(padding: padding, child: child),
+                )
+              : Padding(padding: padding, child: child),
         ),
       ],
     );

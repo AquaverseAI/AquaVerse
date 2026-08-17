@@ -13,10 +13,9 @@ class DataQualityRepository {
 
   DataQualityRepository(this._api, this._cache);
 
-  /// Network-first, cache-fallback, matching PondRepository.getPondRisk /
-  /// getPondEvents. On total failure (no network, no cache), returns a
-  /// non-blind default rather than throwing — a missing signal should never
-  /// silently produce a false "all clear" via an unhandled error state.
+  /// Network-first, cache-fallback, matching PondRepository.getPondRisk / getPondEvents.
+  /// Safety Rule R5: An unknown/uncached state MUST NOT masquerade as "all clear".
+  /// If both network and local cache miss, returns isBlind: true to protect the farmer.
   Future<DataQualitySignal> getDataQuality() async {
     try {
       final raw = await _api.getDataQuality();
@@ -30,11 +29,13 @@ class DataQualityRepository {
           return DataQualitySignal.fromJson(decoded, syncedAt: cached.syncedAt);
         } catch (_) {}
       }
-      // TODO(contract): data-quality response schema not confirmed —
-      // no cache + no network defaults to isBlind: false. Revisit once
-      // schema is confirmed — a genuinely unknown state arguably *should*
-      // render as blind rather than healthy; flagged, not decided here.
-      return DataQualitySignal(isBlind: false, syncedAt: null);
+      // Safety Rule R5: Total miss (no network + no cache) defaults to BLIND state
+      // rather than a false "healthy" signal.
+      return const DataQualitySignal(
+        isBlind: true,
+        suppressionReason: 'No cached data available. Connect to network to verify pond health.',
+        syncedAt: null,
+      );
     }
   }
 }

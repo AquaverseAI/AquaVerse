@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
@@ -116,22 +117,33 @@ class _FeatureRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+    return GlassContainer(
+      opacity: 0.40,
+      borderRadius: 14,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primary100.withValues(alpha: 0.60),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.primary700, size: 22),
           ),
-          child: Icon(icon, color: AppColors.primary700, size: 22),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-        ),
-      ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

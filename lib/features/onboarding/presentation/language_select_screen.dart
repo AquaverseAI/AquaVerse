@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/rotating_globe_icon.dart';
 import '../../../shared/widgets/speaker_button.dart';
@@ -128,14 +129,12 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
 
               const SizedBox(height: 20),
 
-              // ── 2.4 Search Field
-              Container(
+              // ── 2.4 Search Field (40% Glassmorphism)
+              GlassContainer(
                 height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.langSearchBg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.langBorderDefault, width: 1.0),
-                ),
+                borderRadius: 12,
+                opacity: 0.40,
+                fillColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
@@ -208,7 +207,7 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
 
               const SizedBox(height: 8),
 
-              // ── 2.6 Language List
+              // ── 2.6 Language List (40% Glassmorphism Tiles)
               Expanded(
                 child: filteredList.isEmpty
                     ? Center(
@@ -243,25 +242,16 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
                           return InkWell(
                             onTap: () => controller.selectLanguage(code),
                             borderRadius: BorderRadius.circular(12),
-                            child: Container(
+                            child: GlassContainer(
                               height: 64,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              decoration: BoxDecoration(
-                                color: isSelected ? AppColors.langBgSelected : AppColors.langBgSurface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isSelected ? AppColors.langBorderSelected : AppColors.langBorderDefault,
-                                  width: isSelected ? 1.5 : 1.0,
-                                ),
-                                boxShadow: [
-                                  if (!isSelected)
-                                    BoxShadow(
-                                      color: AppColors.langTextPrimary.withValues(alpha: 0.03),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    )
-                                ],
+                              borderRadius: 12,
+                              opacity: isSelected ? 0.55 : 0.40,
+                              fillColor: isSelected ? AppColors.langBgSelected : Colors.white,
+                              border: Border.all(
+                                color: isSelected ? AppColors.langBorderSelected : Colors.white.withValues(alpha: 0.60),
+                                width: isSelected ? 1.8 : 1.2,
                               ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
                               child: Row(
                                 children: [
                                   // Two-Letter Code Badge

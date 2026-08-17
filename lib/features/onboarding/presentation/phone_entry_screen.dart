@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
@@ -88,17 +89,15 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
 
               const SizedBox(height: 36),
 
-              // Phone Number Input Field with fixed +91 prefix
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppTheme.inputRadius),
-                  border: Border.all(
-                    color: state.errorMessage != null
-                        ? AppColors.critical
-                        : (state.isMobileValid ? AppColors.primary500 : AppColors.border),
-                    width: state.isMobileValid || state.errorMessage != null ? 1.5 : 1.0,
-                  ),
+              // Phone Number Input Field with fixed +91 prefix (40% Glassmorphism)
+              GlassContainer(
+                opacity: 0.40,
+                borderRadius: AppTheme.inputRadius,
+                border: Border.all(
+                  color: state.errorMessage != null
+                      ? AppColors.critical
+                      : (state.isMobileValid ? AppColors.primary500 : Colors.white.withValues(alpha: 0.60)),
+                  width: state.isMobileValid || state.errorMessage != null ? 1.5 : 1.2,
                 ),
                 child: Row(
                   children: [
@@ -106,7 +105,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceAqua,
+                        color: AppColors.surfaceAqua.withValues(alpha: 0.50),
                         borderRadius: BorderRadius.only(
                           topLeft: Radius.circular(AppTheme.inputRadius - 1),
                           bottomLeft: Radius.circular(AppTheme.inputRadius - 1),

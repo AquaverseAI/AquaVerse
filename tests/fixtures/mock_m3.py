@@ -1,3 +1,8 @@
+# Unused legacy fixture (P0.3): app/advisory/router.py's POST /v1/ask used to
+# call this over HTTP at a hardcoded Docker-host IP; it now calls the real
+# M3DecisionEngine in-process (see app/ml_inference/numeric/m3_engine.py).
+# Kept here, quarantined out of the repo root, as a lightweight local-dev
+# HTTP mock for anyone who wants one later — nothing in the app imports it.
 from fastapi import FastAPI
 from pydantic import BaseModel
 

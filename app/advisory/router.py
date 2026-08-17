@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from fastapi import APIRouter, Query, status, HTTPException
-import httpx
+from fastapi import APIRouter, Query, status
 
 from app.advisory.number_validator import validate_llm_output
 from app.advisory.schemas import (
@@ -16,14 +16,13 @@ from app.advisory.schemas import (
     BroadcastIn,
     ReasonIn,
     ReasonOut,
-    M3PondSnapshotRequest,
-    M3ReasonResponse,
 )
 from app.core import rbac
 from app.core.errors import NumberMismatchError
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
 from app.deps import CurrentStaff, CurrentUser, InternalOnly
+from app.ml_inference.numeric.m3_engine import get_m3_engine_bundle
 
 if TYPE_CHECKING:
     pass
@@ -110,15 +109,21 @@ async def reason(
 )
 async def ask(body: AskIn, user: CurrentUser) -> AskOut:
     """
-    Phase 4: Call the external M3 serving engine with the static payload.
+    Calls the real M3 quantitative engine in-process (P0.3) — no network
+    hop, no external service required. Narration is built from the engine's
+    output only, then run through the same number_validator guardrail as
+    POST /v1/reason before being returned.
     """
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, body.pond_id)
     now = utcnow()
-    
-    # Construct static 28-field payload for the specific pond_id 
+    rejected_this_request = 0
+
+    # Construct static 28-field payload for the specific pond_id
     # to test integration before full DB aggregation is implemented
-    m3_request = M3PondSnapshotRequest(
+    # (real per-pond feature snapshot is P1.2/P1.3's job, not this one).
+    bundle = get_m3_engine_bundle()
+    snapshot = bundle.PondSnapshot(
         pond_id=str(body.pond_id),
         species_key="vannamei",
         doc=52,
@@ -147,33 +152,28 @@ async def ask(body: AskIn, user: CurrentUser) -> AskOut:
         nh3_un_ionised=0.01,
         cum_feed_kg=8.4,
         feed_cost_per_kg_rs=90.0,
-        market_price_per_kg_rs=350.0
+        market_price_per_kg_rs=350.0,
     )
 
+    # Pure Python + LightGBM inference, ~5ms — fine to call inline here,
+    # no thread pool needed.
+    payload = bundle.engine.decide(snapshot)
+    narration = bundle.payload_to_instruction(payload)
+
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                "http://172.17.0.1:8001/v1/reason/m3",
-                json=m3_request.model_dump()
-            )
-            response.raise_for_status()
-            
-            # Parse the response back into our M3ReasonResponse schema
-            m3_response = M3ReasonResponse.model_validate(response.json())
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"M3 reasoning engine failed: {str(e)}"
-        ) from e
+        validate_llm_output(narration, asdict(payload))
+    except NumberMismatchError:
+        rejected_this_request += 1
+        raise
 
     return AskOut(
         pond_id=body.pond_id,
         question=body.question,
-        answer=m3_response.narration,
+        answer=narration,
         language=body.language,
         tts_url=None,
         generated_at=now,
-        rejected_attempts_this_request=m3_response.regeneration_attempts,
+        rejected_attempts_this_request=rejected_this_request,
     )
 
 

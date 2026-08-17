@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, status
 from fastapi.responses import HTMLResponse
 
+from app.config import get_settings
 from app.core import rbac
 from app.core.timezones import utcnow
 from app.deps import CurrentUser
@@ -56,7 +57,14 @@ async def get_twin_state(pond_id: UUID, user: CurrentUser) -> StateVector:
 )
 async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
     state = await get_twin_state(pond_id, user)
-    
+
+    visualizer_url = get_settings().twin_visualizer_url
+    visualise_button = (
+        f'<a href="{visualizer_url}" class="visualise-btn">Visualize in 3D Twin</a>'
+        if visualizer_url
+        else ""
+    )
+
     html_content = f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -236,7 +244,7 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
         <div class="header">
             <h1>Digital Twin Active</h1>
             <p>Pond ID: {state.pond_id}</p>
-            <a href="http://10.20.18.183:5173/" class="visualise-btn">Visualize in 3D Twin</a>
+            {visualise_button}
         </div>
         
         <div class="dashboard">

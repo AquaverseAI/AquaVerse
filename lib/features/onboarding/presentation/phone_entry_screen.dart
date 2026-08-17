@@ -72,6 +72,25 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
             ),
           ),
 
+          // White gradient scrim — guarantees text readability over
+          // the light mint/teal aquaculture background.
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.45),
+                    Colors.white.withValues(alpha: 0.72),
+                    Colors.white.withValues(alpha: 0.88),
+                  ],
+                  stops: const [0.0, 0.45, 1.0],
+                ),
+              ),
+            ),
+          ),
+
           // 2. Safe Area Content Layout
           SafeArea(
             child: Column(
@@ -110,7 +129,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                           style: TextStyle(
                             fontSize: 30,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: Color(0xFF0D2B3E), // deep navy — max contrast
                             letterSpacing: -0.4,
                           ),
                         ),
@@ -120,12 +139,203 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight: FontWeight.w400,
-                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textPrimary, // lifted from textSecondary
                           ),
                         ),
 
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 24),
+
+                        // Role-Based Access (RBA) Selector: Side-by-Side Flex Cards
+                        Container(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Center(
+                                child: Text(
+                                  'SELECT ACCOUNT ROLE',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.0,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  // 1. Farmer Role Card (1 Pond View)
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => ref
+                                          .read(onboardingControllerProvider.notifier)
+                                          .selectRole('farmer'),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 180),
+                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                        decoration: BoxDecoration(
+                                          color: state.selectedRole == 'farmer'
+                                              ? const Color(0xFFE6F4F1)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: state.selectedRole == 'farmer'
+                                                ? focusBorderColor
+                                                : restBorderColor,
+                                            width: state.selectedRole == 'farmer' ? 2.0 : 1.2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: state.selectedRole == 'farmer'
+                                                  ? focusBorderColor.withValues(alpha: 0.15)
+                                                  : Colors.black.withValues(alpha: 0.04),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
+                                            )
+                                          ],
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.water_drop_rounded,
+                                                  size: 20,
+                                                  color: state.selectedRole == 'farmer'
+                                                      ? focusBorderColor
+                                                      : AppColors.textSecondary,
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  'Farmer',
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: state.selectedRole == 'farmer'
+                                                        ? focusBorderColor
+                                                        : AppColors.textPrimary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: state.selectedRole == 'farmer'
+                                                    ? focusBorderColor.withValues(alpha: 0.15)
+                                                    : AppColors.background,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                '1 Pond Access',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: state.selectedRole == 'farmer'
+                                                      ? focusBorderColor
+                                                      : AppColors.textMuted,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 12),
+
+                                  // 2. Extension Officer Role Card (Multi-Pond Oversight)
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => ref
+                                          .read(onboardingControllerProvider.notifier)
+                                          .selectRole('officer'),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 180),
+                                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                                        decoration: BoxDecoration(
+                                          color: state.selectedRole == 'officer'
+                                              ? const Color(0xFFE6F4F1)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: state.selectedRole == 'officer'
+                                                ? focusBorderColor
+                                                : restBorderColor,
+                                            width: state.selectedRole == 'officer' ? 2.0 : 1.2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: state.selectedRole == 'officer'
+                                                  ? focusBorderColor.withValues(alpha: 0.15)
+                                                  : Colors.black.withValues(alpha: 0.04),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
+                                            )
+                                          ],
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  Icons.assignment_ind_rounded,
+                                                  size: 20,
+                                                  color: state.selectedRole == 'officer'
+                                                      ? focusBorderColor
+                                                      : AppColors.textSecondary,
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  'Officer',
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: state.selectedRole == 'officer'
+                                                        ? focusBorderColor
+                                                        : AppColors.textPrimary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: state.selectedRole == 'officer'
+                                                    ? focusBorderColor.withValues(alpha: 0.15)
+                                                    : AppColors.background,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'Multi-Pond Access',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: state.selectedRole == 'officer'
+                                                      ? focusBorderColor
+                                                      : AppColors.textMuted,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
 
                         // Centered Form: Elevated, Perfectly Fitted Input Card
                         Column(
@@ -138,7 +348,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.0,
-                                color: AppColors.textSecondary,
+                                color: AppColors.textPrimary, // lifted from textSecondary
                               ),
                             ),
                             const SizedBox(height: 14),

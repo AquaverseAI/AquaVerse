@@ -238,7 +238,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                             style: TextStyle(
                               fontSize: 30,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              color: Color(0xFF0D2B3E), // deep navy — max contrast
                               letterSpacing: -0.4,
                             ),
                           ),
@@ -250,8 +250,8 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                                 'Enter OTP sent to +91 $formattedMobile',
                                 style: const TextStyle(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w400,
-                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textPrimary, // lifted from textSecondary
                                 ),
                               ),
                               const SizedBox(width: 4),
@@ -277,7 +277,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                             style: TextStyle(
                               fontSize: 30,
                               fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                              color: Color(0xFF0D2B3E), // deep navy — max contrast
                               letterSpacing: -0.4,
                             ),
                           ),
@@ -287,8 +287,8 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 15,
-                              fontWeight: FontWeight.w400,
-                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary, // lifted from textSecondary
                             ),
                           ),
                         ],

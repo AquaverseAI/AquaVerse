@@ -34,7 +34,8 @@ class OnboardingScaffold extends StatelessWidget {
             ),
           ),
 
-          // 2. Light gradient overlay for text readability
+          // 2. White scrim — strong enough to guarantee text contrast on the
+          //    aquaculture background (light mint/teal image).
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -42,11 +43,11 @@ class OnboardingScaffold extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withValues(alpha: 0.25),
-                    Colors.white.withValues(alpha: 0.10),
-                    Colors.white.withValues(alpha: 0.30),
+                    Colors.white.withValues(alpha: 0.45),
+                    Colors.white.withValues(alpha: 0.72),
+                    Colors.white.withValues(alpha: 0.85),
                   ],
-                  stops: const [0.0, 0.5, 1.0],
+                  stops: const [0.0, 0.45, 1.0],
                 ),
               ),
             ),

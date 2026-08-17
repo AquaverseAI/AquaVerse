@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -59,83 +58,18 @@ class TodayScreen extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.1 Ambient Background: gradient + slow drifting water-light blob
+// §3.1 Ambient Background: static clean underwater-light gradient
 // ─────────────────────────────────────────────────────────────────────────────
-class _DashboardAmbientBackground extends StatefulWidget {
+class _DashboardAmbientBackground extends StatelessWidget {
   final Widget child;
 
   const _DashboardAmbientBackground({required this.child});
 
   @override
-  State<_DashboardAmbientBackground> createState() => _DashboardAmbientBackgroundState();
-}
-
-class _DashboardAmbientBackgroundState extends State<_DashboardAmbientBackground>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _blobController;
-
-  @override
-  void initState() {
-    super.initState();
-    _blobController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 25), // ~20-30s pure sine drift
-    );
-    if (!_isReducedMotion()) {
-      _blobController.repeat();
-    }
-  }
-
-  bool _isReducedMotion() {
-    final binding = WidgetsBinding.instance;
-    return binding.platformDispatcher.accessibilityFeatures.disableAnimations;
-  }
-
-  @override
-  void dispose() {
-    _blobController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.gradientBgAmbient),
-      child: Stack(
-        children: [
-          // Slow drifting teal blob — purely decorative, subordinate
-          AnimatedBuilder(
-            animation: _blobController,
-            builder: (context, _) {
-              final t = _blobController.value * 2 * math.pi;
-              final dx = math.sin(t * 0.7) * 60.0;
-              final dy = math.sin(t * 0.5) * 40.0;
-              return Positioned(
-                top: -60 + dy,
-                left: MediaQuery.of(context).size.width * 0.3 + dx,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 280,
-                    height: 280,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          const Color(0xFF14B8A6).withValues(alpha: 0.12),
-                          const Color(0xFF14B8A6).withValues(alpha: 0.0),
-                        ],
-                        stops: const [0.0, 0.85],
-                      ),
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              );
-            },
-          ),
-          widget.child,
-        ],
-      ),
+      child: child,
     );
   }
 }
@@ -164,7 +98,7 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
     _isReducedMotion =
         WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations;
 
-    // §4.3: 9-section staggered load-in controllers (~60ms stagger, 250ms each)
+    // 9-section staggered entrance (~60ms stagger)
     _loadInControllers = List.generate(
       9,
       (i) => AnimationController(vsync: this, duration: const Duration(milliseconds: 280)),
@@ -187,7 +121,6 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
       }
       return;
     }
-    // §4.3: stagger header → risk → banner → offline → metrics → events → alerts → advisories → footer
     for (int i = 0; i < _loadInControllers.length; i++) {
       await Future.delayed(const Duration(milliseconds: 60));
       if (mounted) _loadInControllers[i].forward();
@@ -217,7 +150,6 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
 
   @override
   Widget build(BuildContext context) {
-    // ── Data reads — same providers, no changes ──────────────────────────────
     final pondsAsync = ref.watch(allPondsProvider);
     final pondAsync = ref.watch(currentPondProvider);
     final meAsync = ref.watch(meProvider);
@@ -238,7 +170,6 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
     final advisories = advisoriesAsync.valueOrNull ?? DemoDataService.recommendations;
     final logs = logsAsync.valueOrNull ?? [];
 
-    // TODO(contract): exact field name in /v1/auth/me response not confirmed
     final farmerName = (me?['name'] as String?) ??
         (me?['full_name'] as String?) ??
         (me?['phone'] as String?) ??
@@ -263,28 +194,24 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
                       ponds: ponds,
                       selectedPond: pond,
                       hasUnackedAlerts: unackedAlertsCount > 0,
-                      isReducedMotion: _isReducedMotion,
                       onPondChanged: (id) =>
                           ref.read(currentPondIdProvider.notifier).state = id,
                     ),
                   ),
                 ),
 
-                // §3.3 Risk Score Block — Tier 2 (hero element, glow + float)
+                // §3.3 Risk Score Block — Tier 2 (hero element, steady disc)
                 SliverToBoxAdapter(
                   child: _sectionFadeRise(
                     1,
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: _RiskDiscBlock(
-                        risk: risk,
-                        isReducedMotion: _isReducedMotion,
-                      ),
+                      child: _RiskDiscBlock(risk: risk),
                     ),
                   ),
                 ),
 
-                // §3.4 Blind-State Banner — Tier 2 when active, spring slide-in
+                // §3.4 Blind-State Banner — Tier 2 when active
                 SliverToBoxAdapter(
                   child: _sectionFadeRise(
                     2,
@@ -375,7 +302,7 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
                   ),
                 ),
 
-                // §3.7 Alerts Card — Tier 1 resting, Tier 2 + pulse when unacked
+                // §3.7 Alerts Card — Static clean display
                 SliverToBoxAdapter(
                   child: _sectionFadeRise(
                     6,
@@ -384,13 +311,12 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
                       child: _AlertsCard(
                         unackedCount: unackedAlertsCount,
                         totalAlerts: alerts.length,
-                        isReducedMotion: _isReducedMotion,
                       ),
                     ),
                   ),
                 ),
 
-                // §3.8 Advisories Card — Tier 1, deliberately calm (no pulse)
+                // §3.8 Advisories Card — Tier 1, calm display
                 SliverToBoxAdapter(
                   child: _sectionFadeRise(
                     7,
@@ -404,10 +330,10 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
             ),
           ),
 
-          // §3.9 Sticky Footer Bar — Tier 2, gradient CTA + breathing glow
+          // §3.9 Sticky Footer Bar — Clean steady CTA bar
           _sectionFadeRise(
             8,
-            _StickyFooterBar(isReducedMotion: _isReducedMotion),
+            const _StickyFooterBar(),
           ),
         ],
       ),
@@ -416,14 +342,13 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.2 Header — Tier 0 (no card, flat)
+// §3.2 Header — Tier 0 (no card, clean static bell)
 // ─────────────────────────────────────────────────────────────────────────────
-class _DashboardHeader extends StatefulWidget {
+class _DashboardHeader extends StatelessWidget {
   final String farmerName;
   final List<Pond> ponds;
   final Pond selectedPond;
   final bool hasUnackedAlerts;
-  final bool isReducedMotion;
   final ValueChanged<String> onPondChanged;
 
   const _DashboardHeader({
@@ -431,58 +356,12 @@ class _DashboardHeader extends StatefulWidget {
     required this.ponds,
     required this.selectedPond,
     required this.hasUnackedAlerts,
-    required this.isReducedMotion,
     required this.onPondChanged,
   });
 
   @override
-  State<_DashboardHeader> createState() => _DashboardHeaderState();
-}
-
-class _DashboardHeaderState extends State<_DashboardHeader>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _bellGlowController;
-  late Animation<double> _bellGlowAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _bellGlowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-    _bellGlowAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _bellGlowController, curve: Curves.easeInOut),
-    );
-    _updateBellGlow();
-  }
-
-  void _updateBellGlow() {
-    if (widget.hasUnackedAlerts && !widget.isReducedMotion) {
-      _bellGlowController.repeat(reverse: true);
-    } else {
-      _bellGlowController.stop();
-      _bellGlowController.value = 0.0;
-    }
-  }
-
-  @override
-  void didUpdateWidget(_DashboardHeader old) {
-    super.didUpdateWidget(old);
-    if (old.hasUnackedAlerts != widget.hasUnackedAlerts) {
-      _updateBellGlow();
-    }
-  }
-
-  @override
-  void dispose() {
-    _bellGlowController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final hasMultiplePonds = widget.ponds.length > 1;
+    final hasMultiplePonds = ponds.length > 1;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
@@ -496,7 +375,7 @@ class _DashboardHeaderState extends State<_DashboardHeader>
                   children: [
                     Flexible(
                       child: Text(
-                        'Vanakkam, ${widget.farmerName} 👋',
+                        'Vanakkam, $farmerName 👋',
                         style: const TextStyle(
                           fontSize: 19,
                           fontWeight: FontWeight.bold,
@@ -512,11 +391,11 @@ class _DashboardHeaderState extends State<_DashboardHeader>
                 if (hasMultiplePonds)
                   DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: widget.selectedPond.id,
+                      value: selectedPond.id,
                       isDense: true,
                       icon: const Icon(Icons.arrow_drop_down_rounded,
                           color: AppColors.langAccentPrimary, size: 18),
-                      items: widget.ponds.map((p) {
+                      items: ponds.map((p) {
                         return DropdownMenuItem<String>(
                           value: p.id,
                           child: Text(
@@ -530,13 +409,13 @@ class _DashboardHeaderState extends State<_DashboardHeader>
                         );
                       }).toList(),
                       onChanged: (val) {
-                        if (val != null) widget.onPondChanged(val);
+                        if (val != null) onPondChanged(val);
                       },
                     ),
                   )
                 else
                   Text(
-                    '${widget.selectedPond.name} · ${widget.selectedPond.id}',
+                    '${selectedPond.name} · ${selectedPond.id}',
                     style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
@@ -547,61 +426,28 @@ class _DashboardHeaderState extends State<_DashboardHeader>
             ),
           ),
 
-          // Bell with pulsing glow ring when unread alerts exist
-          AnimatedBuilder(
-            animation: _bellGlowAnim,
-            builder: (context, child) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (widget.hasUnackedAlerts)
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
+          // Bell button — clean static icon with unread red dot
+          IconButton(
+            onPressed: () => context.push('/notifications'),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_outlined,
+                    color: AppColors.textPrimary, size: 24),
+                if (hasUnackedAlerts)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.riskHigh,
                         shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            AppColors.riskHigh
-                                .withValues(alpha: 0.22 * _bellGlowAnim.value),
-                            AppColors.riskHigh.withValues(alpha: 0.0),
-                          ],
-                        ),
                       ),
                     ),
-                  child!,
-                ],
-              );
-            },
-            child: IconButton(
-              onPressed: () => context.push('/notifications'),
-              icon: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(Icons.notifications_outlined,
-                      color: AppColors.textPrimary, size: 24),
-                  if (widget.hasUnackedAlerts)
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: AppColors.riskHigh,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                                color:
-                                    AppColors.riskHigh.withValues(alpha: 0.5),
-                                blurRadius: 4,
-                                spreadRadius: 1)
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
 
@@ -624,9 +470,7 @@ class _DashboardHeaderState extends State<_DashboardHeader>
               ),
               child: Center(
                 child: Text(
-                  widget.farmerName.isNotEmpty
-                      ? widget.farmerName[0].toUpperCase()
-                      : 'M',
+                  farmerName.isNotEmpty ? farmerName[0].toUpperCase() : 'M',
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -644,66 +488,15 @@ class _DashboardHeaderState extends State<_DashboardHeader>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.3 Risk Disc Block — Tier 2: float + glow breathing + inner highlight
+// §3.3 Risk Disc Block — Tier 2: steady 3D disc with subtle static highlight
 // ─────────────────────────────────────────────────────────────────────────────
-class _RiskDiscBlock extends StatefulWidget {
+class _RiskDiscBlock extends StatelessWidget {
   final PondRisk risk;
-  final bool isReducedMotion;
 
-  const _RiskDiscBlock({required this.risk, required this.isReducedMotion});
-
-  @override
-  State<_RiskDiscBlock> createState() => _RiskDiscBlockState();
-}
-
-class _RiskDiscBlockState extends State<_RiskDiscBlock>
-    with TickerProviderStateMixin {
-  // Idle float — Tier 2, translateY ±3px, 6s
-  late final AnimationController _floatController;
-  late final Animation<double> _floatAnim;
-
-  // Halo breathing — scale 1.0→1.08→1.0, opacity 0.5→0.25→0.5, ~4s
-  late final AnimationController _glowController;
-  late final Animation<double> _glowScale;
-  late final Animation<double> _glowOpacity;
-
-  @override
-  void initState() {
-    super.initState();
-    _floatController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 6000),
-    );
-    _floatAnim = Tween<double>(begin: -3.0, end: 3.0).animate(
-      CurvedAnimation(parent: _floatController, curve: Curves.easeInOut),
-    );
-
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 4000),
-    );
-    _glowScale = Tween<double>(begin: 1.0, end: 1.08).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-    _glowOpacity = Tween<double>(begin: 0.5, end: 0.25).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-
-    if (!widget.isReducedMotion) {
-      _floatController.repeat(reverse: true);
-      _glowController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _floatController.dispose();
-    _glowController.dispose();
-    super.dispose();
-  }
+  const _RiskDiscBlock({required this.risk});
 
   LinearGradient get _discGradient {
-    switch (widget.risk.effectiveTier) {
+    switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
         return AppColors.gradient3DHighRisk;
@@ -717,7 +510,7 @@ class _RiskDiscBlockState extends State<_RiskDiscBlock>
   }
 
   Color get _tierGlowColor {
-    switch (widget.risk.effectiveTier) {
+    switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
         return AppColors.riskHigh;
@@ -729,7 +522,7 @@ class _RiskDiscBlockState extends State<_RiskDiscBlock>
   }
 
   String get _tierLabel {
-    switch (widget.risk.effectiveTier) {
+    switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
         return 'High Risk';
@@ -741,7 +534,7 @@ class _RiskDiscBlockState extends State<_RiskDiscBlock>
   }
 
   String get _tierDescription {
-    switch (widget.risk.effectiveTier) {
+    switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
         return 'Attention required! Environmental conditions warrant immediate check.';
@@ -753,7 +546,7 @@ class _RiskDiscBlockState extends State<_RiskDiscBlock>
   }
 
   IconData get _tierIcon {
-    switch (widget.risk.effectiveTier) {
+    switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
         return Icons.warning_rounded;
@@ -766,173 +559,131 @@ class _RiskDiscBlockState extends State<_RiskDiscBlock>
 
   @override
   Widget build(BuildContext context) {
-    final scoreDisplay = widget.risk.score != null
-        ? '${(widget.risk.score! * 100).toInt()}%'
-        : null;
+    final scoreDisplay =
+        risk.score != null ? '${(risk.score! * 100).toInt()}%' : null;
 
-    return AnimatedBuilder(
-      animation: Listenable.merge([_floatController, _glowController]),
-      builder: (context, _) {
-        return Transform.translate(
-          offset: Offset(0, _floatAnim.value),
-          child: _Tier2GlassCard(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 3D Disc with halo + inner highlight
-                Column(
-                  children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Halo glow ring — breathing
-                        Transform.scale(
-                          scale: _glowScale.value,
-                          child: Container(
-                            width: 90,
-                            height: 90,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: RadialGradient(
-                                colors: [
-                                  _tierGlowColor.withValues(
-                                      alpha: _glowOpacity.value),
-                                  _tierGlowColor.withValues(alpha: 0.0),
-                                ],
-                                stops: const [0.0, 0.70],
-                              ),
-                            ),
-                          ),
-                        ),
-                        // The disc itself
-                        Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: _discGradient,
-                            boxShadow: [
-                              BoxShadow(
-                                color: _tierGlowColor.withValues(alpha: 0.35),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: Stack(
-                            children: [
-                              // Inner top-left highlight — reads as "3D sphere"
-                              Positioned(
-                                top: 8,
-                                left: 8,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: RadialGradient(
-                                      colors: [
-                                        Colors.white.withValues(alpha: 0.45),
-                                        Colors.white.withValues(alpha: 0.0),
-                                      ],
-                                      stops: const [0.0, 1.0],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Center(
-                                child: Icon(_tierIcon,
-                                    color: Colors.white, size: 28),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+    return _Tier2GlassCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 3D Disc — static, clean elevation
+          Column(
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: _discGradient,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _tierGlowColor.withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
-                    if (scoreDisplay != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        scoreDisplay,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: _tierGlowColor,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-
-                const SizedBox(width: 16),
-
-                // Right side: label, description, staleness
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Overall Pond Risk',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                          const Spacer(),
-                          SpeakerButton(
-                              textToSpeak:
-                                  'Overall pond risk is $_tierLabel. $_tierDescription'),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 3),
+                child: Stack(
+                  children: [
+                    // Inner top-left highlight — static 3D sphere look
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        width: 22,
+                        height: 22,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
                             colors: [
-                              _tierGlowColor.withValues(alpha: 0.18),
-                              _tierGlowColor.withValues(alpha: 0.08),
+                              Colors.white.withValues(alpha: 0.45),
+                              Colors.white.withValues(alpha: 0.0),
                             ],
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color:
-                                  _tierGlowColor.withValues(alpha: 0.3),
-                              width: 1),
-                        ),
-                        child: Text(
-                          _tierLabel.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: _tierGlowColor,
-                            letterSpacing: 0.8,
+                            stops: const [0.0, 1.0],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _tierDescription,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          color: AppColors.textSecondary,
-                          height: 1.45,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      StalenessBadge(syncedAt: widget.risk.syncedAt),
-                    ],
+                    ),
+                    Center(
+                      child: Icon(_tierIcon, color: Colors.white, size: 28),
+                    ),
+                  ],
+                ),
+              ),
+              if (scoreDisplay != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  scoreDisplay,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: _tierGlowColor,
                   ),
                 ),
               ],
+            ],
+          ),
+
+          const SizedBox(width: 16),
+
+          // Right side: label, description, staleness
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Overall Pond Risk',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const Spacer(),
+                    SpeakerButton(
+                        textToSpeak:
+                            'Overall pond risk is $_tierLabel. $_tierDescription'),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _tierGlowColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: _tierGlowColor.withValues(alpha: 0.3), width: 1),
+                  ),
+                  child: Text(
+                    _tierLabel.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: _tierGlowColor,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _tierDescription,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textSecondary,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                StalenessBadge(syncedAt: risk.syncedAt),
+              ],
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -947,7 +698,6 @@ class _MetricsScrollRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO(contract): log field list from GET /v1/logs unconfirmed — rendering non-null parameters
     final ph = log?.ph ?? 7.8;
     final doVal = log?.dissolvedOxygen ?? 5.4;
     final temp = log?.temperature ?? 28.0;
@@ -956,7 +706,7 @@ class _MetricsScrollRow extends StatelessWidget {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none, // allow chip shadows to bleed naturally
+      clipBehavior: Clip.none,
       child: Row(
         children: [
           MetricChip(
@@ -987,7 +737,7 @@ class _MetricsScrollRow extends StatelessWidget {
             unit: 'ppt',
             syncedAt: syncedAt,
           ),
-          const SizedBox(width: 4), // trailing breathing room for shadow
+          const SizedBox(width: 4),
         ],
       ),
     );
@@ -1085,19 +835,11 @@ class _EventTimelineCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 11),
       child: Row(
         children: [
-          // Nested Tier-1 icon chip — floats above the base card
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: iconColor.withValues(alpha: 0.10),
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: iconColor.withValues(alpha: 0.18),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
               border: Border.all(
                   color: iconColor.withValues(alpha: 0.2), width: 0.5),
             ),
@@ -1128,117 +870,38 @@ class _EventTimelineCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.7 Alerts Card — Tier 1 resting, Tier 2 + pulse glow when unacked
+// §3.7 Alerts Card — Static clean alert display
 // ─────────────────────────────────────────────────────────────────────────────
-class _AlertsCard extends StatefulWidget {
+class _AlertsCard extends StatelessWidget {
   final int unackedCount;
   final int totalAlerts;
-  final bool isReducedMotion;
 
   const _AlertsCard({
     required this.unackedCount,
     required this.totalAlerts,
-    required this.isReducedMotion,
   });
 
   @override
-  State<_AlertsCard> createState() => _AlertsCardState();
-}
-
-class _AlertsCardState extends State<_AlertsCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    );
-    _pulseAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-    _updatePulse();
-  }
-
-  void _updatePulse() {
-    if (widget.unackedCount > 0 && !widget.isReducedMotion) {
-      _pulseController.repeat(reverse: true);
-    } else {
-      _pulseController.stop();
-      _pulseController.value = 0.0;
-    }
-  }
-
-  @override
-  void didUpdateWidget(_AlertsCard old) {
-    super.didUpdateWidget(old);
-    if (old.unackedCount != widget.unackedCount) _updatePulse();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final hasUnacked = widget.unackedCount > 0;
+    final hasUnacked = unackedCount > 0;
 
-    return AnimatedBuilder(
-      animation: _pulseAnim,
-      builder: (context, child) {
-        final glowAlpha = hasUnacked ? (0.18 * _pulseAnim.value) : 0.0;
-
-        Widget card = hasUnacked
-            ? _Tier2GlassCard(
-                glowColor: AppColors.riskHigh,
-                glowAlpha: glowAlpha,
-                onTap: () => context.go('/alerts'),
-                child: child!,
-              )
-            : _Tier1GlassCard(
-                onTap: () => context.go('/alerts'),
-                child: child!,
-              );
-
-        return card;
-      },
+    return _Tier1GlassCard(
+      onTap: () => context.go('/alerts'),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: widget.unackedCount > 0
-                  ? LinearGradient(colors: [
-                      AppColors.riskHigh.withValues(alpha: 0.18),
-                      AppColors.riskHigh.withValues(alpha: 0.06),
-                    ])
-                  : LinearGradient(colors: [
-                      AppColors.riskLow.withValues(alpha: 0.18),
-                      AppColors.riskLow.withValues(alpha: 0.06),
-                    ]),
-              boxShadow: widget.unackedCount > 0
-                  ? [
-                      BoxShadow(
-                        color: AppColors.riskHigh.withValues(alpha: 0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      )
-                    ]
-                  : null,
+              color: hasUnacked
+                  ? AppColors.riskHigh.withValues(alpha: 0.12)
+                  : AppColors.riskLow.withValues(alpha: 0.12),
             ),
             child: Icon(
-              widget.unackedCount > 0
+              hasUnacked
                   ? Icons.notifications_active_rounded
                   : Icons.check_circle_outline_rounded,
-              color: widget.unackedCount > 0
-                  ? AppColors.riskHigh
-                  : AppColors.riskLow,
+              color: hasUnacked ? AppColors.riskHigh : AppColors.riskLow,
               size: 22,
             ),
           ),
@@ -1248,22 +911,20 @@ class _AlertsCardState extends State<_AlertsCard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.unackedCount > 0
-                      ? '${widget.unackedCount} Unacknowledged Alert${widget.unackedCount > 1 ? 's' : ''}'
+                  hasUnacked
+                      ? '$unackedCount Unacknowledged Alert${unackedCount > 1 ? 's' : ''}'
                       : 'Alert System Clear',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: widget.unackedCount > 0
-                        ? AppColors.riskHigh
-                        : AppColors.textPrimary,
+                    color: hasUnacked ? AppColors.riskHigh : AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  widget.unackedCount > 0
+                  hasUnacked
                       ? 'Tap to review urgent alerts and action steps'
-                      : 'All parameters normal. ${widget.totalAlerts} alerts total.',
+                      : 'All parameters normal. $totalAlerts alerts total.',
                   style: const TextStyle(
                       fontSize: 12, color: AppColors.textSecondary),
                 ),
@@ -1278,7 +939,7 @@ class _AlertsCardState extends State<_AlertsCard>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.8 Advisories Card — Tier 1, deliberately calm (no pulse, no glow)
+// §3.8 Advisories Card — Tier 1, calm display
 // ─────────────────────────────────────────────────────────────────────────────
 class _AdvisoriesCard extends StatelessWidget {
   final List<Recommendation> advisories;
@@ -1326,82 +987,30 @@ class _AdvisoriesCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.9 Sticky Footer Bar — Tier 2 CTA with breathing glow + idle float
+// §3.9 Sticky Footer Bar — Clean steady CTA bar with touch feedback
 // ─────────────────────────────────────────────────────────────────────────────
 class _StickyFooterBar extends StatefulWidget {
-  final bool isReducedMotion;
-
-  const _StickyFooterBar({required this.isReducedMotion});
+  const _StickyFooterBar();
 
   @override
   State<_StickyFooterBar> createState() => _StickyFooterBarState();
 }
 
-class _StickyFooterBarState extends State<_StickyFooterBar>
-    with TickerProviderStateMixin {
-  // CTA button glow — same rhythm family as risk disc (slightly faster phase)
-  late final AnimationController _ctaGlowController;
-  late final Animation<double> _ctaGlowAnim;
-
-  // Mic button pulse — slower, 5s, reads "always listening"
-  late final AnimationController _micPulseController;
-  late final Animation<double> _micPulseAnim;
-
-  // Press/release scale
+class _StickyFooterBarState extends State<_StickyFooterBar> {
   bool _ctaPressed = false;
   bool _micPressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctaGlowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3800),
-    );
-    _ctaGlowAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _ctaGlowController, curve: Curves.easeInOut),
-    );
-
-    _micPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 5000),
-    );
-    _micPulseAnim = Tween<double>(begin: 0.4, end: 0.9).animate(
-      CurvedAnimation(parent: _micPulseController, curve: Curves.easeInOut),
-    );
-
-    if (!widget.isReducedMotion) {
-      _ctaGlowController.repeat(reverse: true);
-      _micPulseController.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctaGlowController.dispose();
-    _micPulseController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
-        // Subtle glass bottom bar
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: 0.85),
-            Colors.white.withValues(alpha: 0.97),
-          ],
-        ),
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: AppColors.shadowTier2,
-            blurRadius: 20,
-            offset: const Offset(0, -6),
+            color: AppColors.shadowTier1,
+            blurRadius: 16,
+            offset: const Offset(0, -4),
           ),
         ],
         border: Border(
@@ -1413,75 +1022,48 @@ class _StickyFooterBarState extends State<_StickyFooterBar>
       ),
       child: Row(
         children: [
-          // "Check your pond" — Tier 2 gradient CTA with breathing glow
+          // "Check your pond" CTA
           Expanded(
-            child: AnimatedBuilder(
-              animation: _ctaGlowAnim,
-              builder: (context, child) {
-                return Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Breathing glow behind CTA button
-                    Positioned.fill(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(28),
-                          gradient: RadialGradient(
-                            colors: [
-                              AppColors.riskLow.withValues(
-                                  alpha: 0.22 * _ctaGlowAnim.value),
-                              AppColors.riskLow.withValues(alpha: 0.0),
-                            ],
-                          ),
+            child: GestureDetector(
+              onTapDown: (_) => setState(() => _ctaPressed = true),
+              onTapUp: (_) {
+                setState(() => _ctaPressed = false);
+                context.go('/log');
+              },
+              onTapCancel: () => setState(() => _ctaPressed = false),
+              child: AnimatedScale(
+                scale: _ctaPressed ? 0.97 : 1.0,
+                duration: const Duration(milliseconds: 100),
+                curve: Curves.easeOut,
+                child: Container(
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.gradient3DPrimary,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.shadowTier2,
+                        blurRadius: _ctaPressed ? 4 : 12,
+                        offset: Offset(0, _ctaPressed ? 2 : 4),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.camera_alt_rounded,
+                          color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Check your pond',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
                         ),
                       ),
-                    ),
-                    child!,
-                  ],
-                );
-              },
-              child: GestureDetector(
-                onTapDown: (_) => setState(() => _ctaPressed = true),
-                onTapUp: (_) {
-                  setState(() => _ctaPressed = false);
-                  context.go('/log');
-                },
-                onTapCancel: () => setState(() => _ctaPressed = false),
-                child: AnimatedScale(
-                  scale: _ctaPressed ? 0.97 : 1.0,
-                  duration: const Duration(milliseconds: 100),
-                  curve: Curves.easeOut,
-                  child: Container(
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.gradient3DPrimary,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.shadowTier2,
-                          blurRadius: _ctaPressed ? 8 : 18,
-                          offset: Offset(0, _ctaPressed ? 2 : 6),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.camera_alt_rounded,
-                            color: Colors.white, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Check your pond',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -1490,65 +1072,39 @@ class _StickyFooterBarState extends State<_StickyFooterBar>
 
           const SizedBox(width: 12),
 
-          // Ask mic — Tier 2 glass circle, slow idle pulse
-          AnimatedBuilder(
-            animation: _micPulseAnim,
-            builder: (context, child) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Outer glow ring
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          AppColors.riskLow.withValues(
-                              alpha: 0.2 * _micPulseAnim.value),
-                          AppColors.riskLow.withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
-                  ),
-                  child!,
-                ],
-              );
+          // Ask mic icon button
+          GestureDetector(
+            onTapDown: (_) => setState(() => _micPressed = true),
+            onTapUp: (_) {
+              setState(() => _micPressed = false);
+              context.go('/ask');
             },
-            child: GestureDetector(
-              onTapDown: (_) => setState(() => _micPressed = true),
-              onTapUp: (_) {
-                setState(() => _micPressed = false);
-                context.go('/ask');
-              },
-              onTapCancel: () => setState(() => _micPressed = false),
-              child: AnimatedScale(
-                scale: _micPressed ? 0.94 : 1.0,
-                duration: const Duration(milliseconds: 100),
-                child: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppColors.gradientCardGlass,
-                    border: Border.all(
-                      color: AppColors.riskLow.withValues(alpha: 0.5),
-                      width: 1.5,
+            onTapCancel: () => setState(() => _micPressed = false),
+            child: AnimatedScale(
+              scale: _micPressed ? 0.94 : 1.0,
+              duration: const Duration(milliseconds: 100),
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppColors.gradientCardGlass,
+                  border: Border.all(
+                    color: AppColors.riskLow.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.shadowTier1,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.shadowTier2,
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.mic_rounded,
-                    color: AppColors.langAccentPrimary,
-                    size: 22,
-                  ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.mic_rounded,
+                  color: AppColors.langAccentPrimary,
+                  size: 22,
                 ),
               ),
             ),
@@ -1560,11 +1116,10 @@ class _StickyFooterBarState extends State<_StickyFooterBar>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared Glass Card Primitives — elevation tier system
+// Shared Glass Card Primitives — static elevation tier system
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Tier 1 — Resting glass card.
-/// Shadow: 0 4px 16px rgba(14,148,136,0.10) — palette-tinted.
 class _Tier1GlassCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -1603,74 +1158,47 @@ class _Tier1GlassCard extends StatelessWidget {
   }
 }
 
-/// Tier 2 — Elevated glass card (hero elements).
-/// Shadow: 0 12px 32px rgba(14,148,136,0.18) — larger, cooler.
-/// Optionally accepts a glow color + alpha for the pulse motif.
+/// Tier 2 — Elevated glass card.
 class _Tier2GlassCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
   final EdgeInsets padding;
-  final Color? glowColor;
-  final double glowAlpha;
 
   const _Tier2GlassCard({
     required this.child,
     this.onTap,
     this.padding = const EdgeInsets.all(18),
-    this.glowColor,
-    this.glowAlpha = 0.0,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Optional glow halo beneath the card (for pulse motif)
-        if (glowColor != null && glowAlpha > 0)
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: glowColor!.withValues(alpha: glowAlpha),
-                    blurRadius: 28,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.gradientCardGlass,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: AppColors.langAccentPrimary.withValues(alpha: 0.2),
+            width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadowTier2,
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
-        Container(
-          decoration: BoxDecoration(
-            gradient: AppColors.gradientCardGlass,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: AppColors.langAccentPrimary.withValues(alpha: 0.2),
-                width: 1.0),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadowTier2,
-                blurRadius: 32,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: onTap != null
-              ? InkWell(
-                  onTap: onTap,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(padding: padding, child: child),
-                )
-              : Padding(padding: padding, child: child),
-        ),
-      ],
+        ],
+      ),
+      child: onTap != null
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(padding: padding, child: child),
+            )
+          : Padding(padding: padding, child: child),
     );
   }
 }
 
-/// Wraps a child in Tier-2 visual treatment without gradient card glass —
-/// used for elements like BlindStateBanner that bring their own background.
+/// Wraps a child in Tier-2 visual treatment.
 class _Tier2Wrapper extends StatelessWidget {
   final Widget child;
 
@@ -1684,8 +1212,8 @@ class _Tier2Wrapper extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: AppColors.shadowTier2,
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -1695,14 +1223,13 @@ class _Tier2Wrapper extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Spring curve for blind-state banner slide-in (§3.4 — overshoot then settle)
+// Spring curve for blind-state banner slide-in
 // ─────────────────────────────────────────────────────────────────────────────
 class _SpringCurve extends Curve {
   const _SpringCurve();
 
   @override
   double transformInternal(double t) {
-    // Mild overshoot: settles at 1.0 with a small bounce
     return 1.0 -
         math.exp(-10.0 * t) * math.cos(math.pi * 2.2 * t) * (1.0 - t) * 1.1;
   }

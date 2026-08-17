@@ -1,0 +1,69 @@
+# Flutter & Dart artifacts
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Logs & Temporary files
+*.log
+flutter_*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# IDE & Editor files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Local Environment & Secrets
+.env
+.env.*
+!.env.example
+local.properties
+
+# Android specific
+.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/local.properties
+android/.gradle/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# iOS specific
+ios/Flutter/.last_build_id
+ios/Flutter/ephemeral/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/Podfile.lock
+ios/ServiceDefinitions.json
+
+# macOS specific
+macos/Flutter/ephemeral/
+macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Linux & Windows specific
+linux/flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Symbolication & obfuscation maps
+app.*.symbols
+app.*.map.json
+
+# Scratch media & design reference dumps
+Refernce/

@@ -252,13 +252,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               // ── White base ────────────────────────────────────────────────
               Positioned.fill(child: Container(color: Colors.white)),
 
-              // ── Background Image + Tint Fill (appears as expand increases) ────
+              // ── Background Image Fill (appears as expand increases) ────
               Positioned.fill(
                 child: Opacity(
                   opacity: bgOpacity,
                   child: Stack(
                     children: [
-                      // Aquaculture Get Started Background Image
+                      // High-res Aquaculture Background Image
                       Positioned.fill(
                         child: Image.asset(
                           'assets/images/splash_background.png',
@@ -266,7 +266,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           alignment: Alignment.center,
                         ),
                       ),
-                      // Gradient overlay to enhance text readability
+                      // Subtle gradient vignette overlay to ensure white text & logo remain crisp
                       Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -274,9 +274,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                const Color(0xFF091F2E).withValues(alpha: 0.45),
-                                AppColors.deepNavy.withValues(alpha: 0.15),
-                                AppColors.deepNavy.withValues(alpha: 0.55),
+                                Colors.black.withValues(alpha: 0.35),
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.40),
                               ],
                               stops: const [0.0, 0.45, 1.0],
                             ),
@@ -288,24 +288,25 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
               ),
 
-              // ── Blob 1: solid seaGreen ─────────────────────────────────
-              Positioned(
-                left: dot1x - blob1W / 2,
-                top:  dot1y - blob1H / 2,
-                child: Opacity(
-                  opacity: (1.0 - expand * 0.0).clamp(0.0, 1.0),
-                  child: Container(
-                    width:  blob1W,
-                    height: blob1H,
-                    decoration: BoxDecoration(
-                      color: AppColors.seaGreen,
-                      borderRadius: BorderRadius.circular(blob1W),
+              // ── Blob 1: solid seaGreen (fades out as background image reveals) ───
+              if (expand < 0.95)
+                Positioned(
+                  left: dot1x - blob1W / 2,
+                  top:  dot1y - blob1H / 2,
+                  child: Opacity(
+                    opacity: (1.0 - expand).clamp(0.0, 1.0),
+                    child: Container(
+                      width:  blob1W,
+                      height: blob1H,
+                      decoration: BoxDecoration(
+                        color: AppColors.seaGreen,
+                        borderRadius: BorderRadius.circular(blob1W),
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              // ── Blob 2: translucent brightMint (merges away at expand→1) ─
+              // ── Blob 2: translucent brightMint (merges & fades away early) ──
               if (expand < 0.85)
                 Positioned(
                   left: dot2x - blob2W / 2,

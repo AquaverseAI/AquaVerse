@@ -71,7 +71,7 @@ void main() {
   });
 
   group('Onboarding Screens Flow Verification', () {
-    testWidgets('LanguageSelectScreen renders 4 languages and Next button', (WidgetTester tester) async {
+    testWidgets('LanguageSelectScreen renders English and Tamil cards and Continue button', (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: MaterialApp(
@@ -81,9 +81,8 @@ void main() {
       );
 
       expect(find.text('Select Language'), findsOneWidget);
+      expect(find.text('English'), findsWidgets);
       expect(find.text('தமிழ்'), findsOneWidget);
-      expect(find.text('हिंदी'), findsOneWidget);
-      expect(find.text('తెలుగు'), findsOneWidget);
       expect(find.text('Continue'), findsOneWidget);
     });
 

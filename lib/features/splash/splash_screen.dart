@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_localizations.dart';
-import '../../shared/widgets/floating_icons_overlay.dart';
 import 'splash_controller.dart';
 
 // =============================================================================
@@ -259,30 +258,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   opacity: bgOpacity,
                   child: Stack(
                     children: [
-                      // High-res Aquaculture Background Image with Contrast Enhancement
+                      // High-res Aquaculture Background Image
                       Positioned.fill(
-                        child: ColorFiltered(
-                          colorFilter: const ColorFilter.matrix([
-                            0.85, 0,    0,    0, -15,
-                            0,    0.88, 0,    0, -10,
-                            0,    0,    0.88, 0, -10,
-                            0,    0,    0,    1,   0,
-                          ]),
-                          child: Image.asset(
-                            'assets/images/splash_background.png',
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                          ),
+                        child: Image.asset(
+                          'assets/images/splash_background.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
                         ),
                       ),
-
-                      // High-contrast Dark Outline Floating Icons Overlay
-                      const Positioned.fill(
-                        child: FloatingIconsOverlay(
-                          iconColor: Color(0xFF042738), // Dark Navy/Teal outline for 100% visibility
-                        ),
-                      ),
-                      // Directional multi-stop gradient scrim per Section 2.2 specification
+                      // Subtle gradient vignette overlay to ensure white text & logo remain crisp
                       Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -290,12 +274,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withValues(alpha: 0.08), // Top: lightest
-                                Colors.black.withValues(alpha: 0.28), // Mid: icons band
-                                Colors.black.withValues(alpha: 0.40), // Mid-lower
-                                Colors.black.withValues(alpha: 0.60), // Bottom: headline/subtext
+                                Colors.black.withValues(alpha: 0.35),
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.40),
                               ],
-                              stops: const [0.0, 0.35, 0.65, 1.0],
+                              stops: const [0.0, 0.45, 1.0],
                             ),
                           ),
                         ),

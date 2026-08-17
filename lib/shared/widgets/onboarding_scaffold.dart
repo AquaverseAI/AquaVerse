@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'floating_icons_overlay.dart';
 
 /// Standard scaffold wrapper for all Onboarding screens.
 /// Displays the custom aquaculture background image (`assets/images/onboarding_bg.png`)
-/// with high-contrast icon overlays and crisp gradient scrim.
+/// with a subtle contrast-enhancing overlay for crisp text readability.
 class OnboardingScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget body;
@@ -26,31 +25,16 @@ class OnboardingScaffold extends StatelessWidget {
       appBar: appBar,
       body: Stack(
         children: [
-          // 1. Background Image with Contrast Boost
+          // 1. Background Image (Full coverage)
           Positioned.fill(
-            child: ColorFiltered(
-              colorFilter: const ColorFilter.matrix([
-                0.85, 0,    0,    0, -15, // Red: slightly darkened & deepened
-                0,    0.88, 0,    0, -10, // Green
-                0,    0,    0.88, 0, -10, // Blue
-                0,    0,    0,    1,   0, // Alpha
-              ]),
-              child: Image.asset(
-                'assets/images/onboarding_bg.png',
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-              ),
+            child: Image.asset(
+              'assets/images/onboarding_bg.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
             ),
           ),
 
-          // 2. High-contrast Dark Outline Floating Icons Overlay
-          const Positioned.fill(
-            child: FloatingIconsOverlay(
-              iconColor: Color(0xFF042738), // Dark Navy/Teal outline for 100% visibility
-            ),
-          ),
-
-          // 2. Multi-stop directional gradient scrim for high contrast (Section 2.2 spec)
+          // 2. Light gradient overlay for text readability
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -58,12 +42,11 @@ class OnboardingScaffold extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.08), // Top: lightest scrim
-                    Colors.black.withValues(alpha: 0.22), // Mid-upper
-                    Colors.black.withValues(alpha: 0.32), // Mid-lower: icon cluster band
-                    Colors.black.withValues(alpha: 0.58), // Bottom: darkest for CTA / subtext
+                    Colors.white.withValues(alpha: 0.25),
+                    Colors.white.withValues(alpha: 0.10),
+                    Colors.white.withValues(alpha: 0.30),
                   ],
-                  stops: const [0.0, 0.30, 0.65, 1.0],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),

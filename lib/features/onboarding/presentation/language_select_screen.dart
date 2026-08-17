@@ -4,77 +4,42 @@ import 'package:go_router/go_router.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
-import '../../../shared/widgets/rotating_globe_icon.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
-/// Rebuilt LanguageSelectScreen adhering to PRD-AV light theme design tokens.
-/// Features:
-/// - Sea-green/teal light palette (AppColors.lang* tokens).
-/// - Top 64dp circular gradient icon badge.
-/// - Title & Subtitle block + SpeakerButton audio prompt.
-/// - Rounded Search Bar with live language filtering.
-/// - Scrollable language tiles (~64dp height) with country code badges & checkmarks.
-/// - Sticky bottom gradient CTA button ("Continue" / "Next").
-class LanguageSelectScreen extends ConsumerStatefulWidget {
+/// Language selection screen supporting English & Tamil in a clean side-by-side card layout.
+class LanguageSelectScreen extends ConsumerWidget {
   const LanguageSelectScreen({super.key});
 
-  @override
-  ConsumerState<LanguageSelectScreen> createState() => _LanguageSelectScreenState();
-}
-
-class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-
-  static const List<Map<String, String>> _allLanguages = [
-    {'code': 'ta', 'nativeName': 'தமிழ்', 'englishName': 'Tamil', 'flagCode': 'TA'},
-    {'code': 'en', 'nativeName': 'English', 'englishName': 'English', 'flagCode': 'EN'},
-    {'code': 'hi', 'nativeName': 'हिंदी', 'englishName': 'Hindi', 'flagCode': 'HI'},
-    {'code': 'te', 'nativeName': 'తెలుగు', 'englishName': 'Telugu', 'flagCode': 'TE'},
-    {'code': 'kn', 'nativeName': 'கன்னட', 'englishName': 'Kannada', 'flagCode': 'KN'},
-    {'code': 'ml', 'nativeName': 'മലയാളം', 'englishName': 'Malayalam', 'flagCode': 'ML'},
-    {'code': 'bn', 'nativeName': 'বাংলা', 'englishName': 'Bengali', 'flagCode': 'BN'},
-    {'code': 'gu', 'nativeName': 'ગુજરાતી', 'englishName': 'Gujarati', 'flagCode': 'GU'},
-    {'code': 'mr', 'nativeName': 'मराठी', 'englishName': 'Marathi', 'flagCode': 'MR'},
-    {'code': 'or', 'nativeName': 'ଓଡ଼ିଆ', 'englishName': 'Odia', 'flagCode': 'OR'},
+  static const List<Map<String, String>> _languages = [
+    {
+      'code': 'en',
+      'nativeName': 'English',
+      'englishName': 'English',
+      'flagCode': 'EN',
+    },
+    {
+      'code': 'ta',
+      'nativeName': 'தமிழ்',
+      'englishName': 'Tamil',
+      'flagCode': 'TA',
+    },
   ];
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<Map<String, String>> get _filteredLanguages {
-    if (_searchQuery.trim().isEmpty) {
-      return _allLanguages;
-    }
-    final q = _searchQuery.trim().toLowerCase();
-    return _allLanguages.where((lang) {
-      final native = lang['nativeName']!.toLowerCase();
-      final english = lang['englishName']!.toLowerCase();
-      final code = lang['code']!.toLowerCase();
-      return native.contains(q) || english.contains(q) || code.contains(q);
-    }).toList();
-  }
-
-  void _onContinue() async {
+  void _onContinue(BuildContext context) async {
     final store = await OnboardingFlagStore.create();
     await store.setHasOnboarded(true);
-    if (mounted) {
+    if (context.mounted) {
       context.push('/onboarding/mobile');
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(onboardingControllerProvider);
     final controller = ref.read(onboardingControllerProvider.notifier);
     final selectedLangCode = state.selectedLanguage;
-    final filteredList = _filteredLanguages;
 
     return OnboardingScaffold(
       body: SafeArea(
@@ -82,33 +47,52 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
           padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageMargin),
           child: Column(
             children: [
-              const SizedBox(height: 12),
+              const SizedBox(height: 20),
 
-              // ── 2.2 Icon Badge (Centered 64dp realistic 3D rotating globe icon)
-              const Center(
-                child: RotatingGlobeIcon(size: 64),
+              // ── Top Icon Badge (Centered 64dp gradient circle with globe icon)
+              Center(
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AppColors.langCtaGradient,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.langAccentPrimary.withValues(alpha: 0.25),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.language_rounded,
+                    color: AppColors.langTextOnAccent,
+                    size: 28,
+                  ),
+                ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // ── 2.3 Title + Subtitle Block + Speaker Button
+              // ── Title & Subtitle + Speaker Accessibility Button
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
-                      children: [
+                      children: const [
                         Text(
                           'Select Language',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 22,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: AppColors.langTextPrimary,
                             letterSpacing: -0.3,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 6),
                         Text(
                           'Choose your preferred language to continue',
                           textAlign: TextAlign.center,
@@ -127,208 +111,131 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
                 ],
               ),
 
-              const SizedBox(height: 20),
+              const Spacer(),
 
-              // ── 2.4 Search Field (40% Glassmorphism)
-              GlassContainer(
-                height: 48,
-                borderRadius: 12,
-                opacity: 0.40,
-                fillColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.search_rounded,
-                      color: AppColors.langSearchPlaceholder,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.langTextPrimary,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Search Languages',
-                          hintStyle: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.langSearchPlaceholder,
+              // ── Side-by-Side Language Cards (English & Tamil)
+              Row(
+                children: _languages.map((lang) {
+                  final code = lang['code']!;
+                  final isSelected = selectedLangCode == code;
+
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                      child: InkWell(
+                        onTap: () => controller.selectLanguage(code),
+                        borderRadius: BorderRadius.circular(16),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.langBgSelected : AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected ? AppColors.langBorderSelected : AppColors.border,
+                              width: isSelected ? 2.0 : 1.0,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: isSelected
+                                    ? AppColors.langBorderSelected.withValues(alpha: 0.15)
+                                    : Colors.black.withValues(alpha: 0.04),
+                                blurRadius: isSelected ? 12 : 6,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Flag / Code Badge
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected
+                                      ? AppColors.langAccentPrimary.withValues(alpha: 0.15)
+                                      : AppColors.langSearchBg,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    lang['flagCode']!,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected
+                                          ? AppColors.langAccentPrimary
+                                          : AppColors.langFlagCodeText,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Native Language Name
+                              Text(
+                                lang['nativeName']!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? AppColors.langAccentPrimary
+                                      : AppColors.langTextPrimary,
+                                ),
+                              ),
+
+                              const SizedBox(height: 4),
+
+                              // English Name
+                              Text(
+                                lang['englishName']!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isSelected
+                                      ? AppColors.langAccentPrimary.withValues(alpha: 0.8)
+                                      : AppColors.langTextSecondary,
+                                ),
+                              ),
+
+                              const SizedBox(height: 14),
+
+                              // Selection Indicator (Radio / Checkmark disc)
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected ? AppColors.langCheckIcon : Colors.transparent,
+                                  border: Border.all(
+                                    color: isSelected ? AppColors.langCheckIcon : AppColors.borderStrong,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: isSelected
+                                    ? const Icon(
+                                        Icons.check_rounded,
+                                        size: 16,
+                                        color: Colors.white,
+                                      )
+                                    : null,
+                              ),
+                            ],
+                          ),
                         ),
-                        onChanged: (val) {
-                          setState(() {
-                            _searchQuery = val;
-                          });
-                        },
                       ),
                     ),
-                    if (_searchQuery.isNotEmpty)
-                      GestureDetector(
-                        onTap: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                          });
-                        },
-                        child: const Icon(
-                          Icons.close_rounded,
-                          color: AppColors.langSearchPlaceholder,
-                          size: 18,
-                        ),
-                      ),
-                  ],
-                ),
+                  );
+                }).toList(),
               ),
 
-              const SizedBox(height: 16),
+              const Spacer(),
 
-              // ── 2.5 Section Label
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'ALL LANGUAGES',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
-                    color: AppColors.langTextSecondary,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              // ── 2.6 Language List (40% Glassmorphism Tiles)
-              Expanded(
-                child: filteredList.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.search_off_rounded,
-                              size: 40,
-                              color: AppColors.langSearchPlaceholder,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No languages found',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.langTextSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: filteredList.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 10),
-                        itemBuilder: (context, index) {
-                          final lang = filteredList[index];
-                          final code = lang['code']!;
-                          final isSelected = selectedLangCode == code;
-
-                          return InkWell(
-                            onTap: () => controller.selectLanguage(code),
-                            borderRadius: BorderRadius.circular(12),
-                            child: GlassContainer(
-                              height: 64,
-                              borderRadius: 12,
-                              opacity: isSelected ? 0.55 : 0.40,
-                              fillColor: isSelected ? AppColors.langBgSelected : Colors.white,
-                              border: Border.all(
-                                color: isSelected ? AppColors.langBorderSelected : Colors.white.withValues(alpha: 0.60),
-                                width: isSelected ? 1.8 : 1.2,
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
-                                children: [
-                                  // Two-Letter Code Badge
-                                  Container(
-                                    width: 38,
-                                    height: 38,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: isSelected
-                                          ? AppColors.langAccentPrimary.withValues(alpha: 0.12)
-                                          : AppColors.langSearchBg,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        lang['flagCode']!,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: isSelected
-                                              ? AppColors.langAccentPrimary
-                                              : AppColors.langFlagCodeText,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 14),
-
-                                  // Language Names (Native + English)
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          lang['nativeName']!,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                                            color: isSelected
-                                                ? AppColors.langAccentPrimary
-                                                : AppColors.langTextPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          lang['englishName']!,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w400,
-                                            color: isSelected
-                                                ? AppColors.langAccentPrimary.withValues(alpha: 0.8)
-                                                : AppColors.langTextSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // Trailing Checkmark Icon when Selected
-                                  if (isSelected)
-                                    const Icon(
-                                      Icons.check_circle_rounded,
-                                      color: AppColors.langCheckIcon,
-                                      size: 22,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // ── 2.7 Sticky CTA Button
+              // ── Sticky Bottom CTA Button
               Container(
                 width: double.infinity,
                 height: 52,
@@ -344,7 +251,7 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
                   ],
                 ),
                 child: ElevatedButton(
-                  onPressed: _onContinue,
+                  onPressed: () => _onContinue(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
@@ -375,7 +282,7 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
             ],
           ),
         ),

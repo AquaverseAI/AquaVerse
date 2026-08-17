@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
@@ -168,15 +167,9 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                   children: List.generate(6, (index) {
                     final isError = state.isOtpInvalid;
 
-                    return GlassContainer(
+                    return SizedBox(
                       width: 48,
                       height: 56,
-                      borderRadius: AppTheme.inputRadius,
-                      opacity: 0.40,
-                      border: Border.all(
-                        color: isError ? AppColors.critical : Colors.white.withValues(alpha: 0.65),
-                        width: isError ? 1.5 : 1.2,
-                      ),
                       child: TextField(
                         controller: _controllers[index],
                         focusNode: _focusNodes[index],
@@ -191,12 +184,24 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(1),
                         ],
-                        decoration: const InputDecoration(
-                          filled: false,
-                          contentPadding: EdgeInsets.symmetric(vertical: 12),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.inputRadius),
+                            borderSide: BorderSide(
+                              color: isError ? AppColors.critical : AppColors.border,
+                              width: isError ? 1.5 : 1.0,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.inputRadius),
+                            borderSide: BorderSide(
+                              color: isError ? AppColors.critical : AppColors.primary500,
+                              width: 2.0,
+                            ),
+                          ),
                         ),
                         onChanged: (value) => _onDigitChanged(index, value),
                       ),

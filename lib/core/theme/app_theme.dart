@@ -35,8 +35,6 @@ class AppTheme {
         centerTitle: false,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
-          fontFamily: 'Palatino Linotype',
-          fontFamilyFallback: ['Palatino', 'Georgia', 'serif'],
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
@@ -138,7 +136,7 @@ class AppTheme {
         unselectedLabelStyle: TextStyle(fontSize: 11),
       ),
 
-      // ── Text (Palatino Linotype Serif Default) ──────────────────────────────
+      // ── Text ────────────────────────────────────────────────────────────────
       textTheme: const TextTheme(
         displayLarge: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.2),
         headlineLarge: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.2),
@@ -153,9 +151,6 @@ class AppTheme {
         labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
         labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
         labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
-      ).apply(
-        fontFamily: 'Palatino Linotype',
-        fontFamilyFallback: const ['Palatino', 'Georgia', 'serif'],
       ),
 
       // ── Icon ────────────────────────────────────────────────────────────────

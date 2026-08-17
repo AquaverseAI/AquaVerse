@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
@@ -98,14 +97,23 @@ class RoleSelectionScreen extends ConsumerWidget {
                   child: InkWell(
                     onTap: () => controller.selectRole(role['id'] as String),
                     borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-                    child: GlassContainer(
+                    child: Container(
                       padding: const EdgeInsets.all(20),
-                      opacity: isSelected ? 0.55 : 0.40,
-                      fillColor: isSelected ? AppColors.surfaceAqua : Colors.white,
-                      borderRadius: AppTheme.cardRadius,
-                      border: Border.all(
-                        color: isSelected ? AppColors.primary500 : Colors.white.withValues(alpha: 0.60),
-                        width: isSelected ? 2.0 : 1.2,
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.surfaceAqua : AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary500 : AppColors.border,
+                          width: isSelected ? 2.0 : 1.0,
+                        ),
+                        boxShadow: [
+                          if (!isSelected)
+                            BoxShadow(
+                              color: AppColors.mountain900.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            )
+                        ],
                       ),
                       child: Row(
                         children: [

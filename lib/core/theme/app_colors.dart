@@ -36,11 +36,11 @@ abstract class AppColors {
   static const Color surfaceAqua = Color(0xFFEDF8FA);
   static const Color surfaceGreen = Color(0xFFEFF9F5);
 
-  // ── Text (High-contrast dark tokens) ──────────────────────────────────────
-  static const Color textPrimary = Color(0xFF041826);
-  static const Color textSecondary = Color(0xFF14364B);
-  static const Color textMuted = Color(0xFF2C5269);
-  static const Color textDisabled = Color(0xFF8BA2AD);
+  // ── Text ───────────────────────────────────────────────────────────────────
+  static const Color textPrimary = Color(0xFF153B56);
+  static const Color textSecondary = Color(0xFF557384);
+  static const Color textMuted = Color(0xFF7D949F);
+  static const Color textDisabled = Color(0xFFA9B9BF);
 
   // ── Semantic ───────────────────────────────────────────────────────────────
   static const Color warning = Color(0xFFE8A33A);

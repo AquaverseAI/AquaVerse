@@ -83,6 +83,81 @@ abstract class AppColors {
     colors: [Color(0xFF2E8B77), Color(0xFF14B8A6)],
   );
 
+  // ── 3D Depth Gradient System ──────────────────────────────────────────────
+  /// Primary 3D gradient: deepest seagreen → mid teal → accent.
+  /// Used on risk disc, primary CTA, elevated cards.
+  static const LinearGradient gradient3DPrimary = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 0.50, 1.0],
+    colors: [
+      Color(0xFF2E8B77), // langAccentSeagreen
+      Color(0xFF14B8A6), // riskLow / teal mid
+      Color(0xFF0E9488), // langAccentPrimary
+    ],
+  );
+
+  /// Medium-risk variant: amber family, same gradient structure.
+  static const LinearGradient gradient3DMediumRisk = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 0.50, 1.0],
+    colors: [
+      Color(0xFFD97706), // amber-700
+      Color(0xFFF59E0B), // riskMedium
+      Color(0xFFFFBB34), // amber-300
+    ],
+  );
+
+  /// High-risk variant: red family, same gradient structure.
+  static const LinearGradient gradient3DHighRisk = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 0.50, 1.0],
+    colors: [
+      Color(0xFFB91C1C), // red-700
+      Color(0xFFEF4444), // riskHigh
+      Color(0xFFF87171), // red-400
+    ],
+  );
+
+  /// Soft ambient background: very faint underwater-light feel.
+  static const RadialGradient gradientBgAmbient = RadialGradient(
+    center: Alignment(0.0, -0.8),
+    radius: 1.4,
+    colors: [
+      Color(0xFFF0FBF9), // light mint wash at top
+      Color(0xFFFFFFFF), // pure white at bottom
+    ],
+    stops: [0.0, 0.55],
+  );
+
+  /// Aqua glow: radial, used as a halo behind risk disc, mic button, bell.
+  static const RadialGradient gradientAquaGlow = RadialGradient(
+    center: Alignment.center,
+    radius: 1.0,
+    colors: [
+      Color(0x5914B8A6), // 35% alpha teal
+      Color(0x0014B8A6), // 0% alpha (transparent)
+    ],
+    stops: [0.0, 0.70],
+  );
+
+  /// Glass card gradient: semi-transparent white frosted surface.
+  static const LinearGradient gradientCardGlass = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 1.0],
+    colors: [
+      Color(0xBFFFFFFF), // white 75% alpha
+      Color(0x8CF4FBF9), // surface 55% alpha
+    ],
+  );
+
+  /// Tier shadows: palette-tinted, not gray/black.
+  static const Color shadowTier1 = Color(0x1A0E9488); // ~10% primary accent
+  static const Color shadowTier2 = Color(0x2E0E9488); // ~18% primary accent
+
   // ===========================================================================
   // LEGACY ALIASES (Do not use for new UI, mapped to prevent compilation errors)
   // ===========================================================================

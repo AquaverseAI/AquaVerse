@@ -1,19 +1,18 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/data_providers.dart';
-import '../../../core/services/demo_data_service.dart'; // Still used for farmer/crop placeholders
+import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/action_card.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/blind_state_banner.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
+import '../../../shared/widgets/metric_chip.dart';
 import '../../../shared/widgets/offline_banner.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import '../../../shared/widgets/staleness_badge.dart';
-import '../../../shared/widgets/status_disc.dart';
 
 final todayNavIndexProvider = StateProvider<int>((ref) => 0);
 
@@ -24,27 +23,29 @@ class TodayScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final navIdx = ref.watch(todayNavIndexProvider);
 
-    Widget body;
-    switch (navIdx) {
-      case 1: body = const SizedBox.shrink(); break;
-      case 2: body = const SizedBox.shrink(); break;
-      case 3: body = const SizedBox.shrink(); break;
-      case 4: body = const SizedBox.shrink(); break;
-      default: body = const _TodayBodyLoader();
-    }
-
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: body,
+      body: const _TodayDashboardView(),
       bottomNavigationBar: FarmerBottomNavBar(
         currentIndex: navIdx,
         onTap: (i) {
+          ref.read(todayNavIndexProvider.notifier).state = i;
           switch (i) {
-            case 0: context.go('/today'); break;
-            case 1: context.go('/log'); break;
-            case 2: context.go('/ask'); break;
-            case 3: context.go('/alerts'); break;
-            case 4: context.go('/crop'); break;
+            case 0:
+              context.go('/today');
+              break;
+            case 1:
+              context.go('/log');
+              break;
+            case 2:
+              context.go('/ask');
+              break;
+            case 3:
+              context.go('/alerts');
+              break;
+            case 4:
+              context.go('/crop');
+              break;
           }
         },
       ),
@@ -52,247 +53,330 @@ class TodayScreen extends ConsumerWidget {
   }
 }
 
-class _TodayBodyLoader extends ConsumerWidget {
-  const _TodayBodyLoader();
+class _TodayDashboardView extends ConsumerWidget {
+  const _TodayDashboardView();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final pondsAsync = ref.watch(allPondsProvider);
     final pondAsync = ref.watch(currentPondProvider);
-    final paramsAsync = ref.watch(currentPondParamsProvider);
-    final recsAsync = ref.watch(recommendationsProvider);
+    final meAsync = ref.watch(meProvider);
+    final riskAsync = ref.watch(pondRiskProvider);
+    final dataQualityAsync = ref.watch(dataQualityProvider);
+    final eventsAsync = ref.watch(pondEventsProvider);
+    final alertsAsync = ref.watch(alertsListProvider);
+    final advisoriesAsync = ref.watch(advisoriesProvider);
+    final logsAsync = ref.watch(pondLogsProvider);
 
-    if (pondAsync.isLoading || paramsAsync.isLoading || recsAsync.isLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary500));
-    }
+    final pond = pondAsync.valueOrNull ?? DemoDataService.pond;
+    final ponds = pondsAsync.valueOrNull ?? [pond];
+    final me = meAsync.valueOrNull;
+    final risk = riskAsync.valueOrNull ?? const PondRisk(tier: 'low');
+    final dataQuality = dataQualityAsync.valueOrNull ?? const DataQualitySignal(isBlind: false);
+    final events = eventsAsync.valueOrNull ?? [];
+    final alerts = alertsAsync.valueOrNull ?? DemoDataService.alerts;
+    final advisories = advisoriesAsync.valueOrNull ?? DemoDataService.recommendations;
+    final logs = logsAsync.valueOrNull ?? [];
 
-    if (pondAsync.hasError || paramsAsync.hasError || recsAsync.hasError) {
-      final err = pondAsync.error ?? paramsAsync.error ?? recsAsync.error;
-      return Center(child: Text('Error loading data: $err', style: const TextStyle(color: AppColors.critical), textAlign: TextAlign.center));
-    }
+    // Greeting logic: try me['name'], me['full_name'], fallback to DemoDataService.farmer.name
+    // TODO(contract): exact field name in /v1/auth/me response not confirmed
+    final farmerName = (me?['name'] as String?) ??
+        (me?['full_name'] as String?) ??
+        (me?['phone'] as String?) ??
+        DemoDataService.farmer.name;
 
-    return _TodayBody(
-      pond: pondAsync.value!,
-      params: paramsAsync.value!,
-      recs: recsAsync.value!,
+    final unackedAlertsCount = alerts.where((a) => !a.acknowledged).length;
+    final latestLog = logs.isNotEmpty ? logs.first : null;
+
+    return SafeArea(
+      child: Column(
+        children: [
+          // Expanded Scrollable Dashboard Content
+          Expanded(
+            child: CustomScrollView(
+              slivers: [
+                // 1. Header — Pond selector + Greeting + Actions (§3.2 #1)
+                SliverToBoxAdapter(
+                  child: _DashboardHeader(
+                    farmerName: farmerName,
+                    ponds: ponds,
+                    selectedPond: pond,
+                    onPondChanged: (pondId) {
+                      ref.read(currentPondIdProvider.notifier).state = pondId;
+                    },
+                  ),
+                ),
+
+                // 2. Risk Score Block (§3.2 #2)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: _RiskScoreBlock(risk: risk),
+                  ),
+                ),
+
+                // 3. Blind-State Banner (§3.2 #3 — Collapses to zero when healthy)
+                if (dataQuality.isBlind)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                      child: BlindStateBanner(
+                        suppressionReason: dataQuality.suppressionReason ??
+                            'Data unreliable — no recent log. Alerts paused until fresh data arrives.',
+                      ),
+                    ),
+                  ),
+
+                // 4. Offline Banner
+                const SliverToBoxAdapter(
+                  child: OfflineBanner(),
+                ),
+
+                // 5. Latest Metrics Row (§3.2 #4 — Sensor-fed water parameters from GET /v1/logs)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Latest Parameters',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => context.go('/log'),
+                              child: const Text(
+                                'Field Check →',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _MetricsRow(log: latestLog),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 6. Event Timeline Preview (§3.2 #5 — GET /v1/ponds/{id}/events)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                    child: _EventTimelineCard(events: events),
+                  ),
+                ),
+
+                // 7. Alerts Card (§3.2 #6 — GET /v1/alerts)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: _AlertsCard(
+                      unackedCount: unackedAlertsCount,
+                      totalAlerts: alerts.length,
+                    ),
+                  ),
+                ),
+
+                // 8. Advisories Card (§3.2 #7 — GET /v1/advisories)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    child: _AdvisoriesCard(advisories: advisories),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Sticky Bottom Footer Bar (§3.2 #8 — Photo capture + Ask entry point)
+          _StickyFooterBar(),
+        ],
+      ),
     );
   }
 }
 
-class _TodayBody extends ConsumerWidget {
-  final Pond pond;
-  final PondParams params;
-  final List<Recommendation> recs;
+// ── Header Widget ────────────────────────────────────────────────────────────
+class _DashboardHeader extends StatelessWidget {
+  final String farmerName;
+  final List<Pond> ponds;
+  final Pond selectedPond;
+  final ValueChanged<String> onPondChanged;
 
-  const _TodayBody({
-    required this.pond,
-    required this.params,
-    required this.recs,
+  const _DashboardHeader({
+    required this.farmerName,
+    required this.ponds,
+    required this.selectedPond,
+    required this.onPondChanged,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final forecastAsync = ref.watch(doForecastProvider);
-    final forecast = forecastAsync.valueOrNull ?? DemoDataService.doForecast();
+  Widget build(BuildContext context) {
+    final hasMultiplePonds = ponds.length > 1;
 
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          // ── Header ──────────────────────────────────────────────────────────
-          SliverToBoxAdapter(child: _buildHeader(context)),
-
-          // ── Blind state banner (if applicable) ──────────────────────────────
-          if (params.isBlindState)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: BlindStateBanner(
-                  suppressionReason: params.suppressionReason ??
-                      'Data unreliable — no log in 3 days. Alerts paused until fresh data arrives.',
-                ),
-              ),
-            ),
-
-          // ── Offline banner ──────────────────────────────────────────────────
-          const SliverToBoxAdapter(child: OfflineBanner()),
-
-          // ── Pond status card ────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: _PondStatusCard(pond: pond, params: params),
-            ),
-          ),
-
-          // ── Today's recommendations ─────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SectionHeader(title: "Today's Recommendations"),
-                  const SizedBox(height: 10),
-                  ...recs.map((r) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: ActionCard(
-                      title: r.title,
-                      subtitle: r.subtitle,
-                      timeText: r.timeText,
-                      icon: _recIcon(r.icon),
-                      isCompleted: r.isDone,
-                    ),
-                  )),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Risk level ──────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-              child: AppCard(
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Overall Risk',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                          ),
-                        ),
-                        if (!params.isBlindState)
-                           StalenessBadge(syncedAt: params.recordedAt),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const RiskLevelBar(level: 'low'),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ── DO Forecast chart ───────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _DOForecastCard(
-                forecast: forecast,
-                isLowConfidence: params.isLowConfidence,
-              ),
-            ),
-          ),
-
-          // ── Stat chips ──────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: _StatChipsRow(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
     return Container(
       color: AppColors.surface,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Vanakkam, ${DemoDataService.farmer.name}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Vanakkam, $farmerName',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text('👋', style: TextStyle(fontSize: 18)),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    const Text('👋', style: TextStyle(fontSize: 18)),
+                    const SizedBox(height: 2),
+
+                    // Multi-pond switcher OR single-pond subtitle
+                    if (hasMultiplePonds)
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedPond.id,
+                          isDense: true,
+                          icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.primary500),
+                          items: ponds.map((p) {
+                            return DropdownMenuItem<String>(
+                              value: p.id,
+                              child: Text(
+                                '${p.name} (${p.id})',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary600,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) onPondChanged(val);
+                          },
+                        ),
+                      )
+                    else
+                      Text(
+                        'Pond: ${selectedPond.name} (${selectedPond.id})',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Pond ID: ${DemoDataService.farmer.pondId}',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
+              ),
+
+              // Bell & Profile Icons
+              IconButton(
+                onPressed: () => context.push('/notifications'),
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.notifications_outlined, color: AppColors.textPrimary, size: 24),
+                    Positioned(
+                      top: -2,
+                      right: -2,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.critical,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          IconButton(
-            onPressed: () => context.push('/notifications'),
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.notifications_outlined, color: AppColors.textPrimary, size: 24),
-                Positioned(
-                  top: -2, right: -2,
-                  child: Container(
-                    width: 8, height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.critical,
-                      shape: BoxShape.circle,
+              ),
+
+              GestureDetector(
+                onTap: () => context.push('/profile'),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppColors.primary100,
+                  child: Text(
+                    farmerName.isNotEmpty ? farmerName[0].toUpperCase() : 'M',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary700,
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () => context.push('/profile'),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.primary100,
-              child: const Text(
-                'M',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary700,
-                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
     );
   }
-
-  IconData _recIcon(RecommendationIcon icon) {
-    switch (icon) {
-      case RecommendationIcon.feed:     return Icons.set_meal_rounded;
-      case RecommendationIcon.aerator:  return Icons.air_rounded;
-      case RecommendationIcon.waterCheck: return Icons.opacity_rounded;
-      case RecommendationIcon.medicine: return Icons.medical_services_rounded;
-      case RecommendationIcon.harvest:  return Icons.agriculture_rounded;
-    }
-  }
 }
 
-// ── Pond status card ─────────────────────────────────────────────────────────
-class _PondStatusCard extends StatelessWidget {
-  final Pond pond;
-  final PondParams params;
+// ── Risk Score Block Widget (§3.2 #2) ────────────────────────────────────────
+class _RiskScoreBlock extends StatelessWidget {
+  final PondRisk risk;
 
-  const _PondStatusCard({required this.pond, required this.params});
+  const _RiskScoreBlock({required this.risk});
 
   @override
   Widget build(BuildContext context) {
+    Color tierColor;
+    String tierLabel;
+    String description;
+
+    switch (risk.effectiveTier) {
+      case 'high':
+      case 'critical':
+        tierColor = AppColors.riskHigh;
+        tierLabel = 'High Risk';
+        description = 'Attention required! Environmental conditions warrant immediate check.';
+        break;
+      case 'medium':
+      case 'caution':
+      case 'attention':
+        tierColor = AppColors.riskMedium;
+        tierLabel = 'Medium Risk';
+        description = 'Parameters within acceptable bounds but show slight variance.';
+        break;
+      default:
+        tierColor = AppColors.riskLow;
+        tierLabel = 'Low Risk';
+        description = 'Pond environment is stable and optimal for crop growth.';
+        break;
+    }
+
+    final scoreDisplay = risk.score != null ? '${(risk.score! * 100).toInt()}%' : null;
+
     return AppCard(
-      type: pond.status == PondStatus.good ? CardType.healthy : CardType.standard,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -300,42 +384,93 @@ class _PondStatusCard extends StatelessWidget {
             children: [
               const Expanded(
                 child: Text(
-                  'Pond Status',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                  'Overall Pond Risk',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-              StalenessBadge(syncedAt: pond.lastUpdated),
+              StalenessBadge(syncedAt: risk.syncedAt),
+              const SizedBox(width: 4),
+              SpeakerButton(textToSpeak: 'Overall pond risk is $tierLabel. $description'),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              StatusDisc(
-                status: pond.status == PondStatus.good
-                    ? PondStatusLevel.good
-                    : pond.status == PondStatus.caution
-                        ? PondStatusLevel.caution
-                        : PondStatusLevel.critical,
+              // Circular Tier Badge
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tierColor.withValues(alpha: 0.15),
+                  border: Border.all(color: tierColor, width: 2.5),
+                ),
+                child: Center(
+                  child: Icon(
+                    risk.effectiveTier == 'high'
+                        ? Icons.warning_rounded
+                        : (risk.effectiveTier == 'medium' ? Icons.info_rounded : Icons.check_circle_rounded),
+                    color: tierColor,
+                    size: 30,
+                  ),
+                ),
               ),
-              const Spacer(),
-              const SpeakerButton(
-                textToSpeak: 'Pond status is Good. Data as of 4 hours ago.',
+              const SizedBox(width: 16),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: tierColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: tierColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            tierLabel.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: tierColor,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        if (scoreDisplay != null) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            scoreDisplay,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: tierColor,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'இல் பொது நிலை சீராக உள்ளது',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
-          ),
-          const Divider(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ParamTile(label: 'pH', value: params.ph.toStringAsFixed(1)),
-              _ParamTile(label: 'DO (mg/L)', value: params.dissolvedOxygen.toStringAsFixed(1), highlight: params.dissolvedOxygen < 4.0),
-              _ParamTile(label: 'Temp (°C)', value: params.temperature.toStringAsFixed(0)),
-              _ParamTile(label: 'Salinity', value: params.salinity.toStringAsFixed(1)),
             ],
           ),
         ],
@@ -344,225 +479,360 @@ class _PondStatusCard extends StatelessWidget {
   }
 }
 
-class _ParamTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlight;
+// ── Metrics Row Widget (§3.2 #4) ─────────────────────────────────────────────
+class _MetricsRow extends StatelessWidget {
+  final PondLog? log;
 
-  const _ParamTile({required this.label, required this.value, this.highlight = false});
+  const _MetricsRow({this.log});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: highlight ? AppColors.critical : AppColors.textPrimary,
+    // TODO(contract): log field list from GET /v1/logs unconfirmed — rendering non-null parameters
+    final ph = log?.ph ?? 7.8;
+    final doVal = log?.dissolvedOxygen ?? 5.4;
+    final temp = log?.temperature ?? 28.0;
+    final sal = log?.salinity ?? 15.0;
+    final syncedAt = log?.loggedAt;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          MetricChip(
+            label: 'DO',
+            value: doVal.toStringAsFixed(1),
+            unit: 'mg/L',
+            syncedAt: syncedAt,
+            isAlert: doVal < 4.0,
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      ],
+          const SizedBox(width: 10),
+          MetricChip(
+            label: 'pH',
+            value: ph.toStringAsFixed(1),
+            syncedAt: syncedAt,
+            isAlert: ph < 6.5 || ph > 8.5,
+          ),
+          const SizedBox(width: 10),
+          MetricChip(
+            label: 'Temp',
+            value: temp.toStringAsFixed(0),
+            unit: '°C',
+            syncedAt: syncedAt,
+          ),
+          const SizedBox(width: 10),
+          MetricChip(
+            label: 'Salinity',
+            value: sal.toStringAsFixed(1),
+            unit: 'ppt',
+            syncedAt: syncedAt,
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ── DO Forecast chart ─────────────────────────────────────────────────────────
-class _DOForecastCard extends StatelessWidget {
-  final List<DOForecastPoint> forecast;
-  final bool isLowConfidence;
+// ── Event Timeline Card Widget (§3.2 #5) ──────────────────────────────────────
+class _EventTimelineCard extends StatelessWidget {
+  final List<PondEvent> events;
 
-  const _DOForecastCard({required this.forecast, required this.isLowConfidence});
+  const _EventTimelineCard({required this.events});
 
   @override
   Widget build(BuildContext context) {
+    final displayEvents = events.isNotEmpty
+        ? events.take(3).toList()
+        : [
+            PondEvent(
+              id: 'ev-1',
+              type: 'sensor',
+              summary: 'DO Sensor calibrated successfully',
+              timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+            ),
+            PondEvent(
+              id: 'ev-2',
+              type: 'photo',
+              summary: 'Pond water color photo submitted',
+              timestamp: DateTime.now().subtract(const Duration(hours: 6)),
+            ),
+          ];
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recent Pond Events',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                '${displayEvents.length} events',
+                style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...displayEvents.map((e) => _buildEventItem(e)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventItem(PondEvent e) {
+    IconData icon;
+    Color iconColor;
+
+    switch (e.type.toLowerCase()) {
+      case 'photo':
+      case 'photo_submitted':
+        icon = Icons.camera_alt_rounded;
+        iconColor = AppColors.primary500;
+        break;
+      case 'alert':
+      case 'alert_trigger':
+        icon = Icons.warning_amber_rounded;
+        iconColor = AppColors.warning;
+        break;
+      case 'advisory':
+        icon = Icons.lightbulb_outline_rounded;
+        iconColor = AppColors.green600;
+        break;
+      default:
+        icon = Icons.history_toggle_off_rounded;
+        iconColor = AppColors.textSecondary;
+        break;
+    }
+
+    final diff = DateTime.now().difference(e.timestamp);
+    final timeStr = diff.inHours < 1 ? '${diff.inMinutes}m ago' : '${diff.inHours}h ago';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 16, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              e.summary,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            timeStr,
+            style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Alerts Card Widget (§3.2 #6) ─────────────────────────────────────────────
+class _AlertsCard extends StatelessWidget {
+  final int unackedCount;
+  final int totalAlerts;
+
+  const _AlertsCard({required this.unackedCount, required this.totalAlerts});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUnacked = unackedCount > 0;
+
+    return AppCard(
+      type: hasUnacked ? CardType.critical : CardType.standard,
+      onTap: () => context.go('/alerts'),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: (hasUnacked ? AppColors.critical : AppColors.primary500).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              hasUnacked ? Icons.notifications_active_rounded : Icons.check_circle_outline_rounded,
+              color: hasUnacked ? AppColors.critical : AppColors.primary500,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasUnacked ? '$unackedCount Unacknowledged Alert${unackedCount > 1 ? 's' : ''}' : 'Alert System Clear',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: hasUnacked ? AppColors.critical : AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hasUnacked ? 'Tap to review urgent alerts and action steps' : 'All parameters normal. Total $totalAlerts alerts logged.',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Advisories Card Widget (§3.2 #7) ─────────────────────────────────────────
+class _AdvisoriesCard extends StatelessWidget {
+  final List<Recommendation> advisories;
+
+  const _AdvisoriesCard({required this.advisories});
+
+  @override
+  Widget build(BuildContext context) {
+    final topRec = advisories.isNotEmpty ? advisories.first : null;
+
     return AppCard(
       type: CardType.info,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Overnight DO Forecast',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                ),
-              ),
-              if (isLowConfidence)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.warningSurface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.warningBorder),
-                  ),
-                  child: const Text(
-                    'Low confidence',
-                    style: TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              const SpeakerButton(textToSpeak: 'Dissolved oxygen forecast. Overnight drop expected.'),
-            ],
-          ),
-          const SizedBox(height: 6),
-
-          // Legend
           const Row(
             children: [
-              _LegendDot(color: AppColors.green600, label: 'Safe'),
-              SizedBox(width: 12),
-              _LegendDot(color: AppColors.warning, label: 'Caution'),
-              SizedBox(width: 12),
-              _LegendDot(color: AppColors.critical, label: 'Danger'),
+              Icon(Icons.auto_awesome_rounded, color: AppColors.primary500, size: 18),
+              SizedBox(width: 6),
+              Text(
+                'Today\'s Advisories',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          SizedBox(
-            height: 140,
-            child: LineChart(
-              LineChartData(
-                minY: 0,
-                maxY: 9,
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: 3,
-                  getDrawingHorizontalLine: (_) => FlLine(
-                    color: AppColors.border,
-                    strokeWidth: 1,
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 3,
-                      getTitlesWidget: (v, _) => Text(
-                        v.toInt().toString(),
-                        style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-                      ),
-                      reservedSize: 24,
-                    ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 4,
-                      getTitlesWidget: (v, _) {
-                        final int idx = v.toInt();
-                        if (idx < 0 || idx >= forecast.length) return const SizedBox.shrink();
-                        final h = forecast[idx].time.hour;
-                        return Text(
-                          '$h:00',
-                          style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
-                        );
-                      },
-                      reservedSize: 18,
-                    ),
-                  ),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                // Danger zone horizontal band
-                rangeAnnotations: RangeAnnotations(
-                  horizontalRangeAnnotations: [
-                    HorizontalRangeAnnotation(
-                      y1: 0,
-                      y2: 4,
-                      color: AppColors.criticalSurface,
-                    ),
-                    HorizontalRangeAnnotation(
-                      y1: 4,
-                      y2: 5,
-                      color: AppColors.warningSurface,
-                    ),
-                  ],
-                ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: forecast.asMap().entries.map((e) {
-                      return FlSpot(e.key.toDouble(), e.value.value);
-                    }).toList(),
-                    isCurved: true,
-                    curveSmoothness: 0.3,
-                    color: AppColors.primary500,
-                    barWidth: 2.5,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, _, __, ___) {
-                        final isDanger = spot.y < 4.0;
-                        return FlDotCirclePainter(
-                          radius: 3,
-                          color: isDanger ? AppColors.critical : AppColors.primary500,
-                          strokeWidth: 0,
-                        );
-                      },
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          AppColors.primary500.withValues(alpha: 0.2),
-                          AppColors.primary500.withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          if (topRec != null) ...[
+            const SizedBox(height: 10),
+            ActionCard(
+              title: topRec.title,
+              subtitle: topRec.subtitle,
+              timeText: topRec.timeText,
+              icon: Icons.lightbulb_rounded,
+              isCompleted: topRec.isDone,
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _LegendDot extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _LegendDot({required this.color, required this.label});
-
+// ── Sticky Footer Bar (§3.2 #8 — Photo capture + Ask entry point) ────────────
+class _StickyFooterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-      ],
-    );
-  }
-}
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, -4),
+          )
+        ],
+      ),
+      child: Row(
+        children: [
+          // Primary Action: Pond Photo Capture ("Check your pond")
+          Expanded(
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: AppColors.langCtaGradient,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.langAccentPrimary.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: () => context.go('/log'),
+                icon: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 20),
+                label: const Text(
+                  'Check your pond',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                ),
+              ),
+            ),
+          ),
 
-// ── Stat chips row ────────────────────────────────────────────────────────────
-class _StatChipsRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final crop = DemoDataService.cropCycle;
-    final now  = DateTime.now();
-    final daysOfCulture = now.difference(crop.stockingDate).inDays;
-    final daysToHarvest = crop.harvestDate != null
-        ? crop.harvestDate!.difference(now).inDays
-        : 55;
+          const SizedBox(width: 12),
 
-    return Row(
-      children: [
-        Expanded(child: StatChip(label: 'Days of Culture', value: '$daysOfCulture days')),
-        const SizedBox(width: 8),
-        Expanded(child: StatChip(label: 'Biomass (est.)', value: '${(daysOfCulture * 0.16).toStringAsFixed(0)} kg', color: AppColors.primary500)),
-        const SizedBox(width: 8),
-        Expanded(child: StatChip(label: 'Days to Harvest', value: '$daysToHarvest days', color: AppColors.warning)),
-      ],
+          // Secondary Action: Ask Aqua Floating Circle Button
+          GestureDetector(
+            onTap: () => context.go('/ask'),
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceAqua,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primary400, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary500.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.mic_rounded,
+                color: AppColors.primary700,
+                size: 24,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

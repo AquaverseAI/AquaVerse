@@ -323,16 +323,52 @@ Map<String, dynamic> _$OfficerVisitToJson(OfficerVisit instance) =>
       'syncStatus': _$SyncStatusEnumMap[instance.syncStatus]!,
     };
 
-DOForecastPoint _$DOForecastPointFromJson(Map<String, dynamic> json) =>
-    DOForecastPoint(
-      time: DateTime.parse(json['time'] as String),
-      value: (json['value'] as num).toDouble(),
-      isDanger: json['isDanger'] as bool,
+PondRisk _$PondRiskFromJson(Map<String, dynamic> json) => PondRisk(
+  score: (json['score'] as num?)?.toDouble(),
+  tier: json['tier'] as String?,
+  syncedAt: json['syncedAt'] == null
+      ? null
+      : DateTime.parse(json['syncedAt'] as String),
+  raw: json['raw'] as Map<String, dynamic>?,
+);
+
+Map<String, dynamic> _$PondRiskToJson(PondRisk instance) => <String, dynamic>{
+  'score': instance.score,
+  'tier': instance.tier,
+  'syncedAt': instance.syncedAt?.toIso8601String(),
+  'raw': instance.raw,
+};
+
+DataQualitySignal _$DataQualitySignalFromJson(Map<String, dynamic> json) =>
+    DataQualitySignal(
+      isBlind: json['isBlind'] as bool,
+      suppressionReason: json['suppressionReason'] as String?,
+      syncedAt: json['syncedAt'] == null
+          ? null
+          : DateTime.parse(json['syncedAt'] as String),
+      raw: json['raw'] as Map<String, dynamic>?,
     );
 
-Map<String, dynamic> _$DOForecastPointToJson(DOForecastPoint instance) =>
+Map<String, dynamic> _$DataQualitySignalToJson(DataQualitySignal instance) =>
     <String, dynamic>{
-      'time': instance.time.toIso8601String(),
-      'value': instance.value,
-      'isDanger': instance.isDanger,
+      'isBlind': instance.isBlind,
+      'suppressionReason': instance.suppressionReason,
+      'syncedAt': instance.syncedAt?.toIso8601String(),
+      'raw': instance.raw,
     };
+
+PondEvent _$PondEventFromJson(Map<String, dynamic> json) => PondEvent(
+  id: json['id'] as String,
+  type: json['type'] as String,
+  summary: json['summary'] as String,
+  timestamp: DateTime.parse(json['timestamp'] as String),
+  payload: json['payload'] as Map<String, dynamic>?,
+);
+
+Map<String, dynamic> _$PondEventToJson(PondEvent instance) => <String, dynamic>{
+  'id': instance.id,
+  'type': instance.type,
+  'summary': instance.summary,
+  'timestamp': instance.timestamp.toIso8601String(),
+  'payload': instance.payload,
+};

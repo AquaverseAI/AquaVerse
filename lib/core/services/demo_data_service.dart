@@ -67,22 +67,12 @@ class DemoDataService {
     ),
   ];
 
-  // ── DO Forecast ─────────────────────────────────────────────────────────────
-  static List<DOForecastPoint> doForecast() {
+  // ── DO Forecast (Deprecated) ─────────────────────────────────────────────
+  static List<Map<String, dynamic>> doForecast() {
     final now = DateTime.now();
     return [
-      DOForecastPoint(time: now.subtract(const Duration(hours: 12)), value: 6.2, isDanger: false),
-      DOForecastPoint(time: now.subtract(const Duration(hours: 10)), value: 5.8, isDanger: false),
-      DOForecastPoint(time: now.subtract(const Duration(hours: 8)),  value: 5.5, isDanger: false),
-      DOForecastPoint(time: now.subtract(const Duration(hours: 6)),  value: 5.2, isDanger: false),
-      DOForecastPoint(time: now.subtract(const Duration(hours: 4)),  value: 4.8, isDanger: false),
-      DOForecastPoint(time: now.subtract(const Duration(hours: 2)),  value: 4.2, isDanger: false),
-      DOForecastPoint(time: now,                                      value: 3.8, isDanger: true),
-      DOForecastPoint(time: now.add(const Duration(hours: 2)),       value: 3.4, isDanger: true),
-      DOForecastPoint(time: now.add(const Duration(hours: 4)),       value: 4.1, isDanger: false),
-      DOForecastPoint(time: now.add(const Duration(hours: 6)),       value: 5.0, isDanger: false),
-      DOForecastPoint(time: now.add(const Duration(hours: 8)),       value: 5.6, isDanger: false),
-      DOForecastPoint(time: now.add(const Duration(hours: 10)),      value: 6.0, isDanger: false),
+      {'time': now.subtract(const Duration(hours: 12)), 'value': 6.2, 'isDanger': false},
+      {'time': now, 'value': 3.8, 'isDanger': true},
     ];
   }
 

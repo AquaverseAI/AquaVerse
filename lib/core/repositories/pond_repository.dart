@@ -1,15 +1,18 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database.dart';
 import '../models/models.dart';
 import '../network/api_client.dart';
 import '../providers/providers.dart';
+import 'dashboard_cache_repository.dart';
 
 class PondRepository {
   final AppDatabase db;
   final ApiClient api;
+  final DashboardCacheRepository cache;
 
-  PondRepository(this.db, this.api);
+  PondRepository(this.db, this.api, this.cache);
 
   Future<void> syncPonds() async {
     try {
@@ -90,17 +93,52 @@ class PondRepository {
     );
   }
 
-  Future<dynamic> getPondRisk(String pondId) async {
-    return api.getPondRisk(pondId); // Not cached in DB for now, purely real-time
+  Future<PondRisk> getPondRisk(String pondId) async {
+    final key = 'risk_$pondId';
+    try {
+      final raw = await api.getPondRisk(pondId);
+      await cache.write(key, raw);
+      return PondRisk.fromJson(raw, syncedAt: DateTime.now());
+    } catch (_) {
+      final cached = await cache.read(key);
+      if (cached != null) {
+        try {
+          final decoded = jsonDecode(cached.blob);
+          return PondRisk.fromJson(decoded, syncedAt: cached.syncedAt);
+        } catch (_) {}
+      }
+      return const PondRisk(tier: 'low');
+    }
   }
 
-  Future<List<DOForecastPoint>> getDOForecast(String pondId) async {
-    return api.getDOForecast(pondId); // Purely real-time data
+  Future<List<PondEvent>> getPondEvents(String pondId) async {
+    final key = 'events_$pondId';
+    try {
+      final raw = await api.getPondEvents(pondId);
+      await cache.write(key, raw);
+      if (raw is List) {
+        return raw.map((e) => PondEvent.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      return [];
+    } catch (_) {
+      final cached = await cache.read(key);
+      if (cached != null) {
+        try {
+          final decoded = jsonDecode(cached.blob);
+          if (decoded is List) {
+            return decoded.map((e) => PondEvent.fromJson(e as Map<String, dynamic>)).toList();
+          }
+        } catch (_) {}
+      }
+      return [];
+    }
   }
 }
 
 final pondRepositoryProvider = Provider<PondRepository>((ref) {
   final db = ref.watch(databaseProvider);
   final api = ref.watch(apiClientProvider);
-  return PondRepository(db, api);
+  final cache = ref.watch(dashboardCacheRepositoryProvider);
+  return PondRepository(db, api, cache);
 });
+

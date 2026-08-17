@@ -337,18 +337,121 @@ class OfficerVisit {
   Map<String, dynamic> toJson() => _$OfficerVisitToJson(this);
 }
 
+// TODO(contract): exact risk response schema not confirmed — building to accept {score, tier} or either alone
 @JsonSerializable(explicitToJson: true)
-class DOForecastPoint {
-  final DateTime time;
-  final double value;
-  final bool isDanger;
+class PondRisk {
+  final double? score;
+  final String? tier; // "low", "medium", "high"
+  final DateTime? syncedAt;
+  final Map<String, dynamic>? raw;
 
-  const DOForecastPoint({
-    required this.time,
-    required this.value,
-    required this.isDanger,
+  const PondRisk({
+    this.score,
+    this.tier,
+    this.syncedAt,
+    this.raw,
   });
 
-  factory DOForecastPoint.fromJson(Map<String, dynamic> json) => _$DOForecastPointFromJson(json);
-  Map<String, dynamic> toJson() => _$DOForecastPointToJson(this);
+  factory PondRisk.fromJson(dynamic json, {DateTime? syncedAt}) {
+    if (json is Map<String, dynamic>) {
+      final s = (json['score'] as num?)?.toDouble() ?? (json['risk_score'] as num?)?.toDouble();
+      final t = (json['tier'] as String?) ?? (json['level'] as String?) ?? (json['risk_tier'] as String?);
+      return PondRisk(
+        score: s,
+        tier: t?.toLowerCase(),
+        syncedAt: syncedAt ?? DateTime.now(),
+        raw: json,
+      );
+    }
+    return PondRisk(
+      score: (json is num) ? json.toDouble() : null,
+      tier: (json is String) ? json.toLowerCase() : null,
+      syncedAt: syncedAt ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => _$PondRiskToJson(this);
+
+  String get effectiveTier {
+    if (tier != null) return tier!;
+    if (score != null) {
+      if (score! >= 0.7) return 'high';
+      if (score! >= 0.3) return 'medium';
+      return 'low';
+    }
+    return 'low';
+  }
 }
+
+// TODO(contract): data-quality response schema not confirmed — R5 blind-state signal parser
+@JsonSerializable(explicitToJson: true)
+class DataQualitySignal {
+  final bool isBlind;
+  final String? suppressionReason;
+  final DateTime? syncedAt;
+  final Map<String, dynamic>? raw;
+
+  const DataQualitySignal({
+    required this.isBlind,
+    this.suppressionReason,
+    this.syncedAt,
+    this.raw,
+  });
+
+  factory DataQualitySignal.fromJson(dynamic json, {DateTime? syncedAt}) {
+    if (json is Map<String, dynamic>) {
+      final blind = (json['is_blind'] as bool?) ??
+          (json['blind_state'] as bool?) ??
+          (json['isBlindState'] as bool?) ??
+          false;
+      final reason = (json['suppression_reason'] as String?) ??
+          (json['reason'] as String?) ??
+          (json['suppressionReason'] as String?);
+      return DataQualitySignal(
+        isBlind: blind,
+        suppressionReason: reason,
+        syncedAt: syncedAt ?? DateTime.now(),
+        raw: json,
+      );
+    }
+    if (json is bool) {
+      return DataQualitySignal(isBlind: json, syncedAt: syncedAt ?? DateTime.now());
+    }
+    return DataQualitySignal(isBlind: false, syncedAt: syncedAt ?? DateTime.now());
+  }
+
+  Map<String, dynamic> toJson() => _$DataQualitySignalToJson(this);
+}
+
+// TODO(contract): event taxonomy from /v1/ponds/{pond_id}/events not confirmed — defensive model
+@JsonSerializable(explicitToJson: true)
+class PondEvent {
+  final String id;
+  final String type; // e.g. "sensor_fault", "alert_trigger", "photo_submitted", "advisory_issued"
+  final String summary;
+  final DateTime timestamp;
+  final Map<String, dynamic>? payload;
+
+  const PondEvent({
+    required this.id,
+    required this.type,
+    required this.summary,
+    required this.timestamp,
+    this.payload,
+  });
+
+  factory PondEvent.fromJson(Map<String, dynamic> json) {
+    return PondEvent(
+      id: (json['id'] as String?) ?? (json['event_id'] as String?) ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      type: (json['type'] as String?) ?? (json['event_type'] as String?) ?? 'info',
+      summary: (json['summary'] as String?) ?? (json['description'] as String?) ?? (json['title'] as String?) ?? 'Pond event logged',
+      timestamp: json['timestamp'] != null
+          ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
+          : (json['created_at'] != null ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now() : DateTime.now()),
+      payload: json['payload'] is Map<String, dynamic> ? json['payload'] as Map<String, dynamic> : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => _$PondEventToJson(this);
+}
+

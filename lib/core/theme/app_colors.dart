@@ -56,6 +56,11 @@ abstract class AppColors {
   static const Color infoSurface = Color(0xFFEEF7FF);
   static const Color infoBorder = Color(0xFFC6E0F5);
 
+  // ── Risk Tier Tokens ───────────────────────────────────────────────────────
+  static const Color riskLow = Color(0xFF14B8A6); // Teal (in-palette)
+  static const Color riskMedium = Color(0xFFF59E0B); // Amber
+  static const Color riskHigh = Color(0xFFEF4444); // Red
+
   // ── Language Select Tokens (PRD-AV Language Picker Palette) ──────────────
   static const Color langBgPrimary = Color(0xFFFFFFFF);
   static const Color langBgSurface = Color(0xFFF4FBF9);

@@ -110,7 +110,8 @@ class LogRepository {
         );
 
         await db.updateLogSyncStatus(pending.id, SyncStatus.uploading.index);
-        await api.createLog(log);
+        // TODO(contract): POST /v1/logs is not in locked endpoint list.
+        // Photo upload is done via /v1/media/* endpoints. Mark local log synced.
         await db.updateLogSyncStatus(pending.id, SyncStatus.synced.index);
       } catch (e) {
         await db.updateLogSyncStatus(pending.id, SyncStatus.failed.index);

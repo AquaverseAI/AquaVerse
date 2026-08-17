@@ -59,12 +59,30 @@ class AlertsTable extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [PondsTable, LogsTable, AlertsTable])
+class DashboardCacheTable extends Table {
+  TextColumn get cacheKey => text()();
+  TextColumn get payloadBlob => text()();
+  DateTimeColumn get syncedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {cacheKey};
+}
+
+@DriftDatabase(tables: [PondsTable, LogsTable, AlertsTable, DashboardCacheTable])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(connection.openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.createTable(dashboardCacheTable);
+          }
+        },
+      );
 
   // -- Ponds Queries --
   Future<List<PondsTableData>> getAllPonds() => select(pondsTable).get();
@@ -96,4 +114,20 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markAlertAcknowledged(String id) {
     return (update(alertsTable)..where((t) => t.id.equals(id))).write(const AlertsTableCompanion(acknowledged: Value(true)));
   }
+
+  // -- Dashboard Cache Queries --
+  Future<void> upsertDashboardCache(String key, String blob, DateTime syncedAt) {
+    return into(dashboardCacheTable).insertOnConflictUpdate(
+      DashboardCacheTableCompanion(
+        cacheKey: Value(key),
+        payloadBlob: Value(blob),
+        syncedAt: Value(syncedAt),
+      ),
+    );
+  }
+
+  Future<DashboardCacheTableData?> getDashboardCache(String key) {
+    return (select(dashboardCacheTable)..where((t) => t.cacheKey.equals(key))).getSingleOrNull();
+  }
 }
+

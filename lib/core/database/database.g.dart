@@ -2271,12 +2271,293 @@ class AlertsTableCompanion extends UpdateCompanion<AlertsTableData> {
   }
 }
 
+class $DashboardCacheTableTable extends DashboardCacheTable
+    with TableInfo<$DashboardCacheTableTable, DashboardCacheTableData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DashboardCacheTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _cacheKeyMeta = const VerificationMeta(
+    'cacheKey',
+  );
+  @override
+  late final GeneratedColumn<String> cacheKey = GeneratedColumn<String>(
+    'cache_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadBlobMeta = const VerificationMeta(
+    'payloadBlob',
+  );
+  @override
+  late final GeneratedColumn<String> payloadBlob = GeneratedColumn<String>(
+    'payload_blob',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _syncedAtMeta = const VerificationMeta(
+    'syncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+    'synced_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [cacheKey, payloadBlob, syncedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dashboard_cache_table';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DashboardCacheTableData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('cache_key')) {
+      context.handle(
+        _cacheKeyMeta,
+        cacheKey.isAcceptableOrUnknown(data['cache_key']!, _cacheKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_cacheKeyMeta);
+    }
+    if (data.containsKey('payload_blob')) {
+      context.handle(
+        _payloadBlobMeta,
+        payloadBlob.isAcceptableOrUnknown(
+          data['payload_blob']!,
+          _payloadBlobMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadBlobMeta);
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(
+        _syncedAtMeta,
+        syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_syncedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {cacheKey};
+  @override
+  DashboardCacheTableData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DashboardCacheTableData(
+      cacheKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cache_key'],
+      )!,
+      payloadBlob: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_blob'],
+      )!,
+      syncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}synced_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DashboardCacheTableTable createAlias(String alias) {
+    return $DashboardCacheTableTable(attachedDatabase, alias);
+  }
+}
+
+class DashboardCacheTableData extends DataClass
+    implements Insertable<DashboardCacheTableData> {
+  final String cacheKey;
+  final String payloadBlob;
+  final DateTime syncedAt;
+  const DashboardCacheTableData({
+    required this.cacheKey,
+    required this.payloadBlob,
+    required this.syncedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['cache_key'] = Variable<String>(cacheKey);
+    map['payload_blob'] = Variable<String>(payloadBlob);
+    map['synced_at'] = Variable<DateTime>(syncedAt);
+    return map;
+  }
+
+  DashboardCacheTableCompanion toCompanion(bool nullToAbsent) {
+    return DashboardCacheTableCompanion(
+      cacheKey: Value(cacheKey),
+      payloadBlob: Value(payloadBlob),
+      syncedAt: Value(syncedAt),
+    );
+  }
+
+  factory DashboardCacheTableData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DashboardCacheTableData(
+      cacheKey: serializer.fromJson<String>(json['cacheKey']),
+      payloadBlob: serializer.fromJson<String>(json['payloadBlob']),
+      syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'cacheKey': serializer.toJson<String>(cacheKey),
+      'payloadBlob': serializer.toJson<String>(payloadBlob),
+      'syncedAt': serializer.toJson<DateTime>(syncedAt),
+    };
+  }
+
+  DashboardCacheTableData copyWith({
+    String? cacheKey,
+    String? payloadBlob,
+    DateTime? syncedAt,
+  }) => DashboardCacheTableData(
+    cacheKey: cacheKey ?? this.cacheKey,
+    payloadBlob: payloadBlob ?? this.payloadBlob,
+    syncedAt: syncedAt ?? this.syncedAt,
+  );
+  DashboardCacheTableData copyWithCompanion(DashboardCacheTableCompanion data) {
+    return DashboardCacheTableData(
+      cacheKey: data.cacheKey.present ? data.cacheKey.value : this.cacheKey,
+      payloadBlob: data.payloadBlob.present
+          ? data.payloadBlob.value
+          : this.payloadBlob,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardCacheTableData(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('payloadBlob: $payloadBlob, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(cacheKey, payloadBlob, syncedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DashboardCacheTableData &&
+          other.cacheKey == this.cacheKey &&
+          other.payloadBlob == this.payloadBlob &&
+          other.syncedAt == this.syncedAt);
+}
+
+class DashboardCacheTableCompanion
+    extends UpdateCompanion<DashboardCacheTableData> {
+  final Value<String> cacheKey;
+  final Value<String> payloadBlob;
+  final Value<DateTime> syncedAt;
+  final Value<int> rowid;
+  const DashboardCacheTableCompanion({
+    this.cacheKey = const Value.absent(),
+    this.payloadBlob = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DashboardCacheTableCompanion.insert({
+    required String cacheKey,
+    required String payloadBlob,
+    required DateTime syncedAt,
+    this.rowid = const Value.absent(),
+  }) : cacheKey = Value(cacheKey),
+       payloadBlob = Value(payloadBlob),
+       syncedAt = Value(syncedAt);
+  static Insertable<DashboardCacheTableData> custom({
+    Expression<String>? cacheKey,
+    Expression<String>? payloadBlob,
+    Expression<DateTime>? syncedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (cacheKey != null) 'cache_key': cacheKey,
+      if (payloadBlob != null) 'payload_blob': payloadBlob,
+      if (syncedAt != null) 'synced_at': syncedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DashboardCacheTableCompanion copyWith({
+    Value<String>? cacheKey,
+    Value<String>? payloadBlob,
+    Value<DateTime>? syncedAt,
+    Value<int>? rowid,
+  }) {
+    return DashboardCacheTableCompanion(
+      cacheKey: cacheKey ?? this.cacheKey,
+      payloadBlob: payloadBlob ?? this.payloadBlob,
+      syncedAt: syncedAt ?? this.syncedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (cacheKey.present) {
+      map['cache_key'] = Variable<String>(cacheKey.value);
+    }
+    if (payloadBlob.present) {
+      map['payload_blob'] = Variable<String>(payloadBlob.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardCacheTableCompanion(')
+          ..write('cacheKey: $cacheKey, ')
+          ..write('payloadBlob: $payloadBlob, ')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $PondsTableTable pondsTable = $PondsTableTable(this);
   late final $LogsTableTable logsTable = $LogsTableTable(this);
   late final $AlertsTableTable alertsTable = $AlertsTableTable(this);
+  late final $DashboardCacheTableTable dashboardCacheTable =
+      $DashboardCacheTableTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2285,6 +2566,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     pondsTable,
     logsTable,
     alertsTable,
+    dashboardCacheTable,
   ];
 }
 
@@ -3353,6 +3635,186 @@ typedef $$AlertsTableTableProcessedTableManager =
       AlertsTableData,
       PrefetchHooks Function()
     >;
+typedef $$DashboardCacheTableTableCreateCompanionBuilder =
+    DashboardCacheTableCompanion Function({
+      required String cacheKey,
+      required String payloadBlob,
+      required DateTime syncedAt,
+      Value<int> rowid,
+    });
+typedef $$DashboardCacheTableTableUpdateCompanionBuilder =
+    DashboardCacheTableCompanion Function({
+      Value<String> cacheKey,
+      Value<String> payloadBlob,
+      Value<DateTime> syncedAt,
+      Value<int> rowid,
+    });
+
+class $$DashboardCacheTableTableFilterComposer
+    extends Composer<_$AppDatabase, $DashboardCacheTableTable> {
+  $$DashboardCacheTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadBlob => $composableBuilder(
+    column: $table.payloadBlob,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DashboardCacheTableTableOrderingComposer
+    extends Composer<_$AppDatabase, $DashboardCacheTableTable> {
+  $$DashboardCacheTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get cacheKey => $composableBuilder(
+    column: $table.cacheKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadBlob => $composableBuilder(
+    column: $table.payloadBlob,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+    column: $table.syncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DashboardCacheTableTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DashboardCacheTableTable> {
+  $$DashboardCacheTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get cacheKey =>
+      $composableBuilder(column: $table.cacheKey, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadBlob => $composableBuilder(
+    column: $table.payloadBlob,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+}
+
+class $$DashboardCacheTableTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DashboardCacheTableTable,
+          DashboardCacheTableData,
+          $$DashboardCacheTableTableFilterComposer,
+          $$DashboardCacheTableTableOrderingComposer,
+          $$DashboardCacheTableTableAnnotationComposer,
+          $$DashboardCacheTableTableCreateCompanionBuilder,
+          $$DashboardCacheTableTableUpdateCompanionBuilder,
+          (
+            DashboardCacheTableData,
+            BaseReferences<
+              _$AppDatabase,
+              $DashboardCacheTableTable,
+              DashboardCacheTableData
+            >,
+          ),
+          DashboardCacheTableData,
+          PrefetchHooks Function()
+        > {
+  $$DashboardCacheTableTableTableManager(
+    _$AppDatabase db,
+    $DashboardCacheTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DashboardCacheTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DashboardCacheTableTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DashboardCacheTableTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> cacheKey = const Value.absent(),
+                Value<String> payloadBlob = const Value.absent(),
+                Value<DateTime> syncedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DashboardCacheTableCompanion(
+                cacheKey: cacheKey,
+                payloadBlob: payloadBlob,
+                syncedAt: syncedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String cacheKey,
+                required String payloadBlob,
+                required DateTime syncedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => DashboardCacheTableCompanion.insert(
+                cacheKey: cacheKey,
+                payloadBlob: payloadBlob,
+                syncedAt: syncedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DashboardCacheTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DashboardCacheTableTable,
+      DashboardCacheTableData,
+      $$DashboardCacheTableTableFilterComposer,
+      $$DashboardCacheTableTableOrderingComposer,
+      $$DashboardCacheTableTableAnnotationComposer,
+      $$DashboardCacheTableTableCreateCompanionBuilder,
+      $$DashboardCacheTableTableUpdateCompanionBuilder,
+      (
+        DashboardCacheTableData,
+        BaseReferences<
+          _$AppDatabase,
+          $DashboardCacheTableTable,
+          DashboardCacheTableData
+        >,
+      ),
+      DashboardCacheTableData,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3363,4 +3825,6 @@ class $AppDatabaseManager {
       $$LogsTableTableTableManager(_db, _db.logsTable);
   $$AlertsTableTableTableManager get alertsTable =>
       $$AlertsTableTableTableManager(_db, _db.alertsTable);
+  $$DashboardCacheTableTableTableManager get dashboardCacheTable =>
+      $$DashboardCacheTableTableTableManager(_db, _db.dashboardCacheTable);
 }

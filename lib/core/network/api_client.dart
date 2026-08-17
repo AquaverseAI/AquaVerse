@@ -15,6 +15,9 @@ abstract class ApiClient {
   @POST('/v1/auth/otp/verify')
   Future<dynamic> verifyOtp(@Body() Map<String, dynamic> body);
 
+  @GET('/v1/auth/me')
+  Future<dynamic> getMe();
+
   // -- Ponds --
   @GET('/v1/ponds')
   Future<List<Pond>> getPonds();
@@ -22,18 +25,19 @@ abstract class ApiClient {
   @GET('/v1/ponds/{pond_id}')
   Future<Pond> getPondDetails(@Path('pond_id') String pondId);
 
+  @GET('/v1/ponds/{pond_id}/events')
+  Future<dynamic> getPondEvents(@Path('pond_id') String pondId);
+
   @GET('/v1/ponds/{pond_id}/risk')
   Future<dynamic> getPondRisk(@Path('pond_id') String pondId);
 
-  @GET('/v1/ponds/{pond_id}/forecast/do')
-  Future<List<DOForecastPoint>> getDOForecast(@Path('pond_id') String pondId);
+  // -- Data Quality --
+  @GET('/v1/data-quality')
+  Future<dynamic> getDataQuality();
 
   // -- Logs --
   @GET('/v1/logs')
   Future<List<PondLog>> getLogs();
-
-  @POST('/v1/logs')
-  Future<void> createLog(@Body() PondLog log);
 
   // -- Media --
   @POST('/v1/media/upload-url')

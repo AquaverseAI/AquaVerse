@@ -5,6 +5,7 @@ import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
+import '../../../shared/widgets/rotating_globe_icon.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
@@ -82,28 +83,9 @@ class _LanguageSelectScreenState extends ConsumerState<LanguageSelectScreen> {
             children: [
               const SizedBox(height: 12),
 
-              // ── 2.2 Icon Badge (Centered 64dp gradient circle with globe icon)
-              Center(
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: AppColors.langCtaGradient,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.langAccentPrimary.withValues(alpha: 0.25),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      )
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.language_rounded,
-                    color: AppColors.langTextOnAccent,
-                    size: 28,
-                  ),
-                ),
+              // ── 2.2 Icon Badge (Centered 64dp realistic 3D rotating globe icon)
+              const Center(
+                child: RotatingGlobeIcon(size: 64),
               ),
 
               const SizedBox(height: 16),

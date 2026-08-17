@@ -266,7 +266,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           alignment: Alignment.center,
                         ),
                       ),
-                      // Subtle gradient vignette overlay to ensure white text & logo remain crisp
+                      // Directional multi-stop gradient scrim per Section 2.2 specification
                       Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -274,11 +274,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withValues(alpha: 0.35),
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.40),
+                                Colors.black.withValues(alpha: 0.08), // Top: lightest
+                                Colors.black.withValues(alpha: 0.28), // Mid: icons band
+                                Colors.black.withValues(alpha: 0.40), // Mid-lower
+                                Colors.black.withValues(alpha: 0.60), // Bottom: headline/subtext
                               ],
-                              stops: const [0.0, 0.45, 1.0],
+                              stops: const [0.0, 0.35, 0.65, 1.0],
                             ),
                           ),
                         ),

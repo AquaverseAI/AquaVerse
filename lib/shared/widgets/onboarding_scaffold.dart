@@ -34,7 +34,7 @@ class OnboardingScaffold extends StatelessWidget {
             ),
           ),
 
-          // 2. Light gradient/overlay to ensure high contrast for text and cards
+          // 2. Multi-stop directional gradient scrim for high contrast (Section 2.2 spec)
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -42,11 +42,12 @@ class OnboardingScaffold extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withValues(alpha: 0.35),
-                    Colors.white.withValues(alpha: 0.15),
-                    Colors.white.withValues(alpha: 0.25),
+                    Colors.black.withValues(alpha: 0.08), // Top: lightest scrim
+                    Colors.black.withValues(alpha: 0.22), // Mid-upper
+                    Colors.black.withValues(alpha: 0.32), // Mid-lower: icon cluster band
+                    Colors.black.withValues(alpha: 0.58), // Bottom: darkest for CTA / subtext
                   ],
-                  stops: const [0.0, 0.5, 1.0],
+                  stops: const [0.0, 0.30, 0.65, 1.0],
                 ),
               ),
             ),

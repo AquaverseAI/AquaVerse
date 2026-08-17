@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Query, status, Response
-from sqlalchemy import select
-
-from app.deps import DbSession, CurrentUser
-from app.db.models.log import Log
-from app.db.models.crop import Crop
+from fastapi import APIRouter, Query, Response, status
+from sqlalchemy import and_, or_, select
 
 from app.core import rbac
-from app.core.pagination import CursorPage
+from app.core.pagination import CursorPage, clamp_limit, decode_keyset_cursor, encode_keyset_cursor
 from app.core.timezones import utcnow
+from app.db.models.crop import Crop
+from app.db.models.log import Log
+from app.deps import CurrentUser, DbSession
 from app.ingest.schemas import (
     LogIn,
     LogOut,
@@ -78,7 +78,7 @@ async def create_log(body: LogIn, session: DbSession, user: CurrentUser, respons
     session.add(log_entry)
     await session.commit()
     await session.refresh(log_entry)
-    
+
     return LogOut.model_validate(log_entry, from_attributes=True)
 
 
@@ -86,33 +86,70 @@ async def create_log(body: LogIn, session: DbSession, user: CurrentUser, respons
     "/logs",
     response_model=CursorPage[LogOut],
     summary="List water quality logs",
+    description=(
+        "Keyset-paginated on `(recorded_at, id)` DESC. Pass the previous page's "
+        "`next_cursor` back as `cursor` to fetch the next page; a `null` "
+        "`next_cursor` means there is no further page."
+    ),
 )
 async def list_logs(
     session: DbSession,
     user: CurrentUser,
     pond_id: UUID | None = Query(default=None),
     cursor: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int | None = Query(default=None),
 ) -> CursorPage[LogOut]:
-    """Phase 2: return logs from DB."""
+    """Real keyset pagination — sorted by recorded_at DESC, id DESC."""
     if pond_id is not None and user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
+
+    effective_limit = clamp_limit(limit)
+
     stmt = select(Log)
     if pond_id:
         stmt = stmt.where(Log.pond_id == pond_id)
-    
-    # Cursor pagination: sort by recorded_at DESC, id DESC
+
+    decoded = decode_keyset_cursor(cursor)
+    if decoded is not None:
+        last_recorded_at_raw, last_id_raw = decoded
+        try:
+            last_recorded_at = datetime.fromisoformat(last_recorded_at_raw)
+            last_id = UUID(last_id_raw)
+        except ValueError:
+            # Malformed/tampered cursor — fail open to the first page rather
+            # than 500, matching decode_cursor's existing tolerant behaviour.
+            last_recorded_at = None
+            last_id = None
+
+        if last_recorded_at is not None and last_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Log.recorded_at < last_recorded_at,
+                    and_(Log.recorded_at == last_recorded_at, Log.id < last_id),
+                )
+            )
+
+    # Sort by recorded_at DESC, id DESC — id breaks ties for rows sharing a
+    # recorded_at timestamp, which is what makes the keyset WHERE above exact.
     stmt = stmt.order_by(Log.recorded_at.desc(), Log.id.desc())
-    
-    # Basic pagination logic based on offset (since cursor isn't fully spec'd here)
-    # We will just return the limit for now until full cursor logic is added
-    stmt = stmt.limit(limit)
-    
+
+    # Fetch one extra row to detect whether a next page exists, without a
+    # separate COUNT query.
+    stmt = stmt.limit(effective_limit + 1)
+
     result = await session.execute(stmt)
-    logs = result.scalars().all()
-    
-    items = [LogOut.model_validate(l, from_attributes=True) for l in logs]
-    return CursorPage[LogOut](items=items, next_cursor=None)
+    logs = list(result.scalars().all())
+
+    has_next = len(logs) > effective_limit
+    logs = logs[:effective_limit]
+
+    next_cursor: str | None = None
+    if has_next and logs:
+        last_row = logs[-1]
+        next_cursor = encode_keyset_cursor(last_row.recorded_at.isoformat(), last_row.id)
+
+    items = [LogOut.model_validate(log, from_attributes=True) for log in logs]
+    return CursorPage[LogOut](items=items, next_cursor=next_cursor)
 
 
 # ---------------------------------------------------------------------------

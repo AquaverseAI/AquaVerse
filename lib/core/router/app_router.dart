@@ -26,9 +26,12 @@ import '../../features/ponds/presentation/my_ponds_screen.dart';
 import '../../features/ponds/presentation/pond_details_screen.dart';
 import '../../features/help/presentation/help_center_screen.dart';
 
-// Officer
+// Extension Officer
 import '../../features/officer/presentation/officer_dashboard_screen.dart';
 import '../../features/officer/presentation/officer_visit_log_screen.dart';
+import '../../features/officer/presentation/officer_profile_screen.dart';
+import '../../features/officer/presentation/officer_send_advice_screen.dart';
+import '../../features/officer/presentation/officer_reports_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -119,7 +122,7 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => const HelpCenterScreen(),
     ),
 
-    // ── Extension Officer ────────────────────────────────────────────────────
+    // ── Extension Officer Suite ──────────────────────────────────────────────
     GoRoute(
       path: '/officer/dashboard',
       builder: (context, state) => const OfficerDashboardScreen(),
@@ -127,6 +130,18 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/officer/visit-log',
       builder: (context, state) => const OfficerVisitLogScreen(),
+    ),
+    GoRoute(
+      path: '/officer/profile',
+      builder: (context, state) => const OfficerProfileScreen(),
+    ),
+    GoRoute(
+      path: '/officer/send-advice',
+      builder: (context, state) => const OfficerSendAdviceScreen(),
+    ),
+    GoRoute(
+      path: '/officer/reports',
+      builder: (context, state) => const OfficerReportsScreen(),
     ),
   ],
 );

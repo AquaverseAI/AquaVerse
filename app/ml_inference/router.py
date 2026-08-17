@@ -189,7 +189,7 @@ async def get_risk_worklist(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[WorklistItem]:
     if district is not None:
-        rbac.require_district(user.district, district)
+        rbac.require_district(user.district, district, user.role)
     now = utcnow()
     stub = WorklistItem(
         pond_id=_STUB_POND_ID,

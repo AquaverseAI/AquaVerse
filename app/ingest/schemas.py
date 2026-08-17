@@ -72,6 +72,7 @@ class MediaUploadUrlOut(BaseModel):
 
 
 class MediaCommitIn(BaseModel):
+    pond_id: UUID
     client_log_id: str | None = Field(default=None, max_length=200)
 
 

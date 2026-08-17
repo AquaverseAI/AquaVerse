@@ -35,7 +35,7 @@ async def geo_ponds(
 ) -> dict[str, Any]:
     """Phase 1: return GeoJSON fixture. Phase 2: PostGIS ST_DWithin query."""
     if district is not None and user.role in ("staff", "admin"):
-        rbac.require_district(user.district, district)
+        rbac.require_district(user.district, district, user.role)
     return {
         "type": "FeatureCollection",
         "features": [
@@ -75,7 +75,7 @@ async def geo_clusters(
 ) -> dict[str, Any]:
     """Phase 1: return GeoJSON fixture. Phase 5: space-time scan statistic."""
     if district is not None and user.role in ("staff", "admin"):
-        rbac.require_district(user.district, district)
+        rbac.require_district(user.district, district, user.role)
     now = utcnow()
     return {
         "type": "FeatureCollection",

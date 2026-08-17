@@ -154,10 +154,12 @@ async def media_commit(
     user: CurrentUser,
 ) -> MediaOut:
     """Phase 1: return fixture. Phase 3: verify S3 object exists, update DB status."""
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, body.pond_id)
     now = utcnow()
     return MediaOut(
         media_id=media_id,
-        pond_id=uuid4(),
+        pond_id=body.pond_id,
         filename="sample.jpg",
         mime_type="image/jpeg",
         status="committed",

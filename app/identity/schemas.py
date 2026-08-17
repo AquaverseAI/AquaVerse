@@ -16,6 +16,8 @@ class OtpRequestIn(BaseModel):
     @classmethod
     def validate_phone(cls, v: str) -> str:
         import re
+        
+        v = v.replace(" ", "").replace("-", "")
 
         if not re.match(r"^\+91[6-9]\d{9}$", v):
             raise ValueError("Phone must be a valid Indian mobile number in E.164 format")

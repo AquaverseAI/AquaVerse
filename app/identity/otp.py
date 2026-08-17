@@ -22,7 +22,7 @@ _RATE_KEY = "otp_rate:{phone}"  # value = request count
 
 async def create_otp(
     phone: str,
-    redis: "aioredis.Redis",  # type: ignore[type-arg]
+    redis: aioredis.Redis,  # type: ignore[type-arg]
 ) -> tuple[str, str]:
     """
     Generate an OTP, store its HMAC hash in Redis, return (request_id, raw_otp).
@@ -72,7 +72,7 @@ async def verify_otp(
     request_id: str,
     phone: str,
     otp: str,
-    redis: "aioredis.Redis",  # type: ignore[type-arg]
+    redis: aioredis.Redis,  # type: ignore[type-arg]
 ) -> bool:
     """
     Verify an OTP against the stored HMAC hash.

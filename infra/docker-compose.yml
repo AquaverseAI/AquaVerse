@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 # =============================================================================
 # AquaVerse AI — Local Development Docker Compose
@@ -33,7 +33,7 @@ services:
       POSTGRES_PASSWORD: aquaverse
     volumes:
       - pgdata:/home/postgres/pgdata/data
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
     healthcheck:
@@ -99,7 +99,7 @@ services:
   # ---------------------------------------------------------------------------
   app:
     build:
-      context: .
+      context: ..
       dockerfile: infra/Dockerfile
     restart: unless-stopped
     environment:
@@ -112,8 +112,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./ml/artifacts:/app/ml/artifacts:ro
-      - ./certs:/app/certs:ro
+      - ../ml/artifacts:/app/ml/artifacts:ro
+      - ../certs:/app/certs:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
       interval: 30s
@@ -131,7 +131,7 @@ services:
   # ---------------------------------------------------------------------------
   worker:
     build:
-      context: .
+      context: ..
       dockerfile: infra/Dockerfile
     restart: unless-stopped
     environment:
@@ -150,7 +150,7 @@ services:
     image: prom/prometheus:latest
     restart: unless-stopped
     volumes:
-      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheusdata:/prometheus
     ports:
       - "9090:9090"
@@ -170,7 +170,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafanadata:/var/lib/grafana
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3000:3000"
     depends_on:

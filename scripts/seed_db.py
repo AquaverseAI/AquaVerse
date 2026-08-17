@@ -29,9 +29,9 @@ os.environ.setdefault("INTERNAL_API_TOKEN", "dev_internal_token_minimum_32_chars
 
 
 def _hash_password(password: str) -> str:
-    from passlib.context import CryptContext
-    ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    return ctx.hash(password)
+    import bcrypt
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
 async def seed() -> None:
@@ -128,7 +128,7 @@ async def seed() -> None:
                 """),
                 {**u, "created_at": now, "updated_at": now},
             )
-            role_label = f"[{u['role'].upper()}]"
+            role_label = f"[{str(u['role']).upper()}]"
             login = u["phone"] or u["username"]
             print(f"  ✅ {role_label} {u['name']} — login: {login}")
 

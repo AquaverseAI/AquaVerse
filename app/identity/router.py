@@ -208,10 +208,9 @@ async def token(body: TokenIn) -> TokenOut:
         )
 
     # Verify password with bcrypt
-    from passlib.context import CryptContext
+    import bcrypt
 
-    pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    if not user.password_hash or not pwd_ctx.verify(body.password, user.password_hash):
+    if not user.password_hash or not bcrypt.checkpw(body.password.encode("utf-8"), user.password_hash.encode("utf-8")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials.",

@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: builder  (uses uv for fast, reproducible installs)
 # ---------------------------------------------------------------------------
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
@@ -39,7 +39,7 @@ RUN uv pip install -e . --no-deps
 # ---------------------------------------------------------------------------
 # Stage 2: runtime  (minimal image — no build tools, no uv binary)
 # ---------------------------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim-bookworm AS runtime
 
 # Non-root user for security
 RUN groupadd -r aquaverse && useradd -r -g aquaverse -d /app aquaverse
@@ -49,7 +49,7 @@ WORKDIR /app
 # Runtime system deps only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    libgdal32 \
+    gdal-bin \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

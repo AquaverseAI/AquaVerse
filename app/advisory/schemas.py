@@ -112,3 +112,45 @@ class BroadcastIn(BaseModel):
         description="info | warning | critical",
     )
     expires_at: datetime | None = None
+
+# ---------------------------------------------------------------------------
+# M3 Serving Integration Schemas
+# ---------------------------------------------------------------------------
+class M3PondSnapshotRequest(BaseModel):
+    pond_id: str
+    species_key: str
+    doc: int
+    biomass_est_kg: float
+    alive_count: int
+    do_mg_l: float
+    tan_mg_l: float
+    ph: float
+    alkalinity_mg_l: float
+    water_temp_c: float
+    salinity_ppt: float
+    wind_mean_24h: float
+    solar_rad_24h: float
+    rain_48h_mm: float
+    night_do_min_3d_trend: float = 0.0
+    do_amplitude: float = 0.0
+    stress_hours_lt3_24h: float = 0.0
+    stress_hours_lt3_7d: float = 0.0
+    tan_slope_3d: float = 0.0
+    alkalinity_trend_7d: float = 0.0
+    feed_kg_7d_cum: float = 0.0
+    fcr_running: float = 0.0
+    management_quality: float = 0.7
+    aerator_on: bool = False
+    data_health_score: float = 1.0
+    nh3_un_ionised: float = 0.0
+    cum_feed_kg: float = 0.0
+    feed_cost_per_kg_rs: float = 90.0
+    market_price_per_kg_rs: float = 350.0
+
+class M3ReasonResponse(BaseModel):
+    pond_id: str
+    payload: dict
+    narration: str
+    hallucination_check_passed: bool
+    regeneration_attempts: int
+    latency_ms: float

@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, status, HTTPException
+import httpx
 
 from app.advisory.number_validator import validate_llm_output
 from app.advisory.schemas import (
@@ -15,12 +16,13 @@ from app.advisory.schemas import (
     BroadcastIn,
     ReasonIn,
     ReasonOut,
+    M3PondSnapshotRequest,
+    M3ReasonResponse,
 )
 from app.core.errors import NumberMismatchError
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
 from app.deps import InternalOnly
-
 
 if TYPE_CHECKING:
     pass
@@ -107,22 +109,68 @@ async def reason(
 )
 async def ask(body: AskIn) -> AskOut:
     """
-    Phase 1: return fixture answer.
-    Phase 4: fetch quantitative scores → call /v1/reason internally → return.
+    Phase 4: Call the external M3 serving engine with the static payload.
     """
     now = utcnow()
+    
+    # Construct static 28-field payload for the specific pond_id 
+    # to test integration before full DB aggregation is implemented
+    m3_request = M3PondSnapshotRequest(
+        pond_id=str(body.pond_id),
+        species_key="vannamei",
+        doc=52,
+        biomass_est_kg=12.3,
+        alive_count=180,
+        do_mg_l=2.74,
+        tan_mg_l=0.15,
+        ph=7.9,
+        alkalinity_mg_l=140.0,
+        water_temp_c=29.5,
+        salinity_ppt=15.0,
+        wind_mean_24h=3.2,
+        solar_rad_24h=450.0,
+        rain_48h_mm=0.0,
+        night_do_min_3d_trend=-0.1,
+        do_amplitude=2.1,
+        stress_hours_lt3_24h=6.0,
+        stress_hours_lt3_7d=14.0,
+        tan_slope_3d=0.02,
+        alkalinity_trend_7d=-1.5,
+        feed_kg_7d_cum=8.4,
+        fcr_running=1.3,
+        management_quality=0.75,
+        aerator_on=True,
+        data_health_score=1.0,
+        nh3_un_ionised=0.01,
+        cum_feed_kg=8.4,
+        feed_cost_per_kg_rs=90.0,
+        market_price_per_kg_rs=350.0
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                "http://172.17.0.1:8001/v1/reason/m3",
+                json=m3_request.model_dump()
+            )
+            response.raise_for_status()
+            
+            # Parse the response back into our M3ReasonResponse schema
+            m3_response = M3ReasonResponse.model_validate(response.json())
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"M3 reasoning engine failed: {str(e)}"
+        ) from e
+
     return AskOut(
         pond_id=body.pond_id,
         question=body.question,
-        answer=(
-            "Your pond's dissolved oxygen level of 4.2 mg/L is below the safe threshold of 5.0 mg/L. "
-            "This is consistent with early oxygen depletion. "
-            "Please aerate immediately and confirm by re-measuring in 30 minutes."
-        ),
+        answer=m3_response.narration,
         language=body.language,
         tts_url=None,
         generated_at=now,
-        rejected_attempts_this_request=0,
+        rejected_attempts_this_request=m3_response.regeneration_attempts,
     )
 
 

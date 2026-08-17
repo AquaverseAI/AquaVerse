@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, status, Response
+from sqlalchemy import select
+
+from app.deps import DbSession, CurrentUser
+from app.db.models.log import Log
+from app.db.models.crop import Crop
 
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
@@ -33,13 +38,28 @@ router = APIRouter(tags=["Ingest"])
         "Accepts a `client_log_id` for idempotency — replays return `200` with the original record."
     ),
 )
-async def create_log(body: LogIn) -> LogOut:
-    """Phase 1: return fixture. Phase 2: persist to DB, trigger async risk re-score."""
-    now = utcnow()
-    return LogOut(
-        id=uuid4(),
+async def create_log(body: LogIn, session: DbSession, user: CurrentUser, response: Response) -> LogOut:
+    """Phase 2: persist to DB, trigger async risk re-score."""
+    # Check idempotency
+    if body.client_log_id:
+        stmt = select(Log).where(Log.client_log_id == body.client_log_id).limit(1)
+        existing = (await session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            response.status_code = status.HTTP_200_OK
+            return LogOut.model_validate(existing, from_attributes=True)
+
+    # Find active crop for this pond
+    crop_stmt = select(Crop.id).where(
+        Crop.pond_id == body.pond_id,
+        Crop.status == "active"
+    ).limit(1)
+    active_crop_id = (await session.execute(crop_stmt)).scalar_one_or_none()
+
+    log_entry = Log(
         pond_id=body.pond_id,
+        crop_id=active_crop_id,
         recorded_at=body.recorded_at,
+        recorded_by=UUID(user.sub),
         temperature_c=body.temperature_c,
         dissolved_oxygen_mgl=body.dissolved_oxygen_mgl,
         ph=body.ph,
@@ -50,10 +70,15 @@ async def create_log(body: LogIn) -> LogOut:
         nitrate_mgl=body.nitrate_mgl,
         alkalinity_mgl=body.alkalinity_mgl,
         hardness_mgl=body.hardness_mgl,
-        source="manual",
+        notes=body.notes,
+        source="manual", # TODO: Phase 2 IoT should set to 'sensor' based on token?
         client_log_id=body.client_log_id,
-        created_at=now,
     )
+    session.add(log_entry)
+    await session.commit()
+    await session.refresh(log_entry)
+    
+    return LogOut.model_validate(log_entry, from_attributes=True)
 
 
 @router.get(
@@ -62,20 +87,28 @@ async def create_log(body: LogIn) -> LogOut:
     summary="List water quality logs",
 )
 async def list_logs(
+    session: DbSession,
     pond_id: UUID | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[LogOut]:
-    """Phase 1: return empty cursor page fixture."""
-    now = utcnow()
-    stub = LogOut(
-        id=uuid4(),
-        pond_id=pond_id or uuid4(),
-        recorded_at=now,
-        source="manual",
-        created_at=now,
-    )
-    return CursorPage[LogOut](items=[stub], next_cursor=None)
+    """Phase 2: return logs from DB."""
+    stmt = select(Log)
+    if pond_id:
+        stmt = stmt.where(Log.pond_id == pond_id)
+    
+    # Cursor pagination: sort by recorded_at DESC, id DESC
+    stmt = stmt.order_by(Log.recorded_at.desc(), Log.id.desc())
+    
+    # Basic pagination logic based on offset (since cursor isn't fully spec'd here)
+    # We will just return the limit for now until full cursor logic is added
+    stmt = stmt.limit(limit)
+    
+    result = await session.execute(stmt)
+    logs = result.scalars().all()
+    
+    items = [LogOut.model_validate(l, from_attributes=True) for l in logs]
+    return CursorPage[LogOut](items=items, next_cursor=None)
 
 
 # ---------------------------------------------------------------------------

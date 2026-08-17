@@ -1,8 +1,6 @@
 import 'package:go_router/go_router.dart';
 
-// Splash
-import '../../features/splash/splash_screen.dart';
-import '../../features/splash/widgets/iris_transition.dart';
+import '../../shared/widgets/iris_transition.dart';
 
 // Onboarding
 import '../../features/onboarding/presentation/language_select_screen.dart';
@@ -32,10 +30,10 @@ import '../../features/officer/presentation/officer_visit_log_screen.dart';
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   routes: [
-    // ── Splash ──────────────────────────────────────────────────────────────
+    // ── Initial Route ────────────────────────────────────────────────────────
     GoRoute(
       path: '/',
-      builder: (context, state) => const SplashScreen(),
+      builder: (context, state) => const LanguageSelectScreen(),
     ),
 
     // ── Onboarding ───────────────────────────────────────────────────────────

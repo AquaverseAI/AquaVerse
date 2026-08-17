@@ -6,6 +6,7 @@ import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
+import '../../../shared/widgets/aurora_ai_orb.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../../shared/widgets/offline_banner.dart';
 import '../../../shared/widgets/speaker_button.dart';
@@ -15,7 +16,6 @@ enum AskState { idle, listening, thinking, response }
 final askStateProvider = StateProvider<AskState>((ref) => AskState.idle);
 final recognizedTextProvider = StateProvider<String?>((ref) => null);
 final answerTextProvider = StateProvider<String?>((ref) => null);
-final textInputProvider = StateProvider<String>((ref) => '');
 
 class AskScreen extends ConsumerStatefulWidget {
   const AskScreen({super.key});
@@ -25,17 +25,12 @@ class AskScreen extends ConsumerStatefulWidget {
 }
 
 class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateMixin {
-  late AnimationController _pulseController;
   late AnimationController _waveController;
   final TextEditingController _textController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -44,7 +39,6 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
 
   @override
   void dispose() {
-    _pulseController.dispose();
     _waveController.dispose();
     _textController.dispose();
     super.dispose();
@@ -52,7 +46,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
 
   Future<void> _onMicTap() async {
     final currentState = ref.read(askStateProvider);
-    if (currentState == AskState.idle) {
+    if (currentState == AskState.idle || currentState == AskState.response) {
       ref.read(askStateProvider.notifier).state = AskState.listening;
       _waveController.repeat();
       await Future.delayed(const Duration(seconds: 2));
@@ -70,7 +64,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
           '• Afternoon 1 PM: 6 kg\n'
           '• Evening 7 PM: 6 kg\n\n'
           'Note: DO is forecast to drop tonight. Reduce evening feed by 20% if DO falls below 4.0 mg/L. '
-          'This is an estimate — confirm with your extension officer if in doubt.';
+          'This is an AI estimate — confirm with your extension officer if in doubt.';
       ref.read(askStateProvider.notifier).state = AskState.response;
     } else {
       ref.read(askStateProvider.notifier).state = AskState.idle;
@@ -99,15 +93,15 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final askState  = ref.watch(askStateProvider);
+    final askState = ref.watch(askStateProvider);
     final recognized = ref.watch(recognizedTextProvider);
-    final answer     = ref.watch(answerTextProvider);
+    final answer = ref.watch(answerTextProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/today')),
-        title: const Text('Ask Aqua', style: TextStyle(color: AppColors.textPrimary)),
+        title: const Text('Ask Aqua', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             onPressed: () => context.push('/notifications'),
@@ -126,11 +120,11 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
               child: Column(
                 children: [
                   const SizedBox(height: 12),
-                  // ── Mic button ──────────────────────────────────────────────
-                  _buildMicSection(askState),
-                  const SizedBox(height: 20),
+                  // ── Pixel-Perfect Aurora AI Voice Assistant Orb ─────────────
+                  _buildAuroraMicSection(askState),
+                  const SizedBox(height: 24),
 
-                  // ── Recognized speech ────────────────────────────────────────
+                  // ── Recognized speech from user ─────────────────────────────
                   if (recognized != null) ...[
                     AppCard(
                       type: CardType.info,
@@ -145,13 +139,13 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                     const SizedBox(height: 12),
                   ],
 
-                  // ── Thinking indicator ───────────────────────────────────────
+                  // ── Thinking state indicator ────────────────────────────────
                   if (askState == AskState.thinking) ...[
                     const _ThinkingIndicator(),
                     const SizedBox(height: 12),
                   ],
 
-                  // ── Answer card ──────────────────────────────────────────────
+                  // ── AI Answer Response Card ─────────────────────────────────
                   if (answer != null) ...[
                     AppCard(
                       child: Column(
@@ -179,7 +173,6 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                             style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.6),
                           ),
                           const SizedBox(height: 12),
-                          // Photo symptom triage
                           _buildSymptomTriageCard(),
                           const SizedBox(height: 12),
                           SizedBox(
@@ -202,7 +195,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                     const SizedBox(height: 16),
                   ],
 
-                  // ── Type instead ──────────────────────────────────────────────
+                  // ── User Question Text Input ───────────────────────────────
                   AppCard(
                     child: Row(
                       children: [
@@ -229,7 +222,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Recent questions ─────────────────────────────────────────
+                  // ── Recent Farmer Questions ──────────────────────────────────
                   const Align(
                     alignment: Alignment.centerLeft,
                     child: Text('Recent Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
@@ -247,110 +240,104 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
         currentIndex: 2,
         onTap: (i) {
           switch (i) {
-            case 0: context.go('/today'); break;
-            case 1: context.go('/log'); break;
-            case 2: break;
-            case 3: context.go('/alerts'); break;
-            case 4: context.go('/crop'); break;
+            case 0:
+              context.go('/today');
+              break;
+            case 1:
+              context.go('/log');
+              break;
+            case 2:
+              break;
+            case 3:
+              context.go('/alerts');
+              break;
+            case 4:
+              context.go('/crop');
+              break;
           }
         },
       ),
     );
   }
 
-  Widget _buildMicSection(AskState askState) {
+  Widget _buildAuroraMicSection(AskState askState) {
     String stateText;
     switch (askState) {
       case AskState.listening:
-        stateText = 'Listening…';
+        stateText = 'Listening… Speak your question';
         break;
       case AskState.thinking:
-        stateText = 'Thinking…';
+        stateText = 'Aqua AI is processing…';
         break;
       case AskState.response:
-        stateText = 'Tap mic for new question';
+        stateText = 'Tap Aurora AI for new question';
         break;
       default:
-        stateText = 'Tap the mic and ask your question';
+        stateText = 'Tap Aurora AI and ask your question';
     }
 
     return Column(
       children: [
         const Text(
-          'Ask Aqua',
-          style: TextStyle(fontSize: 11, letterSpacing: 1.5, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+          'AQUA AI ASSISTANT',
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 1.5,
+            color: AppColors.langAccentPrimary,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
-        // Mic button
-        AnimatedBuilder(
-          animation: _pulseController,
-          builder: (context, child) {
-            final scale = askState == AskState.listening
-                ? 1.0 + (_pulseController.value * 0.1)
-                : 1.0;
-            return Transform.scale(
-              scale: scale,
-              child: GestureDetector(
-                onTap: _onMicTap,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (askState == AskState.listening)
-                      ...List.generate(3, (i) {
-                        final phase = (_pulseController.value + i * 0.33) % 1.0;
-                        return Container(
-                          width: 70 + i * 22 + phase * 10,
-                          height: 70 + i * 22 + phase * 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.primary500.withValues(alpha: (1 - phase) * 0.12),
-                          ),
-                        );
-                      }),
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: askState == AskState.listening
-                            ? AppColors.critical
-                            : AppColors.primary500,
-                        boxShadow: [
-                          BoxShadow(
-                            color: (askState == AskState.listening ? AppColors.critical : AppColors.primary500)
-                                .withValues(alpha: 0.35),
-                            blurRadius: 18,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        askState == AskState.listening ? Icons.stop_rounded : Icons.mic_rounded,
-                        color: Colors.white,
-                        size: 30,
-                      ),
-                    ),
-                  ],
+        // Pixel-Perfect Aurora AI Morphing Orb Centerpiece
+        AuroraAiOrb(
+          size: 160.0,
+          isListening: askState == AskState.listening,
+          isThinking: askState == AskState.thinking,
+          onTap: _onMicTap,
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.9),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowTier2,
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+            child: Icon(
+              askState == AskState.listening
+                  ? Icons.stop_rounded
+                  : Icons.mic_rounded,
+              color: askState == AskState.listening
+                  ? AppColors.riskHigh
+                  : AppColors.langAccentPrimary,
+              size: 28,
+            ),
+          ),
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
           child: Text(
             stateText,
             key: ValueKey(stateText),
-            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
 
-        // Waveform animation when listening
+        // Dynamic Waveform indicator when listening
         if (askState == AskState.listening) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _WaveformWidget(controller: _waveController),
         ],
       ],
@@ -438,7 +425,7 @@ class _WaveformWidget extends StatelessWidget {
             width: 3,
             height: h,
             decoration: BoxDecoration(
-              color: AppColors.primary500.withValues(alpha: 0.7),
+              color: AppColors.langAccentPrimary.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(2),
             ),
           );

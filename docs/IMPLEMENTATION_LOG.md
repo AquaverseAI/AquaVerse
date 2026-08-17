@@ -28,7 +28,29 @@
 - Created `/login` placeholder screen and updated `app_router.dart` accordingly.
 
 ### 5. Router Integration & Verification Results
-- Registered routes in [app_router.dart](file:///home/techpark-6/Music/AquaVerse%20AI/aquaverse_farmer_app/lib/core/router/app_router.dart): `/onboarding/language`, `/onboarding/mobile`, `/onboarding/otp`, `/onboarding/role`, `/today`, `/officer/dashboard`.
+- Registered routes in [app_router.dart](file:///home/techpark-6/Music/AquaVerse/lib/core/router/app_router.dart): `/onboarding/language`, `/onboarding/mobile`, `/onboarding/otp`, `/onboarding/role`, `/today`, `/officer/dashboard`.
 - `flutter analyze`: **No issues found!**
 - `flutter test`: **All tests passed! (8/8 tests)**
 - Deployment: Streamed install succeeded and app launched on **Pixel 9a emulator** (`com.aquaverse.aquaverse_farmer_app/.MainActivity`).
+
+---
+
+## 2026-08-17 — Task 2: Splash Screen Rebuild From Scratch (Sphere Animation Match)
+
+### 1. Reference Video Analysis
+- Primary Reference: `Sphere Animation.mp4`
+- Secondary Composition Reference: `Splash screen reference.mp4`
+- Motion Choreography Observations:
+  - 3D tumble on Y-axis (360° spin) with a 15° X-axis perspective tilt.
+  - Scale-in from `0.3` to `1.0` over 2400ms entrance driven by `Curves.easeOutCubic`.
+  - Continuous ambient 360° Y-axis idle rotation (12s cycle) after entrance completes.
+  - Specular gradient light sweep across glass surface.
+  - Staggered entrance timing: Title at 1800ms, Subtitle at 2100ms, Primary Button at 2400ms.
+
+### 2. Implementation & Stack Discipline
+- **Deleted**: Obsolete 2D painter `lib/features/splash/widgets/fish_logo_painter.dart`.
+- **Rebuilt**: `lib/features/splash/splash_screen.dart` from scratch using pure native Flutter `Transform` + `Matrix4` 3D perspective matrix (`Matrix4.identity()..setEntry(3, 2, 0.0015)..rotateY(...)..rotateX(...)`).
+- **Shader Sweep**: Implemented animated `ShaderMask` sweep using locked brand palette (`#1B4F7A` Deep Navy → `#4FAE9E` Sea Green → `#3FCCA6` Bright Mint).
+- **Background**: Full-bleed `assets/images/splash_background.png`.
+- **Exit Transition**: Unchanged `IrisTransition` (`iris_transition.dart`) triggered by "Get Started" button tap to `/onboarding/language`.
+

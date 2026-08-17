@@ -1,9 +1,38 @@
-import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/app_colors.dart';
+import '../../l10n/app_localizations.dart';
 import 'splash_controller.dart';
-import 'package:aquaverse_farmer_app/core/theme/app_colors.dart';
+
+// =============================================================================
+// TIMING CONSTANTS (Matched from Sphere Animation.mp4 & Splash screen reference.mp4)
+// =============================================================================
+
+/// Total duration of the initial entrance spin & scale-in animation.
+/// Matched from Sphere Animation.mp4: sphere rotates in with scaling over ~2.4s.
+const Duration kEntranceDuration = Duration(milliseconds: 2400);
+
+/// Delay before the header title ("AquaVerse AI") begins to fade & slide in.
+/// Matched from Splash screen reference.mp4: title reveals near the end of logo entrance.
+const Duration kHeaderDelay = Duration(milliseconds: 1800);
+
+/// Delay before the subtitle ("Better decisions, better harvest") reveals.
+/// Matched from reference: 300ms staggered offset after title.
+const Duration kSubtitleDelay = Duration(milliseconds: 2100);
+
+/// Delay before the primary "Get Started" button reveals.
+/// Matched from reference: button appears as motion settles at 2.4s.
+const Duration kButtonDelay = Duration(milliseconds: 2400);
+
+/// Cycle duration of the continuous 360° Y-axis idle rotation after entrance.
+/// Matched from Sphere Animation.mp4: slow continuous ambient turn.
+const Duration kIdleRotationDuration = Duration(seconds: 12);
+
+// =============================================================================
+// SPLASH SCREEN REBUILD
+// =============================================================================
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -12,181 +41,380 @@ class SplashScreen extends ConsumerStatefulWidget {
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProviderStateMixin {
-  String? _targetRoute;
-  
-  // Elegant reveal animation for the logo
-  late AnimationController _revealController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+class _SplashScreenState extends ConsumerState<SplashScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _entranceController;
+  late final AnimationController _idleController;
+  late final AnimationController _staggerController;
 
-  // Pulsing animation for the loader
-  late AnimationController _pulseController;
+  late final Animation<double> _entranceRotation;
+  late final Animation<double> _entranceScale;
+  late final Animation<double> _headerFade;
+  late final Animation<Offset> _headerSlide;
+  late final Animation<double> _subtitleFade;
+  late final Animation<Offset> _subtitleSlide;
+  late final Animation<double> _buttonFade;
+  late final Animation<Offset> _buttonSlide;
+
+  bool _isNavigating = false;
 
   @override
   void initState() {
     super.initState();
-    _determineRoute();
-    
-    // 1. Logo Reveal (slow fade and rise)
-    _revealController = AnimationController(
+
+    // 1. Entrance Controller (2.4s duration, Curves.easeOutCubic)
+    _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
+      duration: kEntranceDuration,
     );
-    
-    _fadeAnimation = CurvedAnimation(
-      parent: _revealController,
-      curve: Curves.easeOut,
-    );
-    
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08), // Start slightly lower
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _revealController,
+
+    _entranceRotation = CurvedAnimation(
+      parent: _entranceController,
       curve: Curves.easeOutCubic,
-    ));
+    );
 
-    // 2. Ripple/Pulse Loader
-    _pulseController = AnimationController(
+    _entranceScale = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _entranceController,
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    // 2. Idle Looping Controller (12s per full Y-axis rotation)
+    _idleController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
+      duration: kIdleRotationDuration,
+    );
 
-    _revealController.forward();
-
-    // Hold splash screen for at least 3.5 seconds
-    Future.delayed(const Duration(milliseconds: 3500), () {
-      _navigateWhenReady();
+    _entranceController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _idleController.repeat();
+      }
     });
-  }
 
-  Future<void> _determineRoute() async {
-    _targetRoute = await ref.read(splashControllerProvider).determineNextRoute();
-  }
+    // 3. Staggered Elements Controller
+    _staggerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
 
-  void _navigateWhenReady() {
-    if (!mounted) return;
-    if (_targetRoute != null) {
-      context.go(_targetRoute!);
-    } else {
-      Future.delayed(const Duration(milliseconds: 100), _navigateWhenReady);
-    }
+    final double totalMs = 3000.0;
+    _headerFade = CurvedAnimation(
+      parent: _staggerController,
+      curve: Interval(
+        kHeaderDelay.inMilliseconds / totalMs,
+        (kHeaderDelay.inMilliseconds + 500) / totalMs,
+        curve: Curves.easeOut,
+      ),
+    );
+    _headerSlide = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(_headerFade);
+
+    _subtitleFade = CurvedAnimation(
+      parent: _staggerController,
+      curve: Interval(
+        kSubtitleDelay.inMilliseconds / totalMs,
+        (kSubtitleDelay.inMilliseconds + 500) / totalMs,
+        curve: Curves.easeOut,
+      ),
+    );
+    _subtitleSlide = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(_subtitleFade);
+
+    _buttonFade = CurvedAnimation(
+      parent: _staggerController,
+      curve: Interval(
+        kButtonDelay.inMilliseconds / totalMs,
+        (kButtonDelay.inMilliseconds + 500) / totalMs,
+        curve: Curves.easeOut,
+      ),
+    );
+    _buttonSlide = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(_buttonFade);
+
+    // Start entrance animations
+    _entranceController.forward();
+    _staggerController.forward();
   }
 
   @override
   void dispose() {
-    _revealController.dispose();
-    _pulseController.dispose();
+    _entranceController.dispose();
+    _idleController.dispose();
+    _staggerController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleGetStarted() async {
+    if (_isNavigating) return;
+    setState(() => _isNavigating = true);
+
+    final splashController = ref.read(splashControllerProvider);
+    final targetRoute = await splashController.determineNextRoute();
+
+    if (mounted) {
+      context.go(targetRoute);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    
+    final l10n = AppLocalizations.of(context);
+    final subtitleText =
+        l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest';
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.mountain900,
       body: Stack(
-        fit: StackFit.expand,
         children: [
-          // Background Image (contains the wordmark and slogan already!)
-          Image.asset(
-            'assets/splash/SPlash screen Background.png',
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            errorBuilder: (_, __, ___) => Container(color: AppColors.scaffoldBg),
-          ),
-          
-          // Elegant Logo Reveal
-          Positioned(
-            top: screenHeight * 0.14,
-            left: 0,
-            right: 0,
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Image.asset(
-                  'assets/splash/logo.png',
-                  height: 190, 
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.set_meal_rounded, 
-                    size: 80, 
-                    color: AppColors.deepNavy
+          // 1. Full-Bleed Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/splash_background.png',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.mountain900,
+                      Color(0xFF0F2E48),
+                      AppColors.mountain900,
+                    ],
                   ),
                 ),
               ),
             ),
           ),
-          
-          // Custom Pulsing Loader and Text at the bottom
-          Positioned(
-            bottom: screenHeight * 0.08,
-            left: 0,
-            right: 0,
+
+          // 2. Main Centered Content
+          SafeArea(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                // Pulsing Water Loader
-                AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, child) {
-                    final scale = 1.0 + (_pulseController.value * 0.15); // Scale up to 1.15x
-                    final opacity = 1.0 - (_pulseController.value * 0.5); // Fade to 0.5 opacity
-                    
-                    return Transform.scale(
-                      scale: scale,
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.lightCyan.withValues(alpha: 0.15 * opacity),
-                          border: Border.all(
-                            color: AppColors.lightCyan.withValues(alpha: 0.8 * opacity),
-                            width: 2,
+                const Spacer(),
+
+                // 3D Rotating Sphere / Logo Object
+                Center(
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([
+                      _entranceController,
+                      _idleController,
+                    ]),
+                    builder: (context, child) {
+                      // Total Y-angle = initial 360° entrance spin + ongoing idle rotation
+                      final entranceY = _entranceRotation.value * math.pi * 2;
+                      final idleY = _idleController.value * math.pi * 2;
+                      final totalY = entranceY + idleY;
+
+                      // Subtle 15° X-axis tumble angle
+                      final xAngle = 0.26 * math.sin(totalY * 0.5);
+
+                      // Perspective matrix transform (perspective = 0.0015)
+                      final transform = Matrix4.identity()
+                        ..setEntry(3, 2, 0.0015)
+                        ..rotateY(totalY)
+                        ..rotateX(xAngle);
+
+                      // Animated Specular Gradient Sweep position
+                      final sweepProgress = (totalY / (math.pi * 2)) % 1.0;
+
+                      return Transform.scale(
+                        scale: _entranceScale.value,
+                        child: Transform(
+                          transform: transform,
+                          alignment: Alignment.center,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Radial Ambient Glow
+                              Container(
+                                width: 180,
+                                height: 180,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary700.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      blurRadius: 40,
+                                      spreadRadius: 10,
+                                    ),
+                                    BoxShadow(
+                                      color: AppColors.seaGreen.withValues(
+                                        alpha: 0.25,
+                                      ),
+                                      blurRadius: 60,
+                                      spreadRadius: 20,
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // AquaVerse Glass-Fish Mark with Specular ShaderMask Sweep
+                              ShaderMask(
+                                shaderCallback: (bounds) {
+                                  return LinearGradient(
+                                    begin: Alignment(
+                                      -1.0 + (sweepProgress * 2.0),
+                                      -1.0,
+                                    ),
+                                    end: Alignment(
+                                      1.0 + (sweepProgress * 2.0),
+                                      1.0,
+                                    ),
+                                    colors: const [
+                                      AppColors.primary700, // #1B4F7A Deep Navy
+                                      AppColors.seaGreen,   // #4FAE9E Sea Green
+                                      Colors.white,         // Specular highlight
+                                      AppColors.brightMint, // #3FCCA6 Bright Mint
+                                      AppColors.primary700,
+                                    ],
+                                    stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+                                  ).createShader(bounds);
+                                },
+                                blendMode: BlendMode.srcATop,
+                                child: Image.asset(
+                                  'assets/images/splash_logo.png',
+                                  width: 140,
+                                  height: 140,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(
+                                    Icons.water_drop_rounded,
+                                    size: 100,
+                                    color: AppColors.brightMint,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.aqua.withValues(alpha: 0.4 * opacity),
-                              blurRadius: 15,
-                              spreadRadius: 2,
-                            ),
-                          ],
                         ),
-                        child: Center(
-                          child: Icon(
-                            Icons.waves_rounded,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            size: 28,
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Staggered Title: "AquaVerse AI"
+                FadeTransition(
+                  opacity: _headerFade,
+                  child: SlideTransition(
+                    position: _headerSlide,
+                    child: const Text(
+                      'AquaVerse AI',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.8,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Staggered Subtitle: "Better decisions, better harvest"
+                FadeTransition(
+                  opacity: _subtitleFade,
+                  child: SlideTransition(
+                    position: _subtitleSlide,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Text(
+                        subtitleText,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Staggered Button: "Get Started"
+                FadeTransition(
+                  opacity: _buttonFade,
+                  child: SlideTransition(
+                    position: _buttonSlide,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32.0,
+                        vertical: 24.0,
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                AppColors.primary700,
+                                AppColors.seaGreen,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(27),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.seaGreen.withValues(alpha: 0.4),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: _isNavigating ? null : _handleGetStarted,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(27),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Get Started',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-                
-                // Loading Text
-                const Text(
-                  'Loading...',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                
-                // Subtext
-                Text(
-                  'Preparing your intelligent insights',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.white70,
+                    ),
                   ),
                 ),
               ],

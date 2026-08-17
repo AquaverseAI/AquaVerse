@@ -36,11 +36,11 @@ abstract class AppColors {
   static const Color surfaceAqua = Color(0xFFEDF8FA);
   static const Color surfaceGreen = Color(0xFFEFF9F5);
 
-  // ── Text ───────────────────────────────────────────────────────────────────
-  static const Color textPrimary = Color(0xFF153B56);
-  static const Color textSecondary = Color(0xFF557384);
-  static const Color textMuted = Color(0xFF7D949F);
-  static const Color textDisabled = Color(0xFFA9B9BF);
+  // ── Text (High-contrast dark tokens) ──────────────────────────────────────
+  static const Color textPrimary = Color(0xFF041826);
+  static const Color textSecondary = Color(0xFF14364B);
+  static const Color textMuted = Color(0xFF2C5269);
+  static const Color textDisabled = Color(0xFF8BA2AD);
 
   // ── Semantic ───────────────────────────────────────────────────────────────
   static const Color warning = Color(0xFFE8A33A);
@@ -64,13 +64,13 @@ abstract class AppColors {
   static const Color langBorderSelected = Color(0xFF14B8A6);
   static const Color langAccentPrimary = Color(0xFF0E9488);
   static const Color langAccentSeagreen = Color(0xFF2E8B77);
-  static const Color langTextPrimary = Color(0xFF0B2B27);
-  static const Color langTextSecondary = Color(0xFF5B7A75);
+  static const Color langTextPrimary = Color(0xFF031622);
+  static const Color langTextSecondary = Color(0xFF123447);
   static const Color langTextOnAccent = Color(0xFFFFFFFF);
   static const Color langCheckIcon = Color(0xFF0E9488);
   static const Color langSearchBg = Color(0xFFF0F7F5);
-  static const Color langSearchPlaceholder = Color(0xFF7C948F);
-  static const Color langFlagCodeText = Color(0xFF5B7A75);
+  static const Color langSearchPlaceholder = Color(0xFF294E63);
+  static const Color langFlagCodeText = Color(0xFF123447);
 
   static const LinearGradient langCtaGradient = LinearGradient(
     begin: Alignment.centerLeft,

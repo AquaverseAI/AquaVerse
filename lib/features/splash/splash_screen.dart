@@ -406,17 +406,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
                           const Spacer(flex: 2),
 
-                          // ── Line 1: dim lead-in ("Get ready to") ─────────
+                          // ── Line 1: lead-in ("Get ready to") ─────────
                           _buildBlurText(
                             text: 'Get ready to',
                             sigma: _line1Blur.value,
                             opacity: _line1Opacity.value,
                             style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w300,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
                               color: Colors.white,
                               height: 1.15,
-                              letterSpacing: 0.2,
+                              letterSpacing: 0.3,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                           ),
 
@@ -428,11 +435,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             sigma: _line2Blur.value,
                             opacity: _line2Opacity.value,
                             style: const TextStyle(
-                              fontSize: 40,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 42,
+                              fontWeight: FontWeight.w900,
                               color: Colors.white,
                               height: 1.08,
                               letterSpacing: -0.5,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 10,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
                             ),
                           ),
 
@@ -440,13 +454,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           _buildBlurText(
                             text: 'your pond,\nyour harvest.',
                             sigma: _line2Blur.value,
-                            opacity: _line2Opacity.value * 0.85,
+                            opacity: _line2Opacity.value * 0.95,
                             style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
                               color: Colors.white,
                               height: 1.1,
                               letterSpacing: -0.3,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 10,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
                             ),
                           ),
 
@@ -458,26 +479,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             sigma: _line3Blur.value,
                             opacity: _line3Opacity.value,
                             style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
                               color: Colors.white,
                               height: 1.3,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                           ),
 
                           const SizedBox(height: 8),
 
-                          // ── Line 5: dim descriptor (smallest weight) ───
+                          // ── Line 5: dim descriptor ───
                           _buildBlurText(
                             text: 'AI-powered aquaculture for every farmer.',
                             sigma: _line3Blur.value,
-                            opacity: _line3Opacity.value * 0.55,
+                            opacity: _line3Opacity.value * 0.85,
                             style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w300,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
                               color: Colors.white,
                               height: 1.4,
                               letterSpacing: 0.1,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black87,
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                           ),
 

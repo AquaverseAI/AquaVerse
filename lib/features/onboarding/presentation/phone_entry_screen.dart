@@ -7,13 +7,12 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
-/// Rebuilt Login / Phone Entry Screen strictly following Section 0-6 Prompt Specifications.
+/// Phone Entry Screen with centered content layout.
 /// Features:
-/// - Full-bleed `assets/images/login_bg.png` background (teal glass-wave artwork top & bottom).
-/// - Curved header spacing with left-aligned title & subtitle + SpeakerButton.
-/// - Underline-style mobile number input with rest (#D8E8E4) and focus (#0E9488) states.
-/// - Fixed +91 country prefix.
-/// - Bottom pill-shaped CTA stack: Primary "Send OTP" gradient button + Secondary "Use email instead" outlined button.
+/// - Top-left back arrow button.
+/// - Top-right speaker accessibility button.
+/// - Centered title, subtitle, field label, and mobile input row.
+/// - Single primary "Send OTP" pill CTA button at bottom (Secondary email button removed per request).
 class PhoneEntryScreen extends ConsumerStatefulWidget {
   const PhoneEntryScreen({super.key});
 
@@ -58,9 +57,8 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(onboardingControllerProvider);
 
-    // Color tokens per specification
     const restBorderColor = Color(0xFFD8E8E4);
-    const focusBorderColor = Color(0xFF0E9488); // --color-field-focus-border
+    const focusBorderColor = Color(0xFF0E9488);
 
     final currentBorderColor = state.errorMessage != null
         ? AppColors.critical
@@ -70,7 +68,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // 1. Full-bleed Background Image (Section 2 spec)
+          // 1. Full-bleed Background Image
           Positioned.fill(
             child: Image.asset(
               'assets/images/login_bg.png',
@@ -79,11 +77,11 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
             ),
           ),
 
-          // 2. Safe Area Screen Content Layout (Section 5 spec)
+          // 2. Safe Area Content Layout
           SafeArea(
             child: Column(
               children: [
-                // Top App Bar / Back Button
+                // Top Navigation Bar: Pinned Back Arrow (left) & Speaker Button (right)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: Row(
@@ -94,7 +92,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                       ),
                       const Spacer(),
                       const SpeakerButton(
-                        textToSpeak: "Login. Enter your mobile number to continue.",
+                        textToSpeak: "Welcome back. Enter your mobile number to continue.",
                       ),
                       const SizedBox(width: 8),
                     ],
@@ -105,13 +103,14 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         const SizedBox(height: 16),
 
-                        // 3.1 Header Text (Section 3.1 & Section 5 spec)
+                        // Centered Title & Subtitle
                         const Text(
                           'Welcome back',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -122,6 +121,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                         const SizedBox(height: 6),
                         const Text(
                           'Enter your mobile number to continue',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
@@ -131,13 +131,14 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
 
                         const SizedBox(height: 36),
 
-                        // 3.2 Form: Underline-style Mobile Input (Section 3.2 & Section 4 spec)
+                        // Centered Form: Underline-style Mobile Input
                         Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Field Label Above
+                            // Centered Field Label
                             const Text(
                               'MOBILE NUMBER',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -145,7 +146,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                 color: AppColors.textSecondary,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 12),
 
                             // Underline Input Container
                             AnimatedContainer(
@@ -160,9 +161,10 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                 ),
                               ),
                               child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  // Pinned Country Code Prefix
+                                  // Fixed +91 Country Prefix
                                   const Text(
                                     '+91',
                                     style: TextStyle(
@@ -226,6 +228,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 state.errorMessage!,
+                                textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: AppColors.critical,
                                   fontSize: 13,
@@ -236,11 +239,9 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                           ],
                         ),
 
-                        // Flexible whitespace to let background breathe
                         const Spacer(),
 
-                        // 3.3 Buttons Stack (Section 3.3 & Section 5 spec)
-                        // Primary Pill Gradient CTA
+                        // Primary Pill Gradient CTA Button ("Send OTP")
                         Container(
                           width: double.infinity,
                           height: 54,
@@ -291,39 +292,6 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                       letterSpacing: 0.3,
                                     ),
                                   ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Secondary Outlined Pill Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: OutlinedButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Email login coming soon'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              side: const BorderSide(color: focusBorderColor, width: 1.5),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(27),
-                              ),
-                            ),
-                            child: const Text(
-                              'Use email instead',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: focusBorderColor,
-                              ),
-                            ),
                           ),
                         ),
 

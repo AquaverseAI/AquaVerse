@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'floating_icons_overlay.dart';
 
 /// Standard scaffold wrapper for all Onboarding screens.
 /// Displays the custom aquaculture background image (`assets/images/onboarding_bg.png`)
-/// with a subtle contrast-enhancing overlay for crisp text readability.
+/// with high-contrast icon overlays and crisp gradient scrim.
 class OnboardingScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget body;
@@ -25,12 +26,27 @@ class OnboardingScaffold extends StatelessWidget {
       appBar: appBar,
       body: Stack(
         children: [
-          // 1. Background Image (Full coverage)
+          // 1. Background Image with Contrast Boost
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/onboarding_bg.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
+            child: ColorFiltered(
+              colorFilter: const ColorFilter.matrix([
+                0.85, 0,    0,    0, -15, // Red: slightly darkened & deepened
+                0,    0.88, 0,    0, -10, // Green
+                0,    0,    0.88, 0, -10, // Blue
+                0,    0,    0,    1,   0, // Alpha
+              ]),
+              child: Image.asset(
+                'assets/images/onboarding_bg.png',
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
+            ),
+          ),
+
+          // 2. High-contrast Dark Outline Floating Icons Overlay
+          const Positioned.fill(
+            child: FloatingIconsOverlay(
+              iconColor: Color(0xFF042738), // Dark Navy/Teal outline for 100% visibility
             ),
           ),
 

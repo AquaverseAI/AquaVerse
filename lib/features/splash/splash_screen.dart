@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_localizations.dart';
+import '../../shared/widgets/floating_icons_overlay.dart';
 import 'splash_controller.dart';
 
 // =============================================================================
@@ -258,12 +259,27 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   opacity: bgOpacity,
                   child: Stack(
                     children: [
-                      // High-res Aquaculture Background Image
+                      // High-res Aquaculture Background Image with Contrast Enhancement
                       Positioned.fill(
-                        child: Image.asset(
-                          'assets/images/splash_background.png',
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
+                        child: ColorFiltered(
+                          colorFilter: const ColorFilter.matrix([
+                            0.85, 0,    0,    0, -15,
+                            0,    0.88, 0,    0, -10,
+                            0,    0,    0.88, 0, -10,
+                            0,    0,    0,    1,   0,
+                          ]),
+                          child: Image.asset(
+                            'assets/images/splash_background.png',
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                          ),
+                        ),
+                      ),
+
+                      // High-contrast Dark Outline Floating Icons Overlay
+                      const Positioned.fill(
+                        child: FloatingIconsOverlay(
+                          iconColor: Color(0xFF042738), // Dark Navy/Teal outline for 100% visibility
                         ),
                       ),
                       // Directional multi-stop gradient scrim per Section 2.2 specification

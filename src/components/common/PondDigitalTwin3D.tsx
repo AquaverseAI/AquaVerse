@@ -845,17 +845,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
             <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-teal-600" /> Live DO State:
             </span>
-            <span
-              className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
-                simulatedDO < 3.0
-                  ? 'bg-risk-criticalBg text-risk-critical border border-risk-criticalBorder'
-                  : simulatedDO < 4.0
-                  ? 'bg-risk-warningBg text-risk-warning border border-risk-warningBorder'
-                  : 'bg-risk-healthyBg text-mint-700 dark:text-mint-400 border border-risk-healthyBorder'
-              }`}
-            >
-              {simulatedDO.toFixed(2)} mg/L
-            </span>
+            <RiskStatusBadge risk={simulatedDO} blind_state={false} showValue={true} suffix="mg/L" />
           </div>
 
           <div className="flex justify-between items-center p-1 rounded-md bg-surface-cardSubtle dark:bg-surface-darkCardAlt">

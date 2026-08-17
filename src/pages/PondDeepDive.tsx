@@ -6,6 +6,7 @@ import { ExplanationCard } from '../components/common/ExplanationCard';
 import { LogIngestionModal } from '../components/common/LogIngestionModal';
 import { AskFarmerModal } from '../components/common/AskFarmerModal';
 import { PondDigitalTwin3D } from '../components/common/PondDigitalTwin3D';
+import { RiskStatusBadge } from '../components/common/RiskStatusBadge';
 
 interface PondDeepDiveProps {
   pondId: string;

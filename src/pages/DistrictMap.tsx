@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ExplanationCard } from '../components/common/ExplanationCard';
 import { mockPonds } from '../mocks/handlers';
+import { RiskStatusBadge } from '../components/common/RiskStatusBadge';
 
 interface DistrictMapProps {
   selectedDistrict: string;
@@ -274,12 +275,10 @@ export const DistrictMap: React.FC<DistrictMapProps> = ({
                       {lake.risk.toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                    <span>{lake.id}</span>
-                    <span className="font-semibold" style={{ color: lake.color }}>
-                      {lake.risk >= 0.7 ? 'Critical' : lake.risk >= 0.5 ? 'Elevated' : 'Optimal'}
-                    </span>
-                  </div>
+<div className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                  <span>{lake.id}</span>
+                  <RiskStatusBadge risk={lake.risk} blind_state={false} showValue={true} />
+                </div>
                 </button>
               );
             })}

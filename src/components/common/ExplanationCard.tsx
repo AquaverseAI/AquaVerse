@@ -15,6 +15,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
+import { RiskStatusBadge } from './RiskStatusBadge';
 
 export interface ExplanationPayloadProps {
   payload: {
@@ -227,9 +228,7 @@ export const ExplanationCard: React.FC<ExplanationPayloadProps> = ({
               </span>
 
               {/* Status Badge */}
-              <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border shadow-xs ${riskStatusBadgeClass}`}>
-                {riskStatusText}
-              </span>
+              <RiskStatusBadge risk={risk} blind_state={blind_state} />
 
               {/* 24-Hour Velocity Delta Indicator */}
               {!blind_state && (

@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Sparkles,
 } from 'lucide-react';
+import { RiskStatusBadge } from '../components/common/RiskStatusBadge';
 
 interface TriageWorklistProps {
   onSelectPondForDeepDive: (pondId: string) => void;
@@ -157,18 +158,8 @@ export const TriageWorklist: React.FC<TriageWorklistProps> = ({
                       <div>{item.farmer_name}</div>
                       <div className="text-[10px] text-slate-500">{item.district}</div>
                     </td>
-                    <td className="p-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full font-bold text-xs border ${
-                          isCritical
-                            ? 'bg-risk-criticalBg text-risk-critical border-risk-criticalBorder'
-                            : isWarning
-                            ? 'bg-risk-warningBg text-risk-warning border-risk-warningBorder'
-                            : 'bg-risk-healthyBg text-mint-700 border-risk-healthyBorder'
-                        }`}
-                      >
-                        {item.risk.toFixed(2)}
-                      </span>
+<td className="p-3">
+                      <RiskStatusBadge risk={item.risk} blind_state={item.blind_state} showValue={true} />
                     </td>
                     <td className="p-3">
                       <span

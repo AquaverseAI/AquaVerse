@@ -54,3 +54,53 @@
 - **Background**: Full-bleed `assets/images/splash_background.png`.
 - **Exit Transition**: Unchanged `IrisTransition` (`iris_transition.dart`) triggered by "Get Started" button tap to `/onboarding/language`.
 
+---
+
+## 2026-08-17 — Task 3: Pivot to Splash Text-Reveal + Orbiting Dual-Dot Loader
+
+### 1. Direction Pivot
+- Previous sphere-rotation approach superseded. New reference shows a progressive text blur/focus sweep and a transitional orbiting two-dot loader. No 3D sphere.
+
+### 2. Components Built
+- **[NEW] [orbit_dots_loader.dart](file:///home/techpark-6/Music/AquaVerse/lib/shared/widgets/orbit_dots_loader.dart)**: Reusable widget — two dots (`seaGreen` solid + `brightMint` translucent) orbiting 180° out of phase using `Transform.translate` with `sin`/`cos` offsets. Generic constructor: size, dotSize, color1, color2, period.
+- **[REBUILT] [splash_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/splash/splash_screen.dart)**:
+  - Progressive `ImageFilter.blur` focus sweep per text block via `ImageFiltered` widget, driven by staggered `AnimationController` intervals.
+  - GPU safeguard: `sigma <= 0.3` bypasses `ImageFiltered` and uses plain `Opacity` to avoid unnecessary rasterization budget on low-end devices.
+  - Max blur sigma capped at `kMaxBlurSigma = 10.0` to stay within 2GB Android Go raster budget.
+  - `_buildBlurText()` helper centralises blur/opacity logic and is the correct point to swap in a pure-opacity fallback if device profiling shows jank.
+  - Ghost-to-solid button via animated `Color.lerp` across gradient stops, border color, and box shadow.
+  - `OrbitDotsLoader` shown during route-decision async call (real loading state, no artificial delay).
+- **[REBUILT] [splash_controller.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/splash/splash_controller.dart)**:
+  - All three routing table branches enforced (PRD-AV-04 §7 Rule 2):
+    - `has_onboarded == false` → `/onboarding/language`
+    - `has_onboarded == true` + valid token → `/today` or `/officer/dashboard`
+    - `has_onboarded == true` + expired/missing token → `/onboarding/mobile`
+
+### 3. Performance Notes
+- `ImageFilter.blur` is applied only while `sigma > 0.3` (early animation frames). At rest it falls back to plain `Opacity(child: Text(...))`.
+- **Low-End Device Action Required**: Run `flutter run --profile -d <android-go-emulator>` and check for dropped frames in the blur sweep phase. If frame drops exceed 5% during the 0–1200ms entrance window, replace `ImageFiltered` in `_buildBlurText()` with a simple `Opacity(opacity: opacity, child: Text(...))` fallback — the code is already structured to make this a 2-line change.
+
+### 4. Verification Results
+- `flutter analyze`: **0 errors, 0 warnings** (9 info items).
+- `flutter test`: **9/9 tests passed.**
+
+---
+
+## 2026-08-17 — Task 4: Onboarding Screen Background Image Integration
+
+### 1. Assets & Styling
+- Placed attached aquaculture background image into `assets/images/onboarding_bg.png` (576x1024 vertical aqua fish-farm scene with mountains, circular net cages, and decorative overlay lines).
+- Created **[OnboardingScaffold](file:///home/techpark-6/Music/AquaVerse/lib/shared/widgets/onboarding_scaffold.dart)** widget to wrap onboarding screens with `BoxFit.cover` background image rendering and a soft white gradient overlay (`0.35 → 0.15 → 0.25` opacity stops) to ensure high contrast and maximum text legibility across all device screen sizes.
+
+### 2. Screens Updated
+- **[language_select_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/language_select_screen.dart)**
+- **[phone_entry_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/phone_entry_screen.dart)**
+- **[otp_verify_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/otp_verify_screen.dart)**
+- **[role_selection_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/role_selection_screen.dart)**
+- **[ai_intro_screen.dart](file:///home/techpark-6/Music/AquaVerse/lib/features/onboarding/presentation/ai_intro_screen.dart)**
+
+### 3. Verification Results
+- `flutter analyze`: **0 errors, 0 warnings** (9 pre-existing info hints).
+- `flutter test`: **9/9 tests passed.**
+
+

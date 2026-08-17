@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
@@ -20,8 +21,7 @@ class AiIntroScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
+    return OnboardingScaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

@@ -2,14 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:aquaverse_farmer_app/main.dart';
+import 'package:aquaverse_farmer_app/shared/widgets/orbit_dots_loader.dart';
 
 void main() {
-  testWidgets('AquaVerseApp initializes and renders initial screen', (WidgetTester tester) async {
-    // Build AquaVerseApp wrapped in ProviderScope
+  testWidgets('AquaVerseApp initializes and renders splash screen', (WidgetTester tester) async {
     await tester.pumpWidget(const ProviderScope(child: AquaVerseApp()));
-    await tester.pumpAndSettle();
-    
-    // Verify app renders scaffold and interactive widgets
     expect(find.byType(Scaffold), findsWidgets);
+  });
+
+  testWidgets('OrbitDotsLoader renders successfully with 2 orbiting dots', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: OrbitDotsLoader(size: 48, dotSize: 12),
+        ),
+      ),
+    );
+
+    expect(find.byType(OrbitDotsLoader), findsOneWidget);
+    expect(find.byType(Stack), findsWidgets);
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
@@ -42,8 +43,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(onboardingControllerProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
+    return OnboardingScaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,

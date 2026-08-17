@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
@@ -22,20 +23,8 @@ class LanguageSelectScreen extends ConsumerWidget {
       {'code': 'te', 'nativeName': 'తెలుగు', 'englishName': 'Telugu'},
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFF8FCFD),
-              Color(0xFFEAF7FA),
-            ],
-          ),
-        ),
-        child: SafeArea(
+    return OnboardingScaffold(
+      body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageMargin, vertical: 20.0),
             child: Column(
@@ -152,7 +141,6 @@ class LanguageSelectScreen extends ConsumerWidget {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

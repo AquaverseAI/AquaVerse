@@ -13,8 +13,10 @@ from app.alerts.schemas import (
     AlertFeedbackOut,
     AlertOut,
 )
+from app.core import rbac
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
+from app.deps import CurrentUser
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
@@ -29,12 +31,15 @@ router = APIRouter(prefix="/alerts", tags=["Alerts"])
     ),
 )
 async def list_alerts(
+    user: CurrentUser,
     pond_id: UUID | None = Query(default=None),
     severity: str | None = Query(default=None),
     acked: bool | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[AlertOut]:
+    if pond_id is not None and user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     stub = AlertOut(
         id=uuid4(),
@@ -60,7 +65,7 @@ async def list_alerts(
     response_model=AlertAckOut,
     summary="Acknowledge an alert",
 )
-async def ack_alert(alert_id: UUID, body: AlertAckIn) -> AlertAckOut:
+async def ack_alert(alert_id: UUID, body: AlertAckIn, user: CurrentUser) -> AlertAckOut:
     now = utcnow()
     return AlertAckOut(
         alert_id=alert_id,
@@ -75,7 +80,7 @@ async def ack_alert(alert_id: UUID, body: AlertAckIn) -> AlertAckOut:
     response_model=AlertFeedbackOut,
     summary="Submit feedback on an alert",
 )
-async def alert_feedback(alert_id: UUID, body: AlertFeedbackIn) -> AlertFeedbackOut:
+async def alert_feedback(alert_id: UUID, body: AlertFeedbackIn, user: CurrentUser) -> AlertFeedbackOut:
     return AlertFeedbackOut(
         alert_id=alert_id,
         feedback_recorded=True,

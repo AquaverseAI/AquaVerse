@@ -19,10 +19,11 @@ from app.advisory.schemas import (
     M3PondSnapshotRequest,
     M3ReasonResponse,
 )
+from app.core import rbac
 from app.core.errors import NumberMismatchError
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
-from app.deps import InternalOnly
+from app.deps import CurrentStaff, CurrentUser, InternalOnly
 
 if TYPE_CHECKING:
     pass
@@ -107,10 +108,12 @@ async def reason(
         "using only those numbers. Rate-limited to 30 requests/minute."
     ),
 )
-async def ask(body: AskIn) -> AskOut:
+async def ask(body: AskIn, user: CurrentUser) -> AskOut:
     """
     Phase 4: Call the external M3 serving engine with the static payload.
     """
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, body.pond_id)
     now = utcnow()
     
     # Construct static 28-field payload for the specific pond_id 
@@ -183,11 +186,15 @@ async def ask(body: AskIn) -> AskOut:
     summary="List published advisories",
 )
 async def list_advisories(
+    user: CurrentUser,
     district: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[AdvisoryOut]:
     from datetime import timedelta
+
+    if district is not None and user.role in ("staff", "admin"):
+        rbac.require_district(user.district, district)
 
     now = utcnow()
     stub = AdvisoryOut(
@@ -213,7 +220,7 @@ async def list_advisories(
     status_code=status.HTTP_201_CREATED,
     summary="Broadcast an advisory to farmers (staff only)",
 )
-async def broadcast_advisory(body: BroadcastIn) -> AdvisoryOut:
+async def broadcast_advisory(body: BroadcastIn, user: CurrentStaff) -> AdvisoryOut:
     now = utcnow()
     return AdvisoryOut(
         id=uuid4(),

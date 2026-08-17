@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from app.core.timezones import utcnow
+from app.deps import CurrentUser
 from app.i18n.schemas import TranslateIn, TranslateOut
 
 router = APIRouter(prefix="/translate", tags=["i18n"])
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/translate", tags=["i18n"])
         "Results are cached in Redis by hash of (source_lang, target_lang, text) with ~90% hit rate target."
     ),
 )
-async def translate(body: TranslateIn) -> TranslateOut:
+async def translate(body: TranslateIn, user: CurrentUser) -> TranslateOut:
     """Phase 1: return echo fixture. Phase 5: call Bhashini / AI4Bharat with Redis cache."""
     now = utcnow()
     return TranslateOut(

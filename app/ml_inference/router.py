@@ -7,8 +7,10 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query
 
+from app.core import rbac
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
+from app.deps import CurrentStaff, CurrentUser
 from app.ml_inference.schemas import (
     DataQualityOut,
     DriftReport,
@@ -36,6 +38,7 @@ _STUB_MODEL_ID = UUID("00000000-0000-0000-0000-000000000002")
 # ---------------------------------------------------------------------------
 @router.get("/ponds", response_model=CursorPage[PondOut], summary="List accessible ponds")
 async def list_ponds(
+    user: CurrentUser,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[PondOut]:
@@ -56,7 +59,9 @@ async def list_ponds(
 
 
 @router.get("/ponds/{pond_id}", response_model=PondOut, summary="Get pond details")
-async def get_pond(pond_id: UUID) -> PondOut:
+async def get_pond(pond_id: UUID, user: CurrentUser) -> PondOut:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     return PondOut(
         id=pond_id,
@@ -82,12 +87,15 @@ async def get_pond(pond_id: UUID) -> PondOut:
 )
 async def get_pond_timeseries(
     pond_id: UUID,
+    user: CurrentUser,
     parameter: str = Query(default="dissolved_oxygen_mgl"),
     from_ts: datetime | None = Query(default=None),
     to_ts: datetime | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> PondTimeseriesOut:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     return PondTimeseriesOut(
         pond_id=pond_id,
@@ -110,9 +118,12 @@ async def get_pond_timeseries(
 )
 async def get_pond_events(
     pond_id: UUID,
+    user: CurrentUser,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[PondEventOut]:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     stub = PondEventOut(
         id=uuid4(),
@@ -136,7 +147,9 @@ async def get_pond_events(
         "with per-feature SHAP attributions. Suppression state is always visible."
     ),
 )
-async def get_pond_risk(pond_id: UUID) -> RiskOut:
+async def get_pond_risk(pond_id: UUID, user: CurrentUser) -> RiskOut:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     return RiskOut(
         pond_id=pond_id,
@@ -169,11 +182,14 @@ async def get_pond_risk(pond_id: UUID) -> RiskOut:
     summary="Risk worklist for staff — all ponds ranked by risk",
 )
 async def get_risk_worklist(
+    user: CurrentStaff,
     district: str | None = Query(default=None),
     risk_level: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[WorklistItem]:
+    if district is not None:
+        rbac.require_district(user.district, district)
     now = utcnow()
     stub = WorklistItem(
         pond_id=_STUB_POND_ID,
@@ -202,8 +218,11 @@ async def get_risk_worklist(
 )
 async def get_do_forecast(
     pond_id: UUID,
+    user: CurrentUser,
     horizon_hours: int = Query(default=24, ge=1, le=168),
 ) -> ForecastOut:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     return ForecastOut(
         pond_id=pond_id,
@@ -233,6 +252,7 @@ async def get_do_forecast(
     summary="List registered ML models",
 )
 async def list_models(
+    user: CurrentStaff,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[ModelOut]:
@@ -262,7 +282,7 @@ async def list_models(
         "This MUST read 0 in steady state."
     ),
 )
-async def get_model_metrics() -> ModelMetricsOut:
+async def get_model_metrics(user: CurrentStaff) -> ModelMetricsOut:
     from app.advisory.metrics import get_rejected_attempts
 
     now = utcnow()
@@ -284,6 +304,7 @@ async def get_model_metrics() -> ModelMetricsOut:
     summary="Model drift reports",
 )
 async def get_model_drift(
+    user: CurrentStaff,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> CursorPage[DriftReport]:
@@ -309,6 +330,7 @@ async def get_model_drift(
     summary="Data quality signals across all ponds",
 )
 async def get_data_quality(
+    user: CurrentStaff,
     pond_id: UUID | None = Query(default=None),
 ) -> DataQualityOut:
     now = utcnow()

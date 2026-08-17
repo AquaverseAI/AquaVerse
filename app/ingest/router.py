@@ -11,6 +11,7 @@ from app.deps import DbSession, CurrentUser
 from app.db.models.log import Log
 from app.db.models.crop import Crop
 
+from app.core import rbac
 from app.core.pagination import CursorPage
 from app.core.timezones import utcnow
 from app.ingest.schemas import (
@@ -88,11 +89,14 @@ async def create_log(body: LogIn, session: DbSession, user: CurrentUser, respons
 )
 async def list_logs(
     session: DbSession,
+    user: CurrentUser,
     pond_id: UUID | None = Query(default=None),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[LogOut]:
     """Phase 2: return logs from DB."""
+    if pond_id is not None and user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     stmt = select(Log)
     if pond_id:
         stmt = stmt.where(Log.pond_id == pond_id)
@@ -124,8 +128,10 @@ async def list_logs(
         "then calls POST /v1/media/{media_id}/commit to finalise."
     ),
 )
-async def media_upload_url(body: MediaUploadUrlIn) -> MediaUploadUrlOut:
+async def media_upload_url(body: MediaUploadUrlIn, user: CurrentUser) -> MediaUploadUrlOut:
     """Phase 1: return fixture URL. Phase 3: generate real presigned S3 URL."""
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, body.pond_id)
     media_id = uuid4()
     expires_at = utcnow().replace(minute=utcnow().minute + 15)
     return MediaUploadUrlOut(
@@ -145,6 +151,7 @@ async def media_upload_url(body: MediaUploadUrlIn) -> MediaUploadUrlOut:
 async def media_commit(
     media_id: UUID,
     body: MediaCommitIn,
+    user: CurrentUser,
 ) -> MediaOut:
     """Phase 1: return fixture. Phase 3: verify S3 object exists, update DB status."""
     now = utcnow()

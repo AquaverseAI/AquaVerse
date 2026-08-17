@@ -66,9 +66,9 @@ class LanguageSelectScreen extends ConsumerWidget {
                     ],
                   ),
                   child: const Icon(
-                    Icons.language_rounded,
+                    Icons.g_translate_rounded,
                     color: AppColors.langTextOnAccent,
-                    size: 28,
+                    size: 30,
                   ),
                 ),
               ),

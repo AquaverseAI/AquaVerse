@@ -7,7 +7,9 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Query
 
+from app.core import rbac
 from app.core.timezones import utcnow
+from app.deps import CurrentUser
 
 router = APIRouter(prefix="/geo", tags=["Geo"])
 
@@ -21,6 +23,7 @@ router = APIRouter(prefix="/geo", tags=["Geo"])
     ),
 )
 async def geo_ponds(
+    user: CurrentUser,
     district: str | None = Query(default=None),
     risk_level: str | None = Query(default=None),
     within_km: float | None = Query(
@@ -31,6 +34,8 @@ async def geo_ponds(
     lon: float | None = Query(default=None, ge=-180, le=180),
 ) -> dict[str, Any]:
     """Phase 1: return GeoJSON fixture. Phase 2: PostGIS ST_DWithin query."""
+    if district is not None and user.role in ("staff", "admin"):
+        rbac.require_district(user.district, district)
     return {
         "type": "FeatureCollection",
         "features": [
@@ -64,10 +69,13 @@ async def geo_ponds(
     ),
 )
 async def geo_clusters(
+    user: CurrentUser,
     district: str | None = Query(default=None),
     days_back: int = Query(default=30, ge=1, le=365),
 ) -> dict[str, Any]:
     """Phase 1: return GeoJSON fixture. Phase 5: space-time scan statistic."""
+    if district is not None and user.role in ("staff", "admin"):
+        rbac.require_district(user.district, district)
     now = utcnow()
     return {
         "type": "FeatureCollection",

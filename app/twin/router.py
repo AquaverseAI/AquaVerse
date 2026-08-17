@@ -8,7 +8,9 @@ from uuid import UUID
 from fastapi import APIRouter, status
 from fastapi.responses import HTMLResponse
 
+from app.core import rbac
 from app.core.timezones import utcnow
+from app.deps import CurrentUser
 from app.twin.schemas import StateVector, WhatIfOut, WhatIfScenario
 
 if TYPE_CHECKING:
@@ -28,7 +30,9 @@ router = APIRouter(prefix="/twin", tags=["Digital Twin"])
         "The source is never revealed in the response schema."
     ),
 )
-async def get_twin_state(pond_id: UUID) -> StateVector:
+async def get_twin_state(pond_id: UUID, user: CurrentUser) -> StateVector:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     return StateVector(
         pond_id=pond_id,
@@ -50,8 +54,8 @@ async def get_twin_state(pond_id: UUID) -> StateVector:
     response_class=HTMLResponse,
     summary="Get a visual dashboard of the digital twin state",
 )
-async def get_twin_view(pond_id: UUID) -> str:
-    state = await get_twin_state(pond_id)
+async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
+    state = await get_twin_state(pond_id, user)
     
     html_content = f"""
     <!DOCTYPE html>
@@ -301,7 +305,9 @@ async def get_twin_view(pond_id: UUID) -> str:
         "Risk delta indicates how much the risk score would change."
     ),
 )
-async def whatif(pond_id: UUID, scenario: WhatIfScenario) -> WhatIfOut:
+async def whatif(pond_id: UUID, scenario: WhatIfScenario, user: CurrentUser) -> WhatIfOut:
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
     now = utcnow()
     # Stub: apply simple delta arithmetic (Phase 4: call simulator_adapter)
     simulated = StateVector(

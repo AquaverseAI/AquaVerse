@@ -25,6 +25,7 @@ export function App() {
   const [activeScreen, setActiveScreen] = useState<ScreenId>('map');
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Coimbatore');
   const [selectedPondId, setSelectedPondId] = useState<string>('CBE-003');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Toggle dark/light class on html element
   useEffect(() => {
@@ -60,7 +61,7 @@ export function App() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 dark:bg-[#0A0E13] dark:text-slate-100 font-sans flex flex-col lg:flex-row antialiased transition-colors duration-200 selection:bg-cyan-500 selection:text-white">
       {/* Left Sidebar Navigation */}
-      <Sidebar
+<Sidebar
         activeScreen={activeScreen}
         onSelectScreen={setActiveScreen}
         selectedDistrict={selectedDistrict}
@@ -69,7 +70,9 @@ export function App() {
         onLogout={() => setUser(null)}
         theme={theme}
         onToggleTheme={handleToggleTheme}
-      />
+        mobileMenuOpen={mobileMenuOpen}
+        onMobileMenuToggle={setMobileMenuOpen}
+/>
 
       {/* Main Content Area (offset by left sidebar on desktop) */}
       <div className="flex-1 flex flex-col lg:pl-64 min-w-0 transition-all duration-200">

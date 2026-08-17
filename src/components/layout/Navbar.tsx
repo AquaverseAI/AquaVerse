@@ -29,6 +29,8 @@ interface NavbarProps {
   onLogout: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  mobileMenuOpen: boolean;
+  onMobileMenuToggle: (open: boolean) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -40,8 +42,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   theme,
   onToggleTheme,
+  mobileMenuOpen,
+  onMobileMenuToggle,
 }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems: Array<{ id: ScreenId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
     { id: 'map', label: 'Map GIS', icon: LayoutDashboard },
@@ -65,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleNavClick = (id: ScreenId) => {
     onSelectScreen(id);
-    setMobileMenuOpen(false);
+    onMobileMenuToggle(false);
   };
 
   return (
@@ -182,7 +185,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4 text-amber-400" />}
           </button>
           <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={() => onMobileMenuToggle(!mobileMenuOpen)}
             className="p-2 bg-slate-100 dark:bg-[#11171F] text-slate-700 dark:text-slate-200 rounded-lg border border-slate-200 dark:border-white/[0.06]"
             aria-label="Toggle Menu"
           >

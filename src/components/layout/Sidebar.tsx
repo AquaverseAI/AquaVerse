@@ -30,6 +30,8 @@ export interface SidebarProps {
   onLogout: () => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
+  mobileMenuOpen: boolean;
+  onMobileMenuToggle: (open: boolean) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,8 +43,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   theme,
   onToggleTheme,
+  mobileMenuOpen,
+  onMobileMenuToggle,
 }) => {
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems: Array<{
     id: ScreenId;
@@ -71,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleNavClick = (id: ScreenId) => {
     onSelectScreen(id);
-    setMobileOpen(false);
+    onMobileMenuToggle(false);
   };
 
   return (
@@ -95,19 +98,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {theme === 'light' ? <Moon className="w-4 h-4 text-ocean-900" /> : <Sun className="w-4 h-4 text-amber-400" />}
           </button>
           <button
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={() => onMobileMenuToggle(!mobileMenuOpen)}
             className="p-1.5 bg-surface-cardSubtle dark:bg-surface-darkCardAlt text-ocean-900 dark:text-slate-300 rounded-lg border border-surface-border dark:border-surface-darkBorder"
           >
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
       {/* Mobile Backdrop Overlay */}
-      {mobileOpen && (
+      {mobileMenuOpen && (
         <div
           className="fixed inset-0 bg-ocean-950/40 backdrop-blur-xs z-40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={() => onMobileMenuToggle(false)}
         />
       )}
 

@@ -96,7 +96,7 @@ void main() {
       );
 
       expect(find.text('+91'), findsOneWidget);
-      expect(find.text('Enter Mobile Number'), findsOneWidget);
+      expect(find.text('Welcome back'), findsOneWidget);
       expect(find.text('Send OTP'), findsOneWidget);
     });
 

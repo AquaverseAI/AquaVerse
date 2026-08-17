@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +9,16 @@ import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
-/// OTP Verification Screen with vertically centered layout and enlarged digit boxes.
+/// OTP Verification Choreography Status Machine
+enum OtpAnimState { filling, verifying, success, error }
+
+/// Rebuilt OTP Verification Screen with complete Motion Choreography:
+/// - Auto-trigger on final digit.
+/// - Verifying Phase 1: Staggered 80ms cascade bounce with rotation.
+/// - Verifying Phase 2: Animated left-to-right connector stroke trace.
+/// - Verifying Phase 3: Morph collapse into stacked badge.
+/// - Success Phase: Resolved checkmark badge + continuous looping radial pulse + header text crossfade.
+/// - Error Phase: Horizontal shake + red outline + error message.
 class OtpVerifyScreen extends ConsumerStatefulWidget {
   const OtpVerifyScreen({super.key});
 
@@ -17,29 +27,61 @@ class OtpVerifyScreen extends ConsumerStatefulWidget {
 }
 
 class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
+  OtpAnimState _animState = OtpAnimState.filling;
+
+  // Animation Controllers
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
+
+  late AnimationController _cascadeController;
+  late AnimationController _traceController;
+  late AnimationController _collapseController;
+  late AnimationController _glowController;
 
   @override
   void initState() {
     super.initState();
 
+    // 1. Error Shake
     _shakeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 350),
+    );
+    _shakeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -12.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -12.0, end: 12.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 12.0, end: -12.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -12.0, end: 0.0), weight: 1),
+    ]).animate(_shakeController);
+
+    // 2. Cascade Bounce
+    _cascadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
     );
 
-    _shakeAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: -10.0), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: -10.0, end: 10.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: 10.0, end: -10.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: -10.0, end: 0.0), weight: 1),
-    ]).animate(_shakeController);
+    // 3. Connector Trace
+    _traceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    // 4. Morph Collapse
+    _collapseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+
+    // 5. Continuous Looping Radial Glow Pulse
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
   }
 
   @override
@@ -51,12 +93,18 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
       f.dispose();
     }
     _shakeController.dispose();
+    _cascadeController.dispose();
+    _traceController.dispose();
+    _collapseController.dispose();
+    _glowController.dispose();
     super.dispose();
   }
 
   String get _fullOtpCode => _controllers.map((c) => c.text).join();
 
   void _onDigitChanged(int index, String value) {
+    if (_animState == OtpAnimState.verifying || _animState == OtpAnimState.success) return;
+
     if (value.isNotEmpty) {
       if (index < 5) {
         _focusNodes[index + 1].requestFocus();
@@ -73,18 +121,61 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
     ref.read(onboardingControllerProvider.notifier).setOtpCode(code);
 
     if (code.length == 6) {
-      _onVerifyOtp();
+      _startVerificationChoreography();
     }
   }
 
-  void _onVerifyOtp() async {
+  void _startVerificationChoreography() async {
+    setState(() {
+      _animState = OtpAnimState.verifying;
+    });
+
+    // Run Choreography Sequence
+    // Step A: Cascade Bounce
+    _cascadeController.forward(from: 0.0);
+    await Future.delayed(const Duration(milliseconds: 250));
+
+    // Step B: Connector Trace
+    _traceController.forward(from: 0.0);
+    await Future.delayed(const Duration(milliseconds: 450));
+
+    // Step C: Trigger Backend Verification
     final controller = ref.read(onboardingControllerProvider.notifier);
     final success = await controller.verifyOtp();
 
-    if (success && mounted) {
-      context.push('/onboarding/role');
-    } else if (mounted) {
+    if (success) {
+      // Step D: Morph Collapse
+      await _collapseController.forward(from: 0.0);
+
+      setState(() {
+        _animState = OtpAnimState.success;
+      });
+
+      // Start continuous looping radial glow
+      _glowController.repeat(reverse: true);
+
+      // Brief delay to wows user with success state before route transition
+      await Future.delayed(const Duration(milliseconds: 1600));
+      if (mounted) {
+        context.push('/onboarding/role');
+      }
+    } else {
+      // Error Path
+      setState(() {
+        _animState = OtpAnimState.error;
+      });
       _shakeController.forward(from: 0.0);
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        setState(() {
+          _animState = OtpAnimState.filling;
+          for (var c in _controllers) {
+            c.clear();
+          }
+          _focusNodes[0].requestFocus();
+        });
+      }
     }
   }
 
@@ -102,7 +193,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar: Back Button (left) & Speaker Button (right)
+            // Top Bar Navigation
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Row(
@@ -113,7 +204,9 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                   ),
                   const Spacer(),
                   SpeakerButton(
-                    textToSpeak: 'Verify OTP. Enter OTP sent to plus 91 $formattedMobile.',
+                    textToSpeak: _animState == OtpAnimState.success
+                        ? 'Verified successfully. Your account is secure.'
+                        : 'Verify OTP. Enter OTP sent to plus 91 $formattedMobile.',
                   ),
                   const SizedBox(width: 8),
                 ],
@@ -126,215 +219,376 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Vertical centering top spacer
                     const Spacer(flex: 2),
 
-                    // Centered Title & Subtitle
-                    const Text(
-                      'Verify OTP',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.4,
+                    // Animated Header Text Crossfade (Section 3.5 spec)
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 400),
+                      crossFadeState: _animState == OtpAnimState.success
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      firstChild: Column(
+                        children: [
+                          const Text(
+                            'Verify OTP',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Enter OTP sent to +91 $formattedMobile',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  size: 18,
+                                  color: focusBorderColor,
+                                ),
+                                onPressed: () => context.pop(),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      secondChild: Column(
+                        children: const [
+                          Text(
+                            'Verified successfully',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Your account is secure',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w400,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Enter OTP sent to +91 $formattedMobile',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w400,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: focusBorderColor,
-                          ),
-                          onPressed: () => context.pop(),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 40),
 
-                    // 6 Separate Digit Boxes with Shake Animation (Enlarged)
-                    AnimatedBuilder(
-                      animation: _shakeAnimation,
-                      builder: (context, child) {
-                        return Transform.translate(
-                          offset: Offset(_shakeAnimation.value, 0),
-                          child: child,
-                        );
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: List.generate(6, (index) {
-                          final isError = state.isOtpInvalid;
-                          final isFocused = _focusNodes[index].hasFocus;
+                    // Central Choreography Motion Area
+                    if (_animState != OtpAnimState.success)
+                      AnimatedBuilder(
+                        animation: Listenable.merge([
+                          _shakeController,
+                          _cascadeController,
+                          _traceController,
+                          _collapseController,
+                        ]),
+                        builder: (context, child) {
+                          final collapseVal = _collapseController.value;
 
-                          return Container(
-                            width: 48,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isError
-                                    ? AppColors.critical
-                                    : (isFocused ? focusBorderColor : restBorderColor),
-                                width: isError || isFocused ? 2.0 : 1.2,
+                          return Transform.scale(
+                            scale: 1.0 - (collapseVal * 0.4),
+                            child: Opacity(
+                              opacity: (1.0 - collapseVal).clamp(0.0, 1.0),
+                              child: Transform.translate(
+                                offset: Offset(_shakeAnimation.value, 0),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // Layer 1: Trace Connector Lines CustomPainter (Section 3.3 spec)
+                                    if (_animState == OtpAnimState.verifying)
+                                      Positioned.fill(
+                                        child: CustomPaint(
+                                          painter: _ConnectorTracePainter(
+                                            progress: _traceController.value,
+                                            boxCount: 6,
+                                          ),
+                                        ),
+                                      ),
+
+                                    // Layer 2: 6 Digit Boxes with Staggered Cascade Bounce
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: List.generate(6, (index) {
+                                        final isError = _animState == OtpAnimState.error;
+                                        final isFocused = _focusNodes[index].hasFocus;
+
+                                        // Staggered bounce math (Section 3.2 spec)
+                                        double translateY = 0.0;
+                                        double rotateRad = 0.0;
+                                        if (_animState == OtpAnimState.verifying) {
+                                          final startTime = index * 0.12;
+                                          final endTime = startTime + 0.40;
+                                          final t = ((_cascadeController.value - startTime) /
+                                                  (endTime - startTime))
+                                              .clamp(0.0, 1.0);
+                                          final bounceCurve = math.sin(t * math.pi);
+                                          translateY = -12.0 * bounceCurve;
+                                          rotateRad = (index % 2 == 0 ? 0.06 : -0.06) * bounceCurve;
+                                        }
+
+                                        return Transform.translate(
+                                          offset: Offset(0, translateY),
+                                          child: Transform.rotate(
+                                            angle: rotateRad,
+                                            child: Container(
+                                              width: 48,
+                                              height: 60,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: isError
+                                                      ? AppColors.critical
+                                                      : (isFocused || _animState == OtpAnimState.verifying
+                                                          ? focusBorderColor
+                                                          : restBorderColor),
+                                                  width: isError || isFocused || _animState == OtpAnimState.verifying
+                                                      ? 2.0
+                                                      : 1.2,
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: isFocused || _animState == OtpAnimState.verifying
+                                                        ? focusBorderColor.withValues(alpha: 0.20)
+                                                        : Colors.black.withValues(alpha: 0.03),
+                                                    blurRadius: 8,
+                                                    offset: const Offset(0, 2),
+                                                  )
+                                                ],
+                                              ),
+                                              child: TextField(
+                                                controller: _controllers[index],
+                                                focusNode: _focusNodes[index],
+                                                keyboardType: TextInputType.number,
+                                                textAlign: TextAlign.center,
+                                                readOnly: _animState == OtpAnimState.verifying,
+                                                style: const TextStyle(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                                inputFormatters: [
+                                                  FilteringTextInputFormatter.digitsOnly,
+                                                  LengthLimitingTextInputFormatter(1),
+                                                ],
+                                                decoration: const InputDecoration(
+                                                  border: InputBorder.none,
+                                                  enabledBorder: InputBorder.none,
+                                                  focusedBorder: InputBorder.none,
+                                                  errorBorder: InputBorder.none,
+                                                  focusedErrorBorder: InputBorder.none,
+                                                  contentPadding: EdgeInsets.zero,
+                                                ),
+                                                onChanged: (value) => _onDigitChanged(index, value),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: isFocused
-                                      ? focusBorderColor.withValues(alpha: 0.15)
-                                      : Colors.black.withValues(alpha: 0.03),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                )
-                              ],
-                            ),
-                            child: TextField(
-                              controller: _controllers[index],
-                              focusNode: _focusNodes[index],
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                                LengthLimitingTextInputFormatter(1),
-                              ],
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                errorBorder: InputBorder.none,
-                                focusedErrorBorder: InputBorder.none,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                              onChanged: (value) => _onDigitChanged(index, value),
                             ),
                           );
-                        }),
-                      ),
-                    ),
+                        },
+                      )
+                    else
+                      // Resolved Success State: Badge + Continuous Looping Glow (Section 3.5 spec)
+                      AnimatedBuilder(
+                        animation: _glowController,
+                        builder: (context, child) {
+                          final scale = 1.0 + 0.12 * math.sin(_glowController.value * math.pi);
+                          final glowOpacity = 0.35 - 0.20 * math.sin(_glowController.value * math.pi);
 
-                    if (state.errorMessage != null) ...[
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // Looping Radial Glow Pulse
+                                  Transform.scale(
+                                    scale: scale * 1.3,
+                                    child: Container(
+                                      width: 80,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFF22C55E).withValues(alpha: glowOpacity),
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Resolved Badge Shape
+                                  Transform.scale(
+                                    scale: scale,
+                                    child: Container(
+                                      width: 76,
+                                      height: 76,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(22),
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            Color(0xFF0E9488), // Teal accent
+                                            Color(0xFF22C55E), // Success green
+                                          ],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF22C55E).withValues(alpha: 0.35),
+                                            blurRadius: 18,
+                                            offset: const Offset(0, 6),
+                                          )
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.check_rounded,
+                                        size: 44,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'Verified and secure',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0E9488),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+
+                    if (_animState == OtpAnimState.error || state.errorMessage != null) ...[
                       const SizedBox(height: 12),
-                      Center(
-                        child: Text(
-                          state.errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.critical,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Text(
+                        state.errorMessage ?? 'Incorrect code, try again',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.critical,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
 
                     const SizedBox(height: 24),
 
-                    // Resend Timer Countdown / Action Link
-                    Center(
-                      child: state.resendCountdown > 0
-                          ? Text(
-                              'Resend OTP in 00:${state.resendCountdown.toString().padLeft(2, '0')}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textMuted,
-                              ),
-                            )
-                          : TextButton(
-                              onPressed: () {
-                                ref
-                                    .read(onboardingControllerProvider.notifier)
-                                    .sendOtp();
-                              },
-                              child: const Text(
-                                'Resend OTP',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: focusBorderColor,
-                                ),
-                              ),
-                            ),
-                    ),
-
-                    // Bottom Spacer for vertical balance
-                    const Spacer(flex: 3),
-
-                    // Primary Pill Gradient CTA Button ("Verify & Continue")
-                    Container(
-                      width: double.infinity,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        gradient: (state.isOtpValid && !state.isLoading)
-                            ? AppColors.langCtaGradient
-                            : LinearGradient(
-                                colors: [
-                                  AppColors.primary500.withValues(alpha: 0.5),
-                                  AppColors.primary600.withValues(alpha: 0.5),
-                                ],
-                              ),
-                        borderRadius: BorderRadius.circular(27),
-                        boxShadow: (state.isOtpValid && !state.isLoading)
-                            ? [
-                                BoxShadow(
-                                  color: focusBorderColor.withValues(alpha: 0.3),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 4),
-                                )
-                              ]
-                            : null,
-                      ),
-                      child: ElevatedButton(
-                        onPressed: (state.isOtpValid && !state.isLoading) ? _onVerifyOtp : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(27),
-                          ),
-                        ),
-                        child: state.isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2.5,
+                    // Resend Link (Visible during filling state)
+                    if (_animState == OtpAnimState.filling)
+                      Center(
+                        child: state.resendCountdown > 0
+                            ? Text(
+                                'Resend OTP in 00:${state.resendCountdown.toString().padLeft(2, '0')}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textMuted,
                                 ),
                               )
-                            : const Text(
-                                'Verify & Continue',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 0.3,
+                            : TextButton(
+                                onPressed: () {
+                                  ref
+                                      .read(onboardingControllerProvider.notifier)
+                                      .sendOtp();
+                                },
+                                child: const Text(
+                                  'Resend OTP',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: focusBorderColor,
+                                  ),
                                 ),
                               ),
                       ),
-                    ),
+
+                    const Spacer(flex: 3),
+
+                    // Primary Pill Gradient CTA Button
+                    if (_animState != OtpAnimState.success)
+                      Container(
+                        width: double.infinity,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          gradient: (state.isOtpValid && _animState != OtpAnimState.verifying)
+                              ? AppColors.langCtaGradient
+                              : LinearGradient(
+                                  colors: [
+                                    AppColors.primary500.withValues(alpha: 0.5),
+                                    AppColors.primary600.withValues(alpha: 0.5),
+                                  ],
+                                ),
+                          borderRadius: BorderRadius.circular(27),
+                          boxShadow: (state.isOtpValid && _animState != OtpAnimState.verifying)
+                              ? [
+                                  BoxShadow(
+                                    color: focusBorderColor.withValues(alpha: 0.3),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ]
+                              : null,
+                        ),
+                        child: ElevatedButton(
+                          onPressed: (state.isOtpValid && _animState == OtpAnimState.filling)
+                              ? _startVerificationChoreography
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(27),
+                            ),
+                          ),
+                          child: _animState == OtpAnimState.verifying
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(
+                                  'Verify & Continue',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                        ),
+                      ),
 
                     const SizedBox(height: 24),
                   ],
@@ -345,5 +599,47 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
         ),
       ),
     );
+  }
+}
+
+/// CustomPainter that progressively draws an animated connecting line trace (Section 3.3 spec)
+class _ConnectorTracePainter extends CustomPainter {
+  final double progress;
+  final int boxCount;
+
+  _ConnectorTracePainter({required this.progress, required this.boxCount});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (progress <= 0.0) return;
+
+    final paint = Paint()
+      ..color = const Color(0xFF0E9488)
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+    final boxWidth = 48.0;
+    final totalWidth = size.width;
+    final step = (totalWidth - (boxWidth * boxCount)) / (boxCount - 1) + boxWidth;
+
+    path.moveTo(boxWidth / 2, size.height / 2);
+    for (int i = 1; i < boxCount; i++) {
+      final x = (boxWidth / 2) + (i * step);
+      final y = (size.height / 2) + (i % 2 == 0 ? 4 : -4);
+      path.lineTo(x, y);
+    }
+
+    final pathMetrics = path.computeMetrics();
+    for (final metric in pathMetrics) {
+      final extractPath = metric.extractPath(0.0, metric.length * progress);
+      canvas.drawPath(extractPath, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConnectorTracePainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }

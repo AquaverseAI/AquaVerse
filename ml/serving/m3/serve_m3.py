@@ -18,8 +18,13 @@ Test:
 from __future__ import annotations
 import os
 import re
+import sys
 import time
+import os
 from contextlib import asynccontextmanager
+
+# Allow importing from root
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 import torch
 from fastapi import FastAPI, HTTPException
@@ -27,8 +32,8 @@ from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 
-from m3_decision_engine import M3DecisionEngine, PondSnapshot, payload_to_instruction
-from training.validate_sft_corpus import extract_numbers, payload_numbers, explainable_by_arithmetic
+from ml.serving.m3.m3_decision_engine import M3DecisionEngine, PondSnapshot, payload_to_instruction
+from ml.serving.m3.training.validate_sft_corpus import extract_numbers, payload_numbers, explainable_by_arithmetic
 
 BASE_MODEL = "unsloth/Qwen3-8B-bnb-4bit"
 ADAPTER_PATH = "/home/techpark-6/Pictures"  # UPDATE to wherever the exported v0.2.0 (or later) adapter actually lives
@@ -151,13 +156,14 @@ def check_hallucination(narration: str, payload_dict: dict) -> tuple[bool, set]:
     return len(suspicious) == 0, suspicious
 
 
-def generate_narration(instruction: str, payload_dict: dict = None) -> str:
+def generate_narration(instruction: str, payload_dict: dict | None = None) -> str:
     if _mock_mode:
         time.sleep(1.5)  # simulate latency
         # Return a mocked narration that contains exactly the numbers required so it passes the hallucination check
         allowed = " ".join(payload_numbers(payload_dict)) if payload_dict else ""
         return f"MOCK NARRATION (No GPU): Based on the data, the feed recommendation is justified. (Used numbers: {allowed})"
 
+    assert _tokenizer is not None and _model is not None, "Model not initialized"
     prompt = CHAT_TEMPLATE.format(instruction=instruction)
     inputs = _tokenizer(prompt, return_tensors="pt").to(_model.device)
     with torch.no_grad():
@@ -180,6 +186,7 @@ async def reason_m3(req: PondSnapshotRequest) -> ReasonResponse:
 
     snap = PondSnapshot(**req.model_dump())
     try:
+        assert _decision_engine is not None, "Decision engine not initialized"
         payload = _decision_engine.decide(snap)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Decision engine failed: {e}")
@@ -187,7 +194,7 @@ async def reason_m3(req: PondSnapshotRequest) -> ReasonResponse:
     payload_dict = {k: v for k, v in payload.__dict__.items()}
     instruction = payload_to_instruction(payload)
 
-    narration = None
+    narration = ""
     passed = False
     attempts = 0
     for attempt in range(1, MAX_REGENERATION_ATTEMPTS + 1):

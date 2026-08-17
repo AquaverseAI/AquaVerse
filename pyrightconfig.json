@@ -2,6 +2,7 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.11",
+  "extraPaths": ["ml/serving/m3"],
   "executionEnvironments": [
     {
       "root": "."

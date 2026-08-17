@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_secret_key: str = Field(..., min_length=32)
     internal_api_token: str = Field(..., min_length=32)
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://10.20.18.183:5173"]
 
     # -----------------------------------------------------------------------
     # Database

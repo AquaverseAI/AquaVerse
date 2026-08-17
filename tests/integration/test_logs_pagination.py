@@ -145,3 +145,113 @@ async def test_list_logs_pages_are_disjoint(
     assert first_ids | second_ids == {str(log.id) for log in logs}
     # Final page has no further cursor.
     assert second_body["next_cursor"] is None
+
+
+async def _seed_tied_pond_and_logs(db_session: AsyncSession) -> tuple[Pond, list[Log]]:
+    """Seed two distinct groups of tied rows (identical recorded_at, distinct
+    id) with nothing else in between, so that a small limit is guaranteed to
+    force a page cut *inside* a tied group rather than landing on a group
+    boundary by coincidence."""
+    pond_id = uuid4()
+    owner_id = uuid4()
+    pond = Pond(
+        id=pond_id,
+        owner_user_id=owner_id,
+        name="Tie Boundary Test Pond",
+        district="Nagapattinam",
+    )
+    db_session.add(pond)
+
+    t_base = datetime.now(UTC).replace(microsecond=0)
+    # Group A: 3 rows sharing t_base. Group B: 2 rows sharing t_base - 1h.
+    # With limit=1, every single page boundary falls strictly inside one of
+    # these tied groups (recorded_at identical, only id differs) — the exact
+    # case the reviewer flagged as untested.
+    logs = [
+        Log(
+            id=uuid4(),
+            pond_id=pond_id,
+            recorded_by=owner_id,
+            recorded_at=t_base,
+            temperature_c=25.0,
+            source="sensor",
+        )
+        for _ in range(3)
+    ] + [
+        Log(
+            id=uuid4(),
+            pond_id=pond_id,
+            recorded_by=owner_id,
+            recorded_at=t_base - timedelta(hours=1),
+            temperature_c=26.0,
+            source="sensor",
+        )
+        for _ in range(2)
+    ]
+    db_session.add_all(logs)
+    await db_session.commit()
+    return pond, logs
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
+async def test_list_logs_keyset_pagination_splits_tied_rows_across_page_boundary(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    """Regression test for the boundary case flagged in review: with a tight
+    limit, a page cut must be able to land *between* two rows that share the
+    exact same `recorded_at` (only `id` differs), not just between rows with
+    distinct timestamps. Walks every page at limit=1 across two tied groups
+    (3-row group + 2-row group, 5 rows total) and asserts full coverage, no
+    duplicates, strict (recorded_at, id) DESC order across every boundary,
+    and a final `next_cursor` of None."""
+    pond, logs = await _seed_tied_pond_and_logs(db_session)
+
+    token = create_access_token(sub=str(uuid4()), role="staff", district="Nagapattinam")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    expected_order = [
+        str(log_id)
+        for _, log_id in sorted(
+            [(log.recorded_at, log.id) for log in logs],
+            key=lambda pair: (pair[0], pair[1]),
+            reverse=True,
+        )
+    ]
+
+    seen_ids: list[str] = []
+    cursor: str | None = None
+    pages_fetched = 0
+
+    while True:
+        params: dict[str, object] = {"pond_id": str(pond.id), "limit": 1}
+        if cursor:
+            params["cursor"] = cursor
+        response = await db_client.get("/v1/logs", params=params, headers=headers)
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        page_items = body["items"]
+        # limit=1 -> every page (except possibly none) has exactly one row.
+        assert len(page_items) == 1
+        seen_ids.extend(item["id"] for item in page_items)
+
+        cursor = body["next_cursor"]
+        pages_fetched += 1
+        assert pages_fetched <= len(logs) + 1, "pagination did not terminate"
+
+        if cursor is None:
+            break
+
+    # Every row seen exactly once — no duplicates, no skips — even though
+    # multiple page boundaries fell strictly inside a tied (recorded_at) group.
+    assert len(seen_ids) == len(logs)
+    assert len(set(seen_ids)) == len(logs)
+    assert pages_fetched == len(logs)
+
+    # Strict (recorded_at, id) DESC order end-to-end, across every boundary,
+    # including the boundaries inside the two tied groups.
+    assert seen_ids == expected_order
+
+    # Final page terminates pagination.
+    assert cursor is None

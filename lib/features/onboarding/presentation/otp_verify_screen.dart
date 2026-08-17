@@ -154,10 +154,13 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
       // Start continuous looping radial glow
       _glowController.repeat(reverse: true);
 
+      // Complete onboarding and set has_onboarded = true flag
+      final nextRoute = await controller.completeOnboarding();
+
       // Brief delay to wows user with success state before route transition
       await Future.delayed(const Duration(milliseconds: 1600));
       if (mounted) {
-        context.push('/onboarding/role');
+        context.go(nextRoute);
       }
     } else {
       // Error Path

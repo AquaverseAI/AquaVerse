@@ -117,7 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Main Left Sidebar */}
       <aside
         className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-surface-card dark:bg-surface-darkCard border-r border-surface-border dark:border-surface-darkBorder flex flex-col justify-between transition-transform duration-200 lg:translate-x-0 ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Top Region: Distinct Identity Block & District Selector */}

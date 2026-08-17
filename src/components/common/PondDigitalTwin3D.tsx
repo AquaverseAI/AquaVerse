@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   RotateCcw,
   Maximize2,
@@ -16,7 +16,11 @@ import {
   Gauge,
   MapPin,
   ExternalLink,
+  Sun,
+  Radio,
+  Fish,
 } from 'lucide-react';
+import { RiskStatusBadge } from './RiskStatusBadge';
 
 export interface PondDigitalTwin3DProps {
   pondId: string;
@@ -30,12 +34,13 @@ export interface PondDigitalTwin3DProps {
 }
 
 /**
- * Real-world 3D Local Anchor Coordinates on the pond.fbx model
+ * Real-world 3D Local Anchor Coordinates on the pond1.glb model
  */
 const DATA_POINT_ANCHORS = {
-  aerator_1: new THREE.Vector3(3.8, 0.08, -2.4),
-  sonde_buoy_1: new THREE.Vector3(0.0, 0.05, 0.0),
-  inflow_1: new THREE.Vector3(-5.2, 0.25, 3.4),
+  probes: new THREE.Vector3(0.0, -0.38, 2.1),
+  solar_mast: new THREE.Vector3(0.0, 0.95, 4.0),
+  aerator: new THREE.Vector3(2.2, -0.05, -1.8),
+  fish_school: new THREE.Vector3(0.0, -0.55, 0.6),
 };
 
 /**
@@ -76,7 +81,7 @@ function createWaterNormalTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 4);
+  texture.repeat.set(6, 6);
   return texture;
 }
 
@@ -99,8 +104,8 @@ function createOutdoorEnvironmentMap(renderer: THREE.WebGLRenderer, isDark: bool
       grad.addColorStop(0, '#eaf6f8'); // Sky blue
       grad.addColorStop(0.45, '#ccecf2');
       grad.addColorStop(0.55, '#85d0e2'); // Horizon
-      grad.addColorStop(0.7, '#4fbfa0'); // Vegetation
-      grad.addColorStop(1, '#154c6e'); // Deep terrain
+      grad.addColorStop(0.7, '#3b9e4a'); // Lush vegetation
+      grad.addColorStop(1, '#1d5a22'); // Earth terrain
     }
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 256);
@@ -134,13 +139,14 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
   const [loadProgress, setLoadProgress] = useState(0);
   const [autoRotate, setAutoRotate] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activePreset, setActivePreset] = useState<'aerial' | 'surface' | 'aerator' | 'sonde'>('surface');
+  const [activePreset, setActivePreset] = useState<'aerial' | 'surface' | 'probes' | 'solar' | 'aerator'>('surface');
 
   // Screen projected coordinates for custom interactive 3D data-point anchors
   const [anchorScreenPositions, setAnchorScreenPositions] = useState<{
+    probes?: { x: number; y: number; visible: boolean };
+    solar_mast?: { x: number; y: number; visible: boolean };
     aerator?: { x: number; y: number; visible: boolean };
-    sonde?: { x: number; y: number; visible: boolean };
-    inflow?: { x: number; y: number; visible: boolean };
+    fish_school?: { x: number; y: number; visible: boolean };
   }>({});
 
   // Three.js internal refs
@@ -148,13 +154,13 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const fbxModelRef = useRef<THREE.Group | null>(null);
+  const gltfModelRef = useRef<THREE.Group | null>(null);
+  const animationMixerRef = useRef<THREE.AnimationMixer | null>(null);
   const waterMeshRef = useRef<THREE.Mesh | null>(null);
   const waterNormalTextureRef = useRef<THREE.CanvasTexture | null>(null);
   const aeratorPaddleRef = useRef<THREE.Group | null>(null);
   const sprayParticlesRef = useRef<THREE.Points | null>(null);
-  const sondeLedRef = useRef<THREE.PointLight | null>(null);
-  const sondeGroupRef = useRef<THREE.Group | null>(null);
+  const statusLedAlarmsRef = useRef<THREE.Mesh[]>([]);
   const animationFrameIdRef = useRef<number | null>(null);
   const clockRef = useRef(new THREE.Clock());
 
@@ -177,7 +183,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
       endPosition: THREE.Vector3,
       endTarget: THREE.Vector3,
       duration = 450,
-      presetName: 'aerial' | 'surface' | 'aerator' | 'sonde' = 'surface'
+      presetName: 'aerial' | 'surface' | 'probes' | 'solar' | 'aerator' = 'surface'
     ) => {
       if (!cameraRef.current || !controlsRef.current) return;
       setActivePreset(presetName);
@@ -209,7 +215,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
     const height = canvasContainerRef.current.clientHeight || 480;
 
     // ==========================================
-    // 1. RENDERER SETUP (Color space, ACES Tone Mapping & PCF Shadows)
+    // 1. RENDERER SETUP (sRGB Color Space, ACES Tone Mapping & PCF Soft Shadows)
     // ==========================================
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -221,7 +227,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = isDark ? 1.05 : 1.15;
+    renderer.toneMappingExposure = isDark ? 1.0 : 1.1;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -236,19 +242,19 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
     const bgColor = isDark ? 0x081722 : 0xf2f8fa;
     scene.background = new THREE.Color(bgColor);
     // Subtle distance fog that preserves the rich asset colors without washing them out
-    scene.fog = new THREE.Fog(bgColor, 32, 75);
+    scene.fog = new THREE.Fog(bgColor, 22, 55);
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 1000);
-    camera.position.set(16, 9.5, 17);
+    camera.position.set(8.0, 4.5, 8.0);
     cameraRef.current = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.04; // Prevent camera from going underwater
-    controls.minDistance = 3.5;
-    controls.maxDistance = 55;
-    controls.target.set(0, 0.3, 0);
+    controls.minDistance = 1.5;
+    controls.maxDistance = 35;
+    controls.target.set(0, -0.2, 0.8);
     controlsRef.current = controls;
 
     // Environment reflection map
@@ -256,129 +262,144 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
     scene.environment = envRenderTarget.texture;
 
     // ==========================================
-    // 3. BALANCED LIGHTING PIPELINE
+    // 3. BALANCED LIGHTING PIPELINE WITH GROUND BOUNCE
     // ==========================================
-    const sunLight = new THREE.DirectionalLight(0xfff8ee, isDark ? 1.3 : 1.6);
-    sunLight.position.set(22, 28, 16);
+    const sunLight = new THREE.DirectionalLight(0xfff8ee, isDark ? 1.25 : 1.5);
+    sunLight.position.set(12, 18, 10);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 80;
-    sunLight.shadow.camera.left = -12;
-    sunLight.shadow.camera.right = 12;
-    sunLight.shadow.camera.top = 12;
-    sunLight.shadow.camera.bottom = -12;
-    sunLight.shadow.bias = -0.0003;
+    sunLight.shadow.camera.far = 40;
+    sunLight.shadow.camera.left = -7;
+    sunLight.shadow.camera.right = 7;
+    sunLight.shadow.camera.top = 7;
+    sunLight.shadow.camera.bottom = -7;
+    sunLight.shadow.bias = -0.0002;
+    sunLight.shadow.normalBias = 0.015;
     scene.add(sunLight);
 
     const hemiLight = new THREE.HemisphereLight(
       isDark ? 0x2e9cb8 : 0xeff9fb,
-      isDark ? 0x092131 : 0x1c4a3b,
-      isDark ? 0.65 : 0.85
+      isDark ? 0x0b1f13 : 0x1d471d, // Lush terrain ground bounce
+      isDark ? 0.6 : 0.8
     );
     scene.add(hemiLight);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.2 : 0.35);
+    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.25 : 0.35);
     scene.add(ambientLight);
 
-    const backRimLight = new THREE.DirectionalLight(0x4fbfa0, isDark ? 0.4 : 0.5);
-    backRimLight.position.set(-18, 12, -18);
+    const backRimLight = new THREE.DirectionalLight(0x4fbfa0, isDark ? 0.35 : 0.45);
+    backRimLight.position.set(-10, 8, -10);
     scene.add(backRimLight);
 
     // ==========================================
-    // 4. LOAD & CONVERT POND.FBX PRESERVING ORIGINAL TEXTURES/COLORS
+    // 4. LOAD & CONVERT POND1.GLB (GLTF) WITH PRESERVED COLOURS & PROPER MAPPINGS
     // ==========================================
     const waterNormalTex = createWaterNormalTexture();
     waterNormalTextureRef.current = waterNormalTex;
+    statusLedAlarmsRef.current = [];
 
-    const fbxLoader = new FBXLoader();
-    fbxLoader.load(
-      '/pond.fbx',
-      (fbx) => {
-        // Compute bounding box and normalize scale (1200-unit model -> 19.2 units)
-        const bbox = new THREE.Box3().setFromObject(fbx);
-        const center = new THREE.Vector3();
-        bbox.getCenter(center);
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      '/pond1.glb',
+      (gltf) => {
+        const model = gltf.scene;
 
-        const targetScale = 0.016; // Scale factor
-        fbx.scale.set(targetScale, targetScale, targetScale);
-        fbx.position.set(-center.x * targetScale, -center.y * targetScale - 0.2, -center.z * targetScale);
-
-        // Convert FBX Materials to PBR while PRESERVING ORIGINAL TEXTURES & COLORS
-        fbx.traverse((child) => {
+        // Traverse GLTF Hierarchy & Preserve Original Colours and Texture Mappings
+        model.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
             const name = mesh.name.toLowerCase();
-            const oldMat: any = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-            const matName = oldMat?.name?.toLowerCase() || '';
+            const mat = mesh.material as THREE.MeshStandardMaterial;
 
-            // 1. Water Surface Mesh -> High-Fidelity MeshPhysicalMaterial
-            if (name.includes('water') || matName.includes('water')) {
-              const originalWaterColor = oldMat?.color ? oldMat.color.clone() : new THREE.Color(0x054059);
+            // Ensure embedded textures use proper sRGB color spaces
+            if (mat?.map) {
+              mat.map.colorSpace = THREE.SRGBColorSpace;
+              mat.map.needsUpdate = true;
+            }
+            if (mat?.emissiveMap) {
+              mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+              mat.emissiveMap.needsUpdate = true;
+            }
+
+            // 1. Water Surface Mesh -> Preserved Original Water Colour & Dynamic DO PBR Shader
+            if (name === 'watersurface' || name.includes('water')) {
+              const originalWaterColor = 0x054059; // Authentic deep aquatic pond teal
               const waterColorHex =
                 simulatedDO < 3.0
-                  ? 0xdc3545
+                  ? 0xdc3545 // Severe Hypoxia Alert Red
                   : simulatedDO < 4.0
-                  ? 0xe8a33d
-                  : originalWaterColor.getHex();
+                  ? 0xe8a33d // Caution Amber
+                  : isDark
+                  ? 0x05374a
+                  : originalWaterColor;
 
               mesh.material = new THREE.MeshPhysicalMaterial({
                 color: waterColorHex,
-                transmission: 0.52,
-                roughness: 0.16,
-                metalness: 0.04,
+                transmission: 0.72,
+                roughness: 0.1,
+                metalness: 0.02,
                 ior: 1.333,
-                clearcoat: 0.95,
-                clearcoatRoughness: 0.08,
-                reflectivity: 0.65,
-                attenuationColor: new THREE.Color(isDark ? 0x092131 : 0x0f3f5c),
-                attenuationDistance: 2.8,
+                clearcoat: 0.92,
+                clearcoatRoughness: 0.06,
+                reflectivity: 0.7,
+                attenuationColor: new THREE.Color(isDark ? 0x052838 : 0x0a4054),
+                attenuationDistance: 3.5,
                 normalMap: waterNormalTex,
                 normalScale: new THREE.Vector2(0.35, 0.35),
                 transparent: true,
-                opacity: 0.92,
+                opacity: 0.9,
                 depthWrite: false,
               });
               waterMeshRef.current = mesh;
             }
-            // 2. Ground Terrain Mesh -> Preserve Original Ground Texture & Color (#26591f)
-            else if (name.includes('ground') || name.includes('terrain') || matName.includes('ground')) {
-              mesh.material = new THREE.MeshStandardMaterial({
-                color: oldMat?.color || new THREE.Color(0x26591f),
-                map: oldMat?.map || null,
-                normalMap: oldMat?.normalMap || null,
-                roughness: 0.8,
-                metalness: 0.05,
-              });
+            // 2. Ground Terrain Mesh -> Preserve Original Rich Grass/Soil Colour (#26591f)
+            else if (name.includes('ground') || name.includes('terrain') || mat?.name === 'GroundMat') {
+              mat.color = new THREE.Color(0x26591f);
+              mat.roughness = 0.82;
+              mat.metalness = 0.05;
+              mat.needsUpdate = true;
             }
-            // 3. Perimeter Rocks -> Preserve Original Rock Color (#4d5259) & Texture
-            else if (name.includes('rock') || matName.includes('rock')) {
-              mesh.material = new THREE.MeshStandardMaterial({
-                color: oldMat?.color || new THREE.Color(0x4d5259),
-                map: oldMat?.map || null,
-                normalMap: oldMat?.normalMap || null,
-                roughness: 0.88,
-                metalness: 0.05,
-              });
+            // 3. Perimeter Rocks -> Preserve Original Natural Slate Rock Colour (#4d5259)
+            else if (name.includes('rock') || mat?.name === 'RockMat') {
+              mat.color = new THREE.Color(0x4d5259);
+              mat.roughness = 0.85;
+              mat.metalness = 0.08;
+              mat.needsUpdate = true;
             }
-            // 4. Any other meshes -> Convert with original map/color preserved
-            else if (oldMat) {
-              mesh.material = new THREE.MeshStandardMaterial({
-                color: oldMat.color || new THREE.Color(0xffffff),
-                map: oldMat.map || null,
-                roughness: 0.7,
-                metalness: 0.1,
-              });
+            // 4. Neon Tetra Fish -> Preserve Glowing Emissive Stripes & Natural Skin Translucency
+            else if (name.includes('tetra') || mat?.name?.includes('neon_fish')) {
+              mat.roughness = 0.25;
+              mat.metalness = 0.05;
+              if (mat.emissiveMap) {
+                mat.emissive = new THREE.Color(0xffffff);
+                mat.emissiveIntensity = 1.6;
+              }
+              mat.needsUpdate = true;
+            }
+
+            // Track Controller Status LEDs
+            if (name.includes('led_alarm') || name.includes('led_cloud') || name.includes('led_pwr')) {
+              statusLedAlarmsRef.current.push(mesh);
             }
           }
         });
 
-        scene.add(fbx);
-        fbxModelRef.current = fbx;
+        // Initialize AnimationMixer for fish swimming schooling action
+        if (gltf.animations && gltf.animations.length > 0) {
+          const mixer = new THREE.AnimationMixer(model);
+          gltf.animations.forEach((clip) => {
+            mixer.clipAction(clip).play();
+          });
+          animationMixerRef.current = mixer;
+        }
+
+        scene.add(model);
+        gltfModelRef.current = model;
         setLoading(false);
       },
       (xhr) => {
@@ -389,57 +410,58 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
         }
       },
       (err) => {
-        console.error('FBX Load Error:', err);
+        console.error('GLTF Load Error:', err);
         setLoading(false);
       }
     );
 
     // ==========================================
-    // 5. ATTACH CUSTOM 3D DATA-POINT PROPS TO POND.FBX
+    // 5. ATTACH PADDLEWHEEL AERATOR INTERVENTION PROP
     // ==========================================
 
-    // (A) Paddlewheel Aerator Prop at DATA_POINT_ANCHORS.aerator_1
+    // Paddlewheel Aerator Prop at DATA_POINT_ANCHORS.aerator
     const aeratorGroup = new THREE.Group();
-    aeratorGroup.position.copy(DATA_POINT_ANCHORS.aerator_1);
+    aeratorGroup.position.copy(DATA_POINT_ANCHORS.aerator);
+    aeratorGroup.scale.set(0.65, 0.65, 0.65);
 
     const pontoonMat = new THREE.MeshStandardMaterial({ color: 0x1f8aa6, roughness: 0.35, metalness: 0.2 });
-    const leftPontoon = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.22, 0.4), pontoonMat);
-    leftPontoon.position.set(0, 0, -0.6);
+    const leftPontoon = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.2, 0.35), pontoonMat);
+    leftPontoon.position.set(0, 0, -0.5);
     leftPontoon.castShadow = true;
     leftPontoon.receiveShadow = true;
     aeratorGroup.add(leftPontoon);
 
-    const rightPontoon = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.22, 0.4), pontoonMat);
-    rightPontoon.position.set(0, 0, 0.6);
+    const rightPontoon = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.2, 0.35), pontoonMat);
+    rightPontoon.position.set(0, 0, 0.5);
     rightPontoon.castShadow = true;
     rightPontoon.receiveShadow = true;
     aeratorGroup.add(rightPontoon);
 
     const frameMat = new THREE.MeshStandardMaterial({ color: 0x154c6e, roughness: 0.4, metalness: 0.6 });
-    const crossbar1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.4), frameMat);
-    crossbar1.position.set(-0.8, 0.12, 0);
+    const crossbar1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 1.2), frameMat);
+    crossbar1.position.set(-0.7, 0.1, 0);
     crossbar1.castShadow = true;
     aeratorGroup.add(crossbar1);
 
-    const crossbar2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.4), frameMat);
-    crossbar2.position.set(0.8, 0.12, 0);
+    const crossbar2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 1.2), frameMat);
+    crossbar2.position.set(0.7, 0.1, 0);
     crossbar2.castShadow = true;
     aeratorGroup.add(crossbar2);
 
     const motorMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.24, 0.24, 0.55, 16),
+      new THREE.CylinderGeometry(0.2, 0.2, 0.45, 16),
       new THREE.MeshStandardMaterial({ color: 0x0f3f5c, metalness: 0.8, roughness: 0.25 })
     );
-    motorMesh.position.set(0, 0.35, 0);
+    motorMesh.position.set(0, 0.3, 0);
     motorMesh.castShadow = true;
     aeratorGroup.add(motorMesh);
 
     // Rotating 8-Blade Paddlewheel
     const paddleGroup = new THREE.Group();
-    paddleGroup.position.set(0, 0.1, 0.75);
+    paddleGroup.position.set(0, 0.08, 0.65);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xf4fbfc, roughness: 0.25, metalness: 0.1 });
     for (let i = 0; i < 8; i++) {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.04, 0.28), bladeMat);
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.035, 0.24), bladeMat);
       blade.rotation.x = (i * Math.PI) / 4;
       blade.castShadow = true;
       paddleGroup.add(blade);
@@ -449,97 +471,41 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
 
     // Anchor Stem Pin
     const aeratorPin = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.02, 0.6, 8),
+      new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8),
       new THREE.MeshStandardMaterial({ color: 0x1f8aa6, metalness: 0.8 })
     );
-    aeratorPin.position.set(0, 0.7, 0);
+    aeratorPin.position.set(0, 0.6, 0);
     aeratorGroup.add(aeratorPin);
 
     scene.add(aeratorGroup);
 
-    // (B) Aerator Spray Mist Particles
-    const particleCount = 220;
+    // Aerator Spray Mist Particles
+    const particleCount = 200;
     const particleGeo = new THREE.BufferGeometry();
     const particlePositions = new Float32Array(particleCount * 3);
     const particleVelocities = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount; i++) {
-      particlePositions[i * 3] = DATA_POINT_ANCHORS.aerator_1.x + (Math.random() - 0.5) * 1.6;
-      particlePositions[i * 3 + 1] = 0.1 + Math.random() * 0.4;
-      particlePositions[i * 3 + 2] = DATA_POINT_ANCHORS.aerator_1.z + 0.7 + Math.random() * 1.4;
+      particlePositions[i * 3] = DATA_POINT_ANCHORS.aerator.x + (Math.random() - 0.5) * 1.2;
+      particlePositions[i * 3 + 1] = 0.05 + Math.random() * 0.35;
+      particlePositions[i * 3 + 2] = DATA_POINT_ANCHORS.aerator.z + 0.5 + Math.random() * 1.0;
 
-      particleVelocities[i * 3] = (Math.random() - 0.5) * 0.035;
-      particleVelocities[i * 3 + 1] = 0.035 + Math.random() * 0.045;
-      particleVelocities[i * 3 + 2] = 0.035 + Math.random() * 0.055;
+      particleVelocities[i * 3] = (Math.random() - 0.5) * 0.025;
+      particleVelocities[i * 3 + 1] = 0.025 + Math.random() * 0.035;
+      particleVelocities[i * 3 + 2] = 0.025 + Math.random() * 0.045;
     }
 
     particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     const particleMat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 0.16,
+      size: 0.14,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.75,
       blending: THREE.AdditiveBlending,
     });
     const sprayParticles = new THREE.Points(particleGeo, particleMat);
     scene.add(sprayParticles);
     sprayParticlesRef.current = sprayParticles;
-
-    // (C) Sensor Sonde Buoy at DATA_POINT_ANCHORS.sonde_buoy_1
-    const sondeGroup = new THREE.Group();
-    sondeGroup.position.copy(DATA_POINT_ANCHORS.sonde_buoy_1);
-
-    const buoyBody = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.38, 0.44, 0.75, 20),
-      new THREE.MeshStandardMaterial({ color: 0x1f8aa6, roughness: 0.3, metalness: 0.15 })
-    );
-    buoyBody.castShadow = true;
-    buoyBody.receiveShadow = true;
-    sondeGroup.add(buoyBody);
-
-    const solarDisc = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.48, 0.48, 0.06, 20),
-      new THREE.MeshStandardMaterial({ color: 0x092131, roughness: 0.2, metalness: 0.85 })
-    );
-    solarDisc.position.y = 0.4;
-    solarDisc.castShadow = true;
-    sondeGroup.add(solarDisc);
-
-    const mast = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.03, 1.1, 8),
-      new THREE.MeshStandardMaterial({ color: 0xdce8ec, metalness: 0.9, roughness: 0.1 })
-    );
-    mast.position.y = 0.85;
-    sondeGroup.add(mast);
-
-    const sondeLed = new THREE.PointLight(0x4fbfa0, 1.8, 3.5);
-    sondeLed.position.set(0, 1.35, 0);
-    sondeGroup.add(sondeLed);
-    sondeLedRef.current = sondeLed;
-
-    scene.add(sondeGroup);
-    sondeGroupRef.current = sondeGroup;
-
-    // (D) Inflow Sluice Gate Prop at DATA_POINT_ANCHORS.inflow_1
-    const inflowGroup = new THREE.Group();
-    inflowGroup.position.copy(DATA_POINT_ANCHORS.inflow_1);
-
-    const sluiceBox = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 0.7, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0x154c6e, metalness: 0.6, roughness: 0.4 })
-    );
-    sluiceBox.castShadow = true;
-    sluiceBox.receiveShadow = true;
-    inflowGroup.add(sluiceBox);
-
-    const inflowPin = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8),
-      new THREE.MeshStandardMaterial({ color: 0x4fbfa0, metalness: 0.8 })
-    );
-    inflowPin.position.set(0, 0.7, 0);
-    inflowGroup.add(inflowPin);
-
-    scene.add(inflowGroup);
 
     // ==========================================
     // 6. MAIN ANIMATION & RENDERING LOOP
@@ -548,7 +514,13 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
 
     const animate = () => {
       animationFrameIdRef.current = requestAnimationFrame(animate);
+      const delta = clockRef.current.getDelta();
       const elapsedTime = clockRef.current.getElapsedTime();
+
+      // Update GLTF Embedded Fish Swimming Animations
+      if (animationMixerRef.current) {
+        animationMixerRef.current.update(delta);
+      }
 
       // Handle Smooth Eased Camera Preset Transitions
       if (cameraTweenRef.current?.active) {
@@ -572,12 +544,6 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
         waterNormalTextureRef.current.offset.y = (elapsedTime * 0.025) % 1;
       }
 
-      // Sonde Buoy Gentle Water Surface Bobbing
-      if (sondeGroupRef.current) {
-        sondeGroupRef.current.position.y = DATA_POINT_ANCHORS.sonde_buoy_1.y + Math.sin(elapsedTime * 2.0) * 0.025;
-        sondeGroupRef.current.rotation.z = Math.sin(elapsedTime * 1.5) * 0.02;
-      }
-
       // Animate Aerator Paddlewheel Rotation
       if (aeratorPaddleRef.current && aerationHours > 0) {
         aeratorPaddleRef.current.rotation.x += 0.09 * (aerationHours / 8);
@@ -594,13 +560,13 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
             posArr[i * 3] += particleVelocities[i * 3];
             posArr[i * 3 + 1] += particleVelocities[i * 3 + 1];
             posArr[i * 3 + 2] += particleVelocities[i * 3 + 2];
-            particleVelocities[i * 3 + 1] -= 0.0018; // Soft gravity
+            particleVelocities[i * 3 + 1] -= 0.0016; // Soft gravity
 
-            if (posArr[i * 3 + 1] <= 0.06) {
-              posArr[i * 3] = DATA_POINT_ANCHORS.aerator_1.x + (Math.random() - 0.5) * 1.6;
-              posArr[i * 3 + 1] = 0.1 + Math.random() * 0.3;
-              posArr[i * 3 + 2] = DATA_POINT_ANCHORS.aerator_1.z + 0.6 + Math.random() * 0.4;
-              particleVelocities[i * 3 + 1] = 0.035 + Math.random() * 0.045;
+            if (posArr[i * 3 + 1] <= 0.02) {
+              posArr[i * 3] = DATA_POINT_ANCHORS.aerator.x + (Math.random() - 0.5) * 1.2;
+              posArr[i * 3 + 1] = 0.05 + Math.random() * 0.25;
+              posArr[i * 3 + 2] = DATA_POINT_ANCHORS.aerator.z + 0.4 + Math.random() * 0.4;
+              particleVelocities[i * 3 + 1] = 0.025 + Math.random() * 0.035;
             }
           }
           posAttr.needsUpdate = true;
@@ -609,15 +575,24 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
         }
       }
 
-      // Pulsate Sonde LED
-      if (sondeLedRef.current) {
-        sondeLedRef.current.intensity = 1.2 + Math.sin(elapsedTime * 3.8) * 0.8;
-      }
+      // Dynamic LED Pulsing
+      statusLedAlarmsRef.current.forEach((ledMesh) => {
+        const mat = ledMesh.material as THREE.MeshStandardMaterial;
+        if (mat && 'emissiveIntensity' in mat) {
+          if (ledMesh.name.toLowerCase().includes('pwr')) {
+            mat.emissiveIntensity = 2.0 + Math.sin(elapsedTime * 3) * 0.5;
+          } else if (ledMesh.name.toLowerCase().includes('cloud')) {
+            mat.emissiveIntensity = 2.5 + Math.sin(elapsedTime * 4.5) * 1.2;
+          } else if (ledMesh.name.toLowerCase().includes('alarm')) {
+            mat.emissiveIntensity = simulatedDO < 3.5 ? 4.0 + Math.sin(elapsedTime * 8) * 3.0 : 0.2;
+          }
+        }
+      });
 
       // Project 3D Anchors to 2D Screen Space for Interactive Leader-Line Labels
       if (canvasContainerRef.current) {
         const rect = canvasContainerRef.current.getBoundingClientRect();
-        const getScreenPos = (worldPos: THREE.Vector3, yOffset = 1.2) => {
+        const getScreenPos = (worldPos: THREE.Vector3, yOffset = 0.8) => {
           tempVec.copy(worldPos);
           tempVec.y += yOffset; // Offset above anchor
           tempVec.project(camera);
@@ -630,9 +605,10 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
         };
 
         setAnchorScreenPositions({
-          aerator: getScreenPos(DATA_POINT_ANCHORS.aerator_1, 1.1),
-          sonde: getScreenPos(DATA_POINT_ANCHORS.sonde_buoy_1, 1.4),
-          inflow: getScreenPos(DATA_POINT_ANCHORS.inflow_1, 0.9),
+          probes: getScreenPos(DATA_POINT_ANCHORS.probes, 0.75),
+          solar_mast: getScreenPos(DATA_POINT_ANCHORS.solar_mast, 0.95),
+          aerator: getScreenPos(DATA_POINT_ANCHORS.aerator, 0.75),
+          fish_school: getScreenPos(DATA_POINT_ANCHORS.fish_school, 0.55),
         });
       }
 
@@ -663,21 +639,23 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
     };
   }, [isDark, aerationHours, simulatedDO, simulatedTAN]);
 
-  // Recalculated Camera Presets Against Real pond.fbx Geometry
-  const handlePresetSelect = (preset: 'aerial' | 'surface' | 'aerator' | 'sonde') => {
+  // Recalculated Camera Presets Against pond1.glb Geometry
+  const handlePresetSelect = (preset: 'aerial' | 'surface' | 'probes' | 'solar' | 'aerator') => {
     if (preset === 'aerial') {
-      animateCameraTo(new THREE.Vector3(0, 22, 0.1), new THREE.Vector3(0, 0, 0), 450, 'aerial');
+      animateCameraTo(new THREE.Vector3(0, 13, 0.1), new THREE.Vector3(0, -0.2, 0.8), 450, 'aerial');
     } else if (preset === 'surface') {
-      animateCameraTo(new THREE.Vector3(15, 6.5, 15), new THREE.Vector3(0, 0.3, 0), 450, 'surface');
+      animateCameraTo(new THREE.Vector3(8.0, 4.5, 8.0), new THREE.Vector3(0, -0.2, 0.8), 450, 'surface');
+    } else if (preset === 'probes') {
+      animateCameraTo(new THREE.Vector3(0.8, 0.15, 3.2), DATA_POINT_ANCHORS.probes, 450, 'probes');
+    } else if (preset === 'solar') {
+      animateCameraTo(new THREE.Vector3(0.9, 1.6, 5.2), DATA_POINT_ANCHORS.solar_mast, 450, 'solar');
     } else if (preset === 'aerator') {
-      animateCameraTo(new THREE.Vector3(6.8, 2.5, -0.8), DATA_POINT_ANCHORS.aerator_1, 450, 'aerator');
-    } else if (preset === 'sonde') {
-      animateCameraTo(new THREE.Vector3(2.8, 2.0, 2.8), DATA_POINT_ANCHORS.sonde_buoy_1, 450, 'sonde');
+      animateCameraTo(new THREE.Vector3(4.2, 1.4, -0.6), DATA_POINT_ANCHORS.aerator, 450, 'aerator');
     }
   };
 
   const handleResetCamera = () => {
-    animateCameraTo(new THREE.Vector3(16, 9.5, 17), new THREE.Vector3(0, 0.3, 0), 400, 'surface');
+    animateCameraTo(new THREE.Vector3(8.0, 4.5, 8.0), new THREE.Vector3(0, -0.2, 0.8), 400, 'surface');
   };
 
   const toggleAutoRotate = () => {
@@ -721,7 +699,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
           <div className="w-10 h-10 border-3 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
           <div className="text-center">
             <p className="text-xs font-bold text-ocean-900 dark:text-teal-300 tracking-wider">
-              RENDERING DIGITAL TWIN (pond.fbx)
+              RENDERING DIGITAL TWIN (pond1.glb)
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">{loadProgress}% complete</p>
           </div>
@@ -729,7 +707,67 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
       )}
 
       {/* INTERACTIVE 3D DATA-POINT LEADER-LINE ANCHOR LABELS */}
-      {/* 1. Aerator Anchor Label */}
+      {/* 1. Submerged Probes Anchor Label */}
+      {anchorScreenPositions.probes?.visible && (
+        <div
+          style={{
+            left: `${anchorScreenPositions.probes.x}px`,
+            top: `${anchorScreenPositions.probes.y}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+          className={`absolute z-20 pointer-events-auto transition-all duration-200 cursor-pointer ${
+            activePreset === 'probes' ? 'scale-105 opacity-100' : 'opacity-85 hover:opacity-100'
+          }`}
+          onClick={() => handlePresetSelect('probes')}
+        >
+          <div className="flex flex-col items-center">
+            <div
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold shadow-md border backdrop-blur-md flex items-center gap-1.5 transition-all ${
+                activePreset === 'probes'
+                  ? 'bg-mint-700 text-white border-mint-400 ring-2 ring-mint-500/30'
+                  : 'bg-white/95 dark:bg-slate-900/95 text-ocean-900 dark:text-slate-200 border-mint-200 dark:border-mint-800'
+              }`}
+            >
+              <Activity className="w-3 h-3 text-mint-500" />
+              <span>Multi-Sensor Array: {simulatedDO.toFixed(2)} mg/L DO | pH 7.8</span>
+            </div>
+            <div className="w-[1.5px] h-3 bg-mint-500/80 mt-0.5 shadow-xs" />
+            <div className="w-1.5 h-1.5 rounded-full bg-mint-600 ring-2 ring-mint-400/50 shadow-xs" />
+          </div>
+        </div>
+      )}
+
+      {/* 2. Solar Edge Mast Anchor Label */}
+      {anchorScreenPositions.solar_mast?.visible && (
+        <div
+          style={{
+            left: `${anchorScreenPositions.solar_mast.x}px`,
+            top: `${anchorScreenPositions.solar_mast.y}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+          className={`absolute z-20 pointer-events-auto transition-all duration-200 cursor-pointer ${
+            activePreset === 'solar' ? 'scale-105 opacity-100' : 'opacity-85 hover:opacity-100'
+          }`}
+          onClick={() => handlePresetSelect('solar')}
+        >
+          <div className="flex flex-col items-center">
+            <div
+              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold shadow-md border backdrop-blur-md flex items-center gap-1.5 transition-all ${
+                activePreset === 'solar'
+                  ? 'bg-amber-600 text-white border-amber-400 ring-2 ring-amber-500/30'
+                  : 'bg-white/95 dark:bg-slate-900/95 text-ocean-900 dark:text-slate-200 border-amber-200 dark:border-amber-800'
+              }`}
+            >
+              <Sun className="w-3 h-3 text-amber-500" />
+              <span>Solar Telemetry Mast: LoRaWAN Link 99%</span>
+            </div>
+            <div className="w-[1.5px] h-3 bg-amber-500/80 mt-0.5 shadow-xs" />
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-600 ring-2 ring-amber-400/50 shadow-xs" />
+          </div>
+        </div>
+      )}
+
+      {/* 3. Aerator Anchor Label */}
       {anchorScreenPositions.aerator?.visible && (
         <div
           style={{
@@ -759,55 +797,23 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
         </div>
       )}
 
-      {/* 2. Sonde Buoy Anchor Label */}
-      {anchorScreenPositions.sonde?.visible && (
+      {/* 4. Fish Biomass Schooling Anchor Label */}
+      {anchorScreenPositions.fish_school?.visible && (
         <div
           style={{
-            left: `${anchorScreenPositions.sonde.x}px`,
-            top: `${anchorScreenPositions.sonde.y}px`,
+            left: `${anchorScreenPositions.fish_school.x}px`,
+            top: `${anchorScreenPositions.fish_school.y}px`,
             transform: 'translate(-50%, -100%)',
           }}
-          className={`absolute z-20 pointer-events-auto transition-all duration-200 cursor-pointer ${
-            activePreset === 'sonde' ? 'scale-105 opacity-100' : 'opacity-85 hover:opacity-100'
-          }`}
-          onClick={() => handlePresetSelect('sonde')}
-        >
-          <div className="flex flex-col items-center">
-            <div
-              className={`px-2 py-1 rounded-lg text-[10px] font-mono font-bold shadow-md border backdrop-blur-md flex items-center gap-1.5 transition-all ${
-                activePreset === 'sonde'
-                  ? 'bg-mint-700 text-white border-mint-400 ring-2 ring-mint-500/30'
-                  : 'bg-white/95 dark:bg-slate-900/95 text-ocean-900 dark:text-slate-200 border-mint-200 dark:border-mint-800'
-              }`}
-            >
-              <Activity className="w-3 h-3 text-mint-600" />
-              <span>
-                Optical Sonde: {simulatedDO.toFixed(2)} mg/L DO
-              </span>
-            </div>
-            <div className="w-[1.5px] h-3 bg-mint-500/80 mt-0.5 shadow-xs" />
-            <div className="w-1.5 h-1.5 rounded-full bg-mint-600 ring-2 ring-mint-400/50 shadow-xs" />
-          </div>
-        </div>
-      )}
-
-      {/* 3. Inflow Feeder Sluice Label */}
-      {anchorScreenPositions.inflow?.visible && (
-        <div
-          style={{
-            left: `${anchorScreenPositions.inflow.x}px`,
-            top: `${anchorScreenPositions.inflow.y}px`,
-            transform: 'translate(-50%, -100%)',
-          }}
-          className="absolute z-20 pointer-events-auto opacity-75 hover:opacity-100 transition-opacity"
+          className="absolute z-20 pointer-events-auto opacity-80 hover:opacity-100 transition-opacity"
         >
           <div className="flex flex-col items-center">
             <div className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-white/90 dark:bg-slate-900/90 text-ocean-900 dark:text-slate-200 border border-surface-border shadow-xs flex items-center gap-1">
-              <Droplets className="w-2.5 h-2.5 text-ocean-600" />
-              <span>Inflow Canal: {waterExchangePct}%/day</span>
+              <Fish className="w-2.5 h-2.5 text-teal-500" />
+              <span>Biomass: Active Schooling</span>
             </div>
-            <div className="w-[1px] h-2.5 bg-slate-400/60 mt-0.5" />
-            <div className="w-1 h-1 rounded-full bg-ocean-600" />
+            <div className="w-[1px] h-2 bg-teal-400/60 mt-0.5" />
+            <div className="w-1 h-1 rounded-full bg-teal-500" />
           </div>
         </div>
       )}
@@ -823,7 +829,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
             </span>
           </div>
           <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-            pond.fbx
+            pond1.glb
           </span>
         </div>
 
@@ -834,8 +840,10 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
             <span className="font-bold text-teal-700 dark:text-teal-400">{pondId}</span>
           </div>
           <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
-            <span>Hydrodynamics:</span>
-            <span className="font-semibold text-ocean-900 dark:text-slate-200">Navier-Stokes</span>
+            <span>Telemetry Status:</span>
+            <span className="font-semibold text-ocean-900 dark:text-slate-200 flex items-center gap-1">
+              <Radio className="w-3 h-3 text-mint-500 animate-pulse" /> Submerged & Live
+            </span>
           </div>
         </div>
 
@@ -857,7 +865,7 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
 
           <div className="flex justify-between items-center p-1 rounded-md bg-surface-cardSubtle dark:bg-surface-darkCardAlt">
             <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-              <Wind className="w-3.5 h-3.5 text-teal-600" /> Night Aeration:
+              <Wind className="w-3.5 h-3.5 text-teal-600" /> Aeration:
             </span>
             <span className="font-bold text-ocean-900 dark:text-teal-300">
               {aerationHours > 0 ? `${aerationHours}h Active` : 'Off'}
@@ -896,6 +904,26 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
           Surface Bank
         </button>
         <button
+          onClick={() => handlePresetSelect('probes')}
+          className={`px-2.5 py-1 text-xs font-mono rounded-lg transition-all ${
+            activePreset === 'probes'
+              ? 'bg-teal-600 text-white font-bold shadow-sm'
+              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Sensor Probes
+        </button>
+        <button
+          onClick={() => handlePresetSelect('solar')}
+          className={`px-2.5 py-1 text-xs font-mono rounded-lg transition-all ${
+            activePreset === 'solar'
+              ? 'bg-teal-600 text-white font-bold shadow-sm'
+              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          Solar Mast
+        </button>
+        <button
           onClick={() => handlePresetSelect('aerator')}
           className={`px-2.5 py-1 text-xs font-mono rounded-lg transition-all ${
             activePreset === 'aerator'
@@ -904,16 +932,6 @@ export const PondDigitalTwin3D: React.FC<PondDigitalTwin3DProps> = ({
           }`}
         >
           Aerator Focus
-        </button>
-        <button
-          onClick={() => handlePresetSelect('sonde')}
-          className={`px-2.5 py-1 text-xs font-mono rounded-lg transition-all ${
-            activePreset === 'sonde'
-              ? 'bg-teal-600 text-white font-bold shadow-sm'
-              : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-        >
-          Sonde Buoy
         </button>
       </div>
 

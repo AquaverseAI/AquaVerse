@@ -252,31 +252,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               // ── White base ────────────────────────────────────────────────
               Positioned.fill(child: Container(color: Colors.white)),
 
-              // ── Gradient background fill (appears as expand increases) ────
-              // Top-to-bottom: deep navy → mid blue → teal → sea green → bright mint
-              // Deliberately steep stops so the colour shift is clearly visible
-              // rather than blending into a flat mid-tone.
+              // ── Background Image + Tint Fill (appears as expand increases) ────
               Positioned.fill(
                 child: Opacity(
                   opacity: bgOpacity,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFF091F2E), // near-black navy — very top
-                          Color(0xFF0D3D5C), // dark navy
-                          AppColors.deepNavy,  // #123F68  — upper third
-                          AppColors.midBlue,   // #08749A  — mid
-                          Color(0xFF1E9B8E),   // teal bridge
-                          AppColors.seaGreen,  // #35A58A  — lower mid
-                          AppColors.brightMint, // #55C4C8 — lower
-                          Color(0xFF7DDACB),   // pale aqua — very bottom
-                        ],
-                        stops: [0.0, 0.08, 0.22, 0.42, 0.58, 0.72, 0.88, 1.0],
+                  child: Stack(
+                    children: [
+                      // Aquaculture Get Started Background Image
+                      Positioned.fill(
+                        child: Image.asset(
+                          'assets/images/splash_background.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                        ),
                       ),
-                    ),
+                      // Gradient overlay to enhance text readability
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                const Color(0xFF091F2E).withValues(alpha: 0.45),
+                                AppColors.deepNavy.withValues(alpha: 0.15),
+                                AppColors.deepNavy.withValues(alpha: 0.55),
+                              ],
+                              stops: const [0.0, 0.45, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

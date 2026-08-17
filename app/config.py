@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_secret_key: str = Field(..., min_length=32)
     internal_api_token: str = Field(..., min_length=32)
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://10.20.18.183:5173"]
+    # Extra LAN/staging origins (e.g. a dev machine's LAN IP) belong in the
+    # CORS_ORIGINS env var, not hardcoded here — see .env.example.
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     # -----------------------------------------------------------------------
     # Database
@@ -104,6 +106,11 @@ class Settings(BaseSettings):
     model_artifacts_dir: str = "./ml/artifacts"
     default_model_version: str = "latest"
 
+    # M3 production/feed decision engine (LightGBM, in-process — see
+    # app/ml_inference/numeric/m3_engine.py). Directory containing
+    # m3_decision_engine.py, its sim/ package, and models/*.txt boosters.
+    m3_engine_dir: str = "./ml/serving/m3"
+
     # -----------------------------------------------------------------------
     # MLflow
     # -----------------------------------------------------------------------
@@ -135,6 +142,14 @@ class Settings(BaseSettings):
     # Geo
     # -----------------------------------------------------------------------
     default_srid: int = 4326
+
+    # -----------------------------------------------------------------------
+    # Digital Twin
+    # -----------------------------------------------------------------------
+    # External 3D visualizer URL shown as a button on GET /v1/twin/{id}/view.
+    # Empty by default — the button is omitted entirely when unset, rather
+    # than rendering a link to a fixed dev-machine LAN IP. See .env.example.
+    twin_visualizer_url: str = ""
 
     @property
     def is_production(self) -> bool:

@@ -540,6 +540,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                     if (_animState != OtpAnimState.success)
                       Container(
                         width: double.infinity,
+                        constraints: const BoxConstraints(maxWidth: 360),
                         height: 54,
                         decoration: BoxDecoration(
                           gradient: (state.isOtpValid && _animState != OtpAnimState.verifying)

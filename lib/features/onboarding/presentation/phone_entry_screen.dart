@@ -7,7 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
-/// Phone Entry Screen with vertically centered layout and enlarged input box.
+/// Phone Entry Screen with elevated, perfectly styled input container layout.
 class PhoneEntryScreen extends ConsumerStatefulWidget {
   const PhoneEntryScreen({super.key});
 
@@ -100,7 +100,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Vertical centering spacer
+                        // Vertical centering top spacer
                         const Spacer(flex: 2),
 
                         // Centered Title & Subtitle
@@ -125,13 +125,12 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 36),
 
-                        // Centered Form: Enlarged Underline-style Mobile Input
+                        // Centered Form: Elevated, Perfectly Fitted Input Card
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            // Centered Field Label
                             const Text(
                               'MOBILE NUMBER',
                               textAlign: TextAlign.center,
@@ -142,42 +141,59 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                 color: AppColors.textSecondary,
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 14),
 
-                            // Enlarged Underline Input Container
+                            // Styled Elevated Input Container
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.only(bottom: 12),
+                              height: 64,
+                              constraints: const BoxConstraints(maxWidth: 360),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
                               decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: currentBorderColor,
-                                    width: _isFocused || state.isMobileValid || state.errorMessage != null ? 2.5 : 1.5,
-                                  ),
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: currentBorderColor,
+                                  width: _isFocused || state.isMobileValid || state.errorMessage != null ? 2.0 : 1.2,
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _isFocused || state.isMobileValid
+                                        ? focusBorderColor.withValues(alpha: 0.18)
+                                        : Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  // Fixed +91 Country Prefix (Enlarged)
-                                  const Text(
-                                    '+91',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.textPrimary,
+                                  // Fixed +91 Badge Container
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE6F4F1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '+91',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: focusBorderColor,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 14),
                                   Container(
-                                    width: 1.5,
+                                    width: 1.2,
                                     height: 24,
                                     color: currentBorderColor,
                                   ),
                                   const SizedBox(width: 14),
 
-                                  // 10-Digit Mobile Text Field (Enlarged)
+                                  // 10-Digit Mobile Text Field
                                   Expanded(
                                     child: TextField(
                                       controller: _phoneController,
@@ -188,7 +204,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                         LengthLimitingTextInputFormatter(10),
                                       ],
                                       style: const TextStyle(
-                                        fontSize: 22,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 2.0,
                                         color: AppColors.textPrimary,
@@ -196,7 +212,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                                       decoration: const InputDecoration(
                                         hintText: 'Enter mobile number',
                                         hintStyle: TextStyle(
-                                          fontSize: 18,
+                                          fontSize: 16,
                                           fontWeight: FontWeight.w400,
                                           letterSpacing: 0.2,
                                           color: AppColors.textMuted,
@@ -241,6 +257,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                         // Primary Pill Gradient CTA Button ("Send OTP")
                         Container(
                           width: double.infinity,
+                          constraints: const BoxConstraints(maxWidth: 360),
                           height: 54,
                           decoration: BoxDecoration(
                             gradient: (state.isMobileValid && !state.isLoading)

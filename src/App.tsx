@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar, ScreenId } from './components/layout/Navbar';
+import { Sidebar, ScreenId } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
 import { DistrictMap } from './pages/DistrictMap';
 import { TriageWorklist } from './pages/TriageWorklist';
@@ -23,8 +23,8 @@ export function App() {
     token: 'mock-jwt-token-12345',
   });
   const [activeScreen, setActiveScreen] = useState<ScreenId>('map');
-  const [selectedDistrict, setSelectedDistrict] = useState<string>('All');
-  const [selectedPondId, setSelectedPondId] = useState<string>('NGP-004');
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('Coimbatore');
+  const [selectedPondId, setSelectedPondId] = useState<string>('CBE-003');
 
   // Toggle dark/light class on html element
   useEffect(() => {
@@ -58,9 +58,9 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans flex flex-col antialiased transition-colors duration-200">
-      {/* Top Navbar Header */}
-      <Navbar
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 dark:bg-[#0A0E13] dark:text-slate-100 font-sans flex flex-col lg:flex-row antialiased transition-colors duration-200 selection:bg-cyan-500 selection:text-white">
+      {/* Left Sidebar Navigation */}
+      <Sidebar
         activeScreen={activeScreen}
         onSelectScreen={setActiveScreen}
         selectedDistrict={selectedDistrict}
@@ -71,43 +71,45 @@ export function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto p-4">
-        {activeScreen === 'map' && (
-          <DistrictMap
-            selectedDistrict={selectedDistrict}
-            onSelectPondForDeepDive={handleSelectPondForDeepDive}
-            theme={theme}
-          />
-        )}
+      {/* Main Content Area (offset by left sidebar on desktop) */}
+      <div className="flex-1 flex flex-col lg:pl-64 min-w-0 transition-all duration-200">
+        <main className="flex-1 w-full max-w-[1700px] mx-auto p-3 sm:p-4 md:p-5">
+          {activeScreen === 'map' && (
+            <DistrictMap
+              selectedDistrict={selectedDistrict}
+              onSelectPondForDeepDive={handleSelectPondForDeepDive}
+              theme={theme}
+            />
+          )}
 
-        {activeScreen === 'worklist' && (
-          <TriageWorklist
-            onSelectPondForDeepDive={handleSelectPondForDeepDive}
-            onOpenBroadcaster={handleOpenBroadcaster}
-            theme={theme}
-          />
-        )}
+          {activeScreen === 'worklist' && (
+            <TriageWorklist
+              onSelectPondForDeepDive={handleSelectPondForDeepDive}
+              onOpenBroadcaster={handleOpenBroadcaster}
+              theme={theme}
+            />
+          )}
 
-        {activeScreen === 'deepdive' && (
-          <PondDeepDive pondId={selectedPondId} theme={theme} />
-        )}
+          {activeScreen === 'deepdive' && (
+            <PondDeepDive pondId={selectedPondId} theme={theme} />
+          )}
 
-        {activeScreen === 'modelops' && <ModelOperations theme={theme} />}
+          {activeScreen === 'modelops' && <ModelOperations theme={theme} />}
 
-        {activeScreen === 'broadcaster' && (
-          <AdvisoryBroadcaster initialPondId={selectedPondId} theme={theme} />
-        )}
+          {activeScreen === 'broadcaster' && (
+            <AdvisoryBroadcaster initialPondId={selectedPondId} theme={theme} />
+          )}
 
-        {activeScreen === 'dataquality' && <DataQuality theme={theme} />}
+          {activeScreen === 'dataquality' && <DataQuality theme={theme} />}
 
-        {activeScreen === 'analytics' && <AnalyticsReports theme={theme} />}
-      </main>
+          {activeScreen === 'analytics' && <AnalyticsReports theme={theme} />}
+        </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-900 py-3 text-center text-xs font-mono text-slate-500 bg-white dark:bg-slate-950">
-        AquaVerse AI — Workstream 1: Analyst Dashboard &amp; M1 Water-Chemistry Model | Confidential State Deployment (Tamil Nadu)
-      </footer>
+        {/* Footer */}
+        <footer className="border-t border-slate-200 dark:border-white/[0.06] py-3 text-center text-xs font-mono text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-[#0A0E13]/80 backdrop-blur-md">
+          AquaVerse AI &bull; State Aquaculture Observability &amp; M1 Reasoning Engine &bull; Confidential State Deployment (Tamil Nadu)
+        </footer>
+      </div>
     </div>
   );
 }

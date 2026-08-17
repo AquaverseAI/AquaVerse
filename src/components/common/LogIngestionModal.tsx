@@ -16,7 +16,7 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
   const [tanVal, setTanVal] = useState('0.15');
   const [salinityVal, setSalinityVal] = useState('12.0');
   const [source, setSource] = useState<'manual' | 'iot_sensor' | 'drone_flyover'>('manual');
-  const [notes, setNotes] = useState('Morning routine water sample test');
+  const [notes, setNotes] = useState('Routine morning water sample titration');
   const [isLoading, setIsLoading] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
 
@@ -45,7 +45,7 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
       setTimeout(() => {
         onClose();
         setResultMsg('');
-      }, 1500);
+      }, 1400);
     } catch (err: any) {
       setResultMsg(`Failed to ingest log: ${err.message}`);
     } finally {
@@ -54,30 +54,30 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-ocean-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="instrument-card rounded-2xl max-w-lg w-full p-6 shadow-card-elevated space-y-5 animate-fade-in">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="flex items-center justify-between border-b border-surface-border dark:border-surface-darkBorder pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold">
+            <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold">
               <Database className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                Water-Quality Log Ingestion (/v1/logs)
+              <h3 className="font-bold text-ocean-900 dark:text-slate-100 text-sm font-mono">
+                Water-Quality Telemetry Ingestion
               </h3>
-              <p className="text-xs text-slate-500 font-mono">Pond ID: {pondId} • TimescaleDB Telemetry Ingest</p>
+              <p className="text-xs text-slate-500 font-mono">Pond: {pondId} &bull; TimescaleDB Ingest</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-ocean-900 dark:hover:text-slate-200">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Status Message */}
         {resultMsg && (
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-mono flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <div className="p-3 bg-mint-50 border border-mint-200 text-mint-800 rounded-lg text-xs font-mono flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-mint-600 shrink-0" />
             <span>{resultMsg}</span>
           </div>
         )}
@@ -86,57 +86,57 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-mono">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Dissolved Oxygen (mg/L)</label>
+              <label className="text-slate-600 dark:text-slate-300">Dissolved Oxygen (mg/L)</label>
               <input
                 type="number"
                 step="0.1"
                 value={doVal}
                 onChange={(e) => setDoVal(e.target.value)}
                 required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono"
+                className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
               />
             </div>
             <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">pH Level</label>
+              <label className="text-slate-600 dark:text-slate-300">pH Level</label>
               <input
                 type="number"
                 step="0.1"
                 value={phVal}
                 onChange={(e) => setPhVal(e.target.value)}
                 required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono"
+                className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
               />
             </div>
             <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">Temperature (°C)</label>
+              <label className="text-slate-600 dark:text-slate-300">Temperature (°C)</label>
               <input
                 type="number"
                 step="0.1"
                 value={tempVal}
                 onChange={(e) => setTempVal(e.target.value)}
                 required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono"
+                className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
               />
             </div>
             <div className="space-y-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">TAN Ammonia (mg/L)</label>
+              <label className="text-slate-600 dark:text-slate-300">TAN Ammonia (mg/L)</label>
               <input
                 type="number"
                 step="0.01"
                 value={tanVal}
                 onChange={(e) => setTanVal(e.target.value)}
                 required
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono"
+                className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="font-semibold text-slate-700 dark:text-slate-300">Telemetry Data Source</label>
+            <label className="text-slate-600 dark:text-slate-300">Telemetry Data Source</label>
             <select
               value={source}
               onChange={(e) => setSource(e.target.value as any)}
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono"
+              className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none"
             >
               <option value="manual">Manual Entry (Handheld Probe / Titration)</option>
               <option value="iot_sensor">IoT Solar Buoy Telemetry</option>
@@ -145,19 +145,19 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
           </div>
 
           <div className="space-y-1">
-            <label className="font-semibold text-slate-700 dark:text-slate-300">Field Notes / Observations</label>
+            <label className="text-slate-600 dark:text-slate-300">Field Notes / Observations</label>
             <input
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2 font-mono"
+              className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
             />
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 font-sans"
+            className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 font-mono active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Ingest Telemetry Log to Database</span>

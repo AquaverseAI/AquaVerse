@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ArrowRight, Sparkles, Sun, Moon } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Sparkles, Sun, Moon, ShieldCheck, Phone } from 'lucide-react';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { username: string; role: string; token: string }) => void;
@@ -98,57 +98,59 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex items-center justify-center p-4 relative overflow-hidden font-sans transition-colors duration-200">
-      {/* Background Animated Ocean Blue Glow Gradients */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-400/20 dark:bg-cyan-600/20 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-400/20 dark:bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen bg-surface-base text-ocean-900 dark:bg-surface-darkBase dark:text-slate-100 flex items-center justify-center p-4 relative overflow-hidden font-sans transition-colors duration-200">
+      {/* Background Subtle Gradient Spheres */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-400/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-ocean-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
-      {/* Theme Toggle Button in Corner */}
+      {/* Theme Toggle Button */}
       {onToggleTheme && (
         <button
           onClick={onToggleTheme}
-          className="absolute top-6 right-6 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-md text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all"
+          className="absolute top-6 right-6 p-2 instrument-card rounded-lg text-ocean-900 dark:text-slate-300 transition-all"
         >
-          {theme === 'light' ? <Moon className="w-5 h-5 text-blue-600" /> : <Sun className="w-5 h-5 text-amber-400" />}
+          {theme === 'light' ? <Moon className="w-4 h-4 text-ocean-900" /> : <Sun className="w-4 h-4 text-amber-400" />}
         </button>
       )}
 
-      {/* Main Glass Card Container */}
-      <div className="w-full max-w-md bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl relative z-10 space-y-6">
-        {/* Header Logo & Branding */}
+      {/* Main Container */}
+      <div className="w-full max-w-md instrument-card p-8 rounded-2xl shadow-card-elevated relative z-10 space-y-6 animate-fade-in">
+        {/* Header Logo */}
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center font-bold text-white shadow-lg glow-blue font-mono mx-auto text-2xl">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-600 to-ocean-900 flex items-center justify-center font-bold text-white shadow-md font-mono mx-auto text-lg">
             AV
           </div>
-          <div className="flex items-center justify-center gap-2 pt-2">
-            <h1 className="font-bold text-2xl text-blue-950 dark:text-slate-100 tracking-tight">AquaVerse AI</h1>
-            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-cyan-950 dark:text-cyan-400 dark:border-cyan-800 font-semibold">
-              Keycloak OAuth2
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <h1 className="font-bold text-xl text-ocean-900 dark:text-slate-100 tracking-tight font-mono">
+              AquaVerse <span className="text-teal-600 font-extrabold">AI</span>
+            </h1>
+            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-semibold">
+              State Portal
             </span>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Analyst &amp; Extension Officer Secure Portal (PRD-AV-01)
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+            Analyst &amp; Reasoner Secure Interface
           </p>
         </div>
 
-        {/* Auth Mode Toggle Tabs */}
-        <div className="flex rounded-xl bg-slate-100 dark:bg-slate-950 p-1 border border-slate-200 dark:border-slate-800 text-xs font-semibold">
+        {/* Auth Mode Toggle */}
+        <div className="flex rounded-lg bg-surface-cardSubtle dark:bg-surface-darkCardAlt p-1 border border-surface-border dark:border-surface-darkBorder text-xs font-mono font-semibold">
           <button
             onClick={() => setAuthMode('keycloak')}
-            className={`flex-1 py-2 rounded-lg transition-all ${
+            className={`flex-1 py-1.5 rounded transition-all ${
               authMode === 'keycloak'
-                ? 'bg-blue-600 text-white shadow-sm font-bold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-ocean-900 dark:hover:text-slate-200'
             }`}
           >
-            Keycloak RBAC (Staff)
+            Keycloak OAuth2
           </button>
           <button
             onClick={() => setAuthMode('otp')}
-            className={`flex-1 py-2 rounded-lg transition-all ${
+            className={`flex-1 py-1.5 rounded transition-all ${
               authMode === 'otp'
-                ? 'bg-blue-600 text-white shadow-sm font-bold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-ocean-900 dark:hover:text-slate-200'
             }`}
           >
             Farmer Mobile OTP
@@ -157,31 +159,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
 
         {/* Error Callout */}
         {errorMsg && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/80 rounded-lg text-xs text-red-700 dark:text-red-300 font-mono text-center">
+          <div className="p-3 bg-risk-criticalBg border border-risk-criticalBorder rounded-lg text-xs text-risk-critical font-mono text-center">
             {errorMsg}
           </div>
         )}
 
         {authMode === 'otp' ? (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
+          <form onSubmit={handleVerifyOtp} className="space-y-4 font-mono text-xs">
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Mobile Phone Number</label>
+              <label className="text-slate-600 dark:text-slate-300">Mobile Phone Number</label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-xs font-mono"
+                className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2.5 font-mono text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
                 placeholder="+91 98765 43210"
               />
             </div>
             {otpSent ? (
               <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">6-Digit OTP Code</label>
+                <label className="text-slate-600 dark:text-slate-300">6-Digit OTP Code</label>
                 <input
                   type="text"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-xs font-mono tracking-widest text-center font-bold text-blue-600 dark:text-cyan-400 text-base"
+                  className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg p-2.5 font-mono tracking-widest text-center font-bold text-teal-700 dark:text-teal-400 text-base focus:outline-none focus:border-teal-600"
                   placeholder="1 2 3 4 5 6"
                 />
               </div>
@@ -190,102 +192,71 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
                 type="button"
                 onClick={handleRequestOtp}
                 disabled={isLoading}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95"
               >
-                Send Verification OTP Code
+                <span>Send OTP Code</span>
               </button>
             )}
             {otpSent && (
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95"
               >
-                Verify &amp; Login as Farmer <ArrowRight className="w-4 h-4" />
+                <span>Verify OTP &amp; Login</span>
               </button>
             )}
           </form>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 font-mono text-xs">
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Staff Email / Keycloak ID</label>
+              <label className="text-slate-600 dark:text-slate-300">Institutional Username (Email)</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
-                  required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="name@aquaverse.gov.tn"
-                  className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-xs focus:outline-none focus:border-blue-600 font-mono transition-all"
+                  required
+                  className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg pl-9 pr-3 py-2.5 text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
                 />
               </div>
             </div>
 
-          {/* Password */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Keycloak Password</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg pl-9 pr-3 py-2.5 text-xs focus:outline-none focus:border-blue-600 font-mono transition-all"
-              />
+            <div className="space-y-1.5">
+              <label className="text-slate-600 dark:text-slate-300">Keycloak Password</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full bg-surface-cardSubtle dark:bg-surface-darkCardAlt border border-surface-border dark:border-surface-darkBorder rounded-lg pl-9 pr-3 py-2.5 text-ocean-900 dark:text-slate-100 focus:outline-none focus:border-teal-600"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Role Selection */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-mono text-slate-700 dark:text-slate-300 font-semibold">Role-Scoped Realm</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as any)}
-              className="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 text-xs focus:outline-none focus:border-blue-600 font-mono font-medium"
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={handleFillDemo}
+                className="text-[11px] text-teal-700 dark:text-teal-400 hover:underline"
+              >
+                Fill Demo Credentials
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-2.5 bg-ocean-900 hover:bg-ocean-800 text-white font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 active:scale-95"
             >
-              <option value="analyst">Analyst (Fleet Manager &amp; Reasoner Lead)</option>
-              <option value="extension_officer">Extension Officer (Field Operations)</option>
-              <option value="department_admin">Department Official (State Director)</option>
-            </select>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2 font-mono disabled:opacity-50"
-          >
-            {isLoading ? (
-              <span>Authenticating Keycloak...</span>
-            ) : (
-              <>
-                <span>Sign In to Analyst Dashboard</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </form>
+              <span>Authenticate with Keycloak</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
         )}
-
-        {/* Demo Fill Helper */}
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500 font-mono">Quick Access:</span>
-          <button
-            onClick={handleFillDemo}
-            className="text-[11px] font-mono text-blue-600 dark:text-cyan-400 font-semibold hover:underline flex items-center gap-1"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-cyan-400" />
-            Fill Staff Demo Credentials
-          </button>
-        </div>
-
-        {/* Disclaimer Footer */}
-        <div className="text-[10px] text-center text-slate-400 font-mono">
-          AquaVerse AI — Department of Fisheries, Govt of Tamil Nadu. Authorized staff access only.
-        </div>
       </div>
     </div>
   );

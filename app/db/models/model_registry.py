@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, DateTime, String, Text
@@ -11,8 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    import uuid
-    from datetime import datetime
+    pass
 
 
 class ModelRegistry(Base, UUIDPrimaryKeyMixin, TimestampMixin):

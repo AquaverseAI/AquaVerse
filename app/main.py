@@ -188,6 +188,37 @@ def _mount_routers(app: FastAPI) -> None:
 
 def _add_utility_endpoints(app: FastAPI) -> None:
     from app.config import get_settings as _gs
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/", tags=["Utility"], summary="Landing Page", response_class=HTMLResponse)
+    async def root() -> str:
+        s = _gs()
+        return f"""
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>AquaVerse AI</title>
+                <style>
+                    body {{ font-family: system-ui, -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f3f4f6; color: #1f2937; }}
+                    .container {{ text-align: center; background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); max-width: 500px; }}
+                    h1 {{ color: #0284c7; margin-bottom: 0.5rem; }}
+                    p {{ color: #4b5563; line-height: 1.5; margin-bottom: 1.5rem; }}
+                    .btn {{ display: inline-block; background-color: #0284c7; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 500; transition: background-color 0.2s; margin: 0.25rem; }}
+                    .btn:hover {{ background-color: #0369a1; }}
+                    .version {{ margin-top: 2rem; font-size: 0.875rem; color: #9ca3af; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>🌊 AquaVerse AI</h1>
+                    <p>The predictive analytics backend is running successfully in <strong>{s.app_env}</strong> mode.</p>
+                    <a href="/docs" class="btn">Swagger Docs</a>
+                    <a href="/redoc" class="btn">ReDoc</a>
+                    <div class="version">Version {s.app_version}</div>
+                </div>
+            </body>
+        </html>
+        """
 
     @app.get("/v1/health", tags=["Utility"], summary="Health check")
     async def health() -> dict[str, str]:

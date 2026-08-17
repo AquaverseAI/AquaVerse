@@ -20,10 +20,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Enable Extensions & Schemas
-    op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
-    op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
-    op.execute("CREATE SCHEMA IF NOT EXISTS features")
+    # 1. Enable Extensions & Schemas (PostgreSQL only)
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
+        op.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+        op.execute("CREATE SCHEMA IF NOT EXISTS features")
 
     # 2. Create Ponds Table
     op.create_table(

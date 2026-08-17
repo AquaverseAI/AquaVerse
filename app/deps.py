@@ -8,7 +8,6 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
-from app.db.session import AsyncSessionLocal
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -20,7 +19,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async DB session and close it when the request finishes."""
-    async with AsyncSessionLocal() as session:
+    from app.db.session import get_async_session
+
+    async with get_async_session() as session:
         try:
             yield session
             await session.commit()
@@ -65,20 +66,40 @@ async def _parse_bearer(authorization: str = Header(default="")) -> str:
 async def get_current_user(
     token: Annotated[str, Depends(_parse_bearer)],
 ) -> TokenPayload:
-    """
-    Verify JWT and return parsed claims.
-    Phase 1: stub returns a mock farmer token so endpoints can be exercised.
-    Phase 3: replace stub body with real JWT verification.
-    """
-    # TODO (Phase 3): call core/security.py verify_token(token)
-    from uuid import uuid4
+    """Verify JWT and return parsed claims."""
+    from uuid import UUID
 
-    _ = token  # suppress unused warning
+    from jose import JWTError
+
+    from app.core.security import verify_token
+
+    try:
+        claims = verify_token(token)
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+    sub = str(claims.get("sub", ""))
+    role = str(claims.get("role", "farmer"))
+    district = claims.get("district")
+
+    # pond_ids may be a list of UUID strings
+    from contextlib import suppress
+
+    raw_pond_ids: list[object] = claims.get("pond_ids", [])  # type: ignore[assignment]
+    pond_ids: list[UUID] = []
+    for pid in raw_pond_ids:
+        with suppress(ValueError):
+            pond_ids.append(UUID(str(pid)))
+
     return TokenPayload(
-        sub=str(uuid4()),
-        role="farmer",
-        pond_ids=[uuid4()],
-        district=None,
+        sub=sub,
+        role=role,
+        pond_ids=pond_ids,
+        district=str(district) if district else None,
     )
 
 

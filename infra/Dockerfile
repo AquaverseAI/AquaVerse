@@ -1,15 +1,18 @@
 # =============================================================================
-# AquaVerse AI — Multi-stage Dockerfile
+# AquaVerse AI — Multi-stage Dockerfile with uv
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# Stage 1: builder
+# Stage 1: builder  (uses uv for fast, reproducible installs)
 # ---------------------------------------------------------------------------
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /build
 
-# System dependencies for asyncpg, shapely, reportlab, etc.
+# Install uv — the fast Python package manager
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# System dependencies for asyncpg, shapely, geoalchemy2, reportlab, etc.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -19,41 +22,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency spec first (cache layer)
-COPY pyproject.toml .
-RUN pip install --upgrade pip \
-    && pip install --no-cache-dir build \
-    && pip install --no-cache-dir -e ".[dev]" 2>/dev/null || \
-       pip install --no-cache-dir \
-           fastapi uvicorn[standard] pydantic pydantic-settings \
-           sqlalchemy[asyncio] asyncpg alembic geoalchemy2 \
-           redis arq python-jose passlib python-multipart httpx \
-           structlog prometheus-client sentry-sdk \
-           boto3 lightgbm interpret shap numpy pandas scikit-learn mlflow \
-           langdetect reportlab openpyxl jinja2 \
-           shapely pyproj python-dateutil pytz orjson tenacity anyio \
-           sse-starlette
+# Copy dependency specs first (cache layer — only reinstalls when these change)
+COPY pyproject.toml requirements.txt requirements-dev.txt ./
+
+# Create venv and install production deps via uv
+RUN uv venv /opt/venv --python 3.11
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN uv pip install -r requirements.txt
+
+# Copy app and install it in editable mode (picks up app/ package)
+COPY . .
+RUN uv pip install -e . --no-deps
 
 # ---------------------------------------------------------------------------
-# Stage 2: runtime
+# Stage 2: runtime  (minimal image — no build tools, no uv binary)
 # ---------------------------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim-bookworm AS runtime
 
 # Non-root user for security
 RUN groupadd -r aquaverse && useradd -r -g aquaverse -d /app aquaverse
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Runtime system deps
+# Runtime system deps only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    libgdal32 \
+    gdal-bin \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy venv from builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY app/ ./app/
@@ -66,7 +67,9 @@ RUN chown -R aquaverse:aquaverse /app
 
 USER aquaverse
 
-ENV PYTHONUNBUFFERED=1 \
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 

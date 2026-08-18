@@ -70,6 +70,11 @@ class Log(Base, TimestampMixin):
     nitrate_mgl: Mapped[float | None] = mapped_column(Float)
     alkalinity_mgl: Mapped[float | None] = mapped_column(Float)
     hardness_mgl: Mapped[float | None] = mapped_column(Float)
+    # Ambient (not water-column) readings — populated by pond-side IoT sensor
+    # units via POST /v1/ingest/sensor/{pond_id}. Nullable: manual logs never
+    # set these, sensor logs almost always do.
+    air_temperature_c: Mapped[float | None] = mapped_column(Float)
+    humidity_pct: Mapped[float | None] = mapped_column(Float)
 
     # Metadata
     source: Mapped[str] = mapped_column(

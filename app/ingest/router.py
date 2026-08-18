@@ -1,18 +1,21 @@
-"""Ingest — routers for /v1/logs and /v1/media."""
+"""Ingest — routers for /v1/logs, /v1/media, and /v1/ingest/sensor."""
 
 from __future__ import annotations
 
+import hmac
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from sqlalchemy import and_, or_, select
 
+from app.config import get_settings
 from app.core import rbac
 from app.core.pagination import CursorPage, clamp_limit, decode_keyset_cursor, encode_keyset_cursor
 from app.core.timezones import utcnow
 from app.db.models.crop import Crop
 from app.db.models.log import Log
+from app.db.models.pond import Pond
 from app.deps import CurrentUser, DbSession
 from app.ingest.schemas import (
     LogIn,
@@ -21,9 +24,17 @@ from app.ingest.schemas import (
     MediaOut,
     MediaUploadUrlIn,
     MediaUploadUrlOut,
+    SensorIngestIn,
+    SensorIngestOut,
 )
 
 router = APIRouter(tags=["Ingest"])
+
+# Sentinel `recorded_by` for logs written by an unattended sensor device —
+# there's no human user account to attribute these to. `Log.recorded_by` is
+# a plain UUID column with no FK constraint (see app/db/models/log.py), so
+# this is safe to use without a matching `users` row.
+_SENSOR_DEVICE_USER_ID = UUID("00000000-0000-0000-0000-0000000000fe")
 
 
 # ---------------------------------------------------------------------------
@@ -201,4 +212,82 @@ async def media_commit(
         mime_type="image/jpeg",
         status="committed",
         created_at=now,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sensor ingest (IoT device webhook)
+# ---------------------------------------------------------------------------
+def _check_device_key(x_device_key: str | None) -> None:
+    """Validate the optional per-deployment shared secret.
+
+    `settings.iot_device_key` empty (the default) disables this check
+    entirely — see app/config.py. Once set, the header is required and
+    compared in constant time.
+    """
+    settings = get_settings()
+    if not settings.iot_device_key:
+        return
+    if not x_device_key or not hmac.compare_digest(x_device_key, settings.iot_device_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid X-Device-Key.",
+        )
+
+
+@router.post(
+    "/ingest/sensor/{pond_id}",
+    response_model=SensorIngestOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Push a reading from a pond's IoT sensor unit",
+    description=(
+        "Webhook for pond-side sensor hardware — accepts the device's raw JSON shape "
+        "(`ph`, `air_temperature`, `humidity`, `water_temperature`, `turbidity`) directly, "
+        "no farmer/staff login required. Persisted as a `Log` row with `source=\"sensor\"`, "
+        "timestamped at server receipt time, and immediately visible via "
+        "GET /v1/logs and GET /v1/ponds/{pond_id}/timeseries. "
+        "Optionally gated by a shared `X-Device-Key` header — see app/config.py."
+    ),
+)
+async def ingest_sensor_reading(
+    pond_id: UUID,
+    body: SensorIngestIn,
+    session: DbSession,
+    x_device_key: str | None = Header(default=None),
+) -> SensorIngestOut:
+    _check_device_key(x_device_key)
+
+    pond_exists = (await session.execute(select(Pond.id).where(Pond.id == pond_id))).scalar_one_or_none()
+    if pond_exists is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pond not found")
+
+    crop_stmt = select(Crop.id).where(Crop.pond_id == pond_id, Crop.status == "active").limit(1)
+    active_crop_id = (await session.execute(crop_stmt)).scalar_one_or_none()
+
+    log_entry = Log(
+        pond_id=pond_id,
+        crop_id=active_crop_id,
+        recorded_at=utcnow(),
+        recorded_by=_SENSOR_DEVICE_USER_ID,
+        temperature_c=body.water_temperature,
+        ph=body.ph,
+        turbidity_ntu=body.turbidity,
+        air_temperature_c=body.air_temperature,
+        humidity_pct=body.humidity,
+        source="sensor",
+    )
+    session.add(log_entry)
+    await session.commit()
+    await session.refresh(log_entry)
+
+    return SensorIngestOut(
+        id=log_entry.id,
+        pond_id=log_entry.pond_id,
+        recorded_at=log_entry.recorded_at,
+        ph=log_entry.ph,
+        air_temperature_c=log_entry.air_temperature_c,
+        humidity_pct=log_entry.humidity_pct,
+        water_temperature_c=log_entry.temperature_c,
+        turbidity_ntu=log_entry.turbidity_ntu,
+        source=log_entry.source,
     )

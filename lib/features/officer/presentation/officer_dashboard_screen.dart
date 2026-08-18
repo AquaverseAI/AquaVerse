@@ -197,7 +197,6 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
 
           // ── Working Quick Action Hub ─────────────────────────────────────
           Container(
-            color: AppColors.surface,
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
             decoration: BoxDecoration(
               color: AppColors.surface,

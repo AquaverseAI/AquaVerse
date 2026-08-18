@@ -11,6 +11,141 @@ import '../../../shared/widgets/speaker_button.dart';
 class OfficerProfileScreen extends ConsumerWidget {
   const OfficerProfileScreen({super.key});
 
+  void _showClusterDetailsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.location_city_rounded, color: AppColors.langAccentPrimary),
+              SizedBox(width: 8),
+              Text('District Cluster Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DetailRow(label: 'District', value: 'Nagapattinam'),
+              Divider(height: 12),
+              _DetailRow(label: 'Cluster ID', value: 'Cluster 3'),
+              Divider(height: 12),
+              _DetailRow(label: 'Supervised Ponds', value: '12 Ponds'),
+              Divider(height: 12),
+              _DetailRow(label: 'Assigned Farmers', value: '8 Farmers'),
+              Divider(height: 12),
+              _DetailRow(label: 'Senior Officer', value: 'Dr. K. Arunkumar (OFF-TN-804)'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showOfflineQueueDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.sync_rounded, color: AppColors.langAccentPrimary),
+              SizedBox(width: 8),
+              Text('Offline Report Queue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '2 Field Visit Logs Queued for Sync',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+              ),
+              SizedBox(height: 8),
+              _DetailRow(label: 'TN-01-002 Visit Log', value: 'Pending Sync'),
+              Divider(height: 10),
+              _DetailRow(label: 'TN-01-004 Visit Log', value: 'Pending Sync'),
+              SizedBox(height: 10),
+              Text(
+                'Visit reports will auto-sync to backend when connected to mobile network.',
+                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Offline visit reports synced successfully!')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.langAccentPrimary,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.sync_rounded, size: 16),
+              label: const Text('Sync Now'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: AppColors.langAccentPrimary),
+              SizedBox(width: 8),
+              Text('About Extension Portal', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'AquaVerse Extension Officer Portal · v1.2.0',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Empowering Aquaculture Field Extension Officers with real-time pond telemetry, outbreak triage, and cluster analytics.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const officerName = 'Dr. K. Arunkumar';
@@ -187,13 +322,7 @@ class OfficerProfileScreen extends ConsumerWidget {
                     icon: Icons.location_city_rounded,
                     title: 'Assigned District Cluster',
                     subtitle: 'Nagapattinam Cluster 3 (12 Ponds)',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Cluster assignment managed by State Admin'),
-                        ),
-                      );
-                    },
+                    onTap: () => _showClusterDetailsDialog(context),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
@@ -201,13 +330,7 @@ class OfficerProfileScreen extends ConsumerWidget {
                     title: 'Offline Report Queue',
                     subtitle: '2 visit logs queued for sync',
                     trailingBadge: '2 Pending',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Synced offline visit logs successfully'),
-                        ),
-                      );
-                    },
+                    onTap: () => _showOfflineQueueDialog(context),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
@@ -223,14 +346,21 @@ class OfficerProfileScreen extends ConsumerWidget {
                     subtitle: 'Direct escalation line for urgent outbreaks',
                     onTap: () => context.push('/help'),
                   ),
+                  const Divider(height: 1),
+                  _OptionTile(
+                    icon: Icons.info_rounded,
+                    title: 'About Extension Portal',
+                    subtitle: 'Version 1.2.0 · Platform specs',
+                    onTap: () => _showAboutDialog(context),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
-            // ── Logout / Switch Role ────────────────────────────────────────
+            // ── Clean Sign Out Button (No unnecessary words) ────────────────
             SecondaryButton(
-              label: 'Sign Out (Switch Role)',
+              label: 'Sign Out',
               icon: Icons.logout_rounded,
               onPressed: () async {
                 final flagStore = await OnboardingFlagStore.create();
@@ -243,6 +373,32 @@ class OfficerProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _DetailRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

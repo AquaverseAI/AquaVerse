@@ -17,87 +17,6 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
   String _search = '';
   String _filter = 'All'; // All | High Risk | Medium Risk | Low Risk
 
-  void _showCallFarmerModal(BuildContext context, Map<String, dynamic>? selectedPond) {
-    final farmerName = selectedPond?['farmerName'] ?? 'M. Selvam';
-    final pondId = selectedPond?['pondId'] ?? 'TN-01-001';
-    final location = selectedPond?['location'] ?? 'Nagapattinam';
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.langAccentPrimary.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.phone_in_talk_rounded,
-                    color: AppColors.langAccentPrimary, size: 26),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Contact $farmerName',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '$pondId · $location · Nagapattinam Cluster 3',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ListTile(
-                leading: const Icon(Icons.call_rounded, color: AppColors.green600),
-                title: const Text('+91 98765 43210'),
-                subtitle: const Text('Direct Voice Line'),
-                trailing: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Dialing $farmerName (+91 98765 43210)…')),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.green600,
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Icons.phone, size: 16),
-                  label: const Text('Call'),
-                ),
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.chat_bubble_outline_rounded,
-                    color: AppColors.langAccentPrimary),
-                title: const Text('Send SMS Recommendation'),
-                subtitle: const Text('Send text message fallback'),
-                onTap: () {
-                  Navigator.pop(context);
-                  context.push('/officer/send-advice');
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final ponds = DemoDataService.officerPonds;
@@ -233,7 +152,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                   icon: Icons.phone_in_talk_rounded,
                   label: 'Call Farmer',
                   color: AppColors.critical,
-                  onTap: () => _showCallFarmerModal(context, null),
+                  onTap: () => context.push('/officer/farmer-info'),
                 ),
               ],
             ),
@@ -325,7 +244,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                 }
 
                 return AppCard(
-                  onTap: () => context.push('/pond-details'),
+                  onTap: () => context.push('/officer/farmer-info', extra: p),
                   child: Row(
                     children: [
                       Container(
@@ -391,7 +310,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                       IconButton(
                         icon: const Icon(Icons.phone_outlined,
                             color: AppColors.langAccentPrimary, size: 20),
-                        onPressed: () => _showCallFarmerModal(context, p),
+                        onPressed: () => context.push('/officer/farmer-info', extra: p),
                       ),
                       const Icon(Icons.chevron_right_rounded,
                           color: AppColors.textMuted, size: 20),

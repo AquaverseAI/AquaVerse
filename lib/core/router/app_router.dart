@@ -34,6 +34,7 @@ import '../../features/officer/presentation/officer_visit_log_screen.dart';
 import '../../features/officer/presentation/officer_profile_screen.dart';
 import '../../features/officer/presentation/officer_send_advice_screen.dart';
 import '../../features/officer/presentation/officer_reports_screen.dart';
+import '../../features/officer/presentation/officer_farmer_info_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -204,6 +205,16 @@ final GoRouter appRouter = GoRouter(
         key: state.pageKey,
         child: const OfficerReportsScreen(),
       ),
+    ),
+    GoRoute(
+      path: '/officer/farmer-info',
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return buildSmoothPushPage(
+          key: state.pageKey,
+          child: OfficerFarmerInfoScreen(farmerData: extra),
+        );
+      },
     ),
   ],
 );

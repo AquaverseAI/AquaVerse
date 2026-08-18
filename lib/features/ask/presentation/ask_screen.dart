@@ -203,11 +203,13 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                                 child: const Icon(Icons.assistant_rounded, color: AppColors.primary700, size: 18),
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                AppTranslations.getText('aquaAnswer', currentLang),
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                              Expanded(
+                                child: Text(
+                                  AppTranslations.getText('aquaAnswer', currentLang),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              const Spacer(),
                               SpeakerButton(textToSpeak: answer),
                             ],
                           ),

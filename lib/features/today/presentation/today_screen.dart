@@ -651,16 +651,20 @@ class _RiskDiscBlock extends ConsumerWidget {
               children: [
                 Row(
                   children: [
-                    Text(
-                      AppTranslations.getText('overallPondRisk', currentLang),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                        letterSpacing: 0.2,
+                    Expanded(
+                      child: Text(
+                        AppTranslations.getText('overallPondRisk', currentLang),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 4),
                     SpeakerButton(
                         textToSpeak:
                             'Overall pond risk is $tierLabel. $tierDesc'),

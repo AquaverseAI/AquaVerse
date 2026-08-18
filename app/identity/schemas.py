@@ -16,7 +16,7 @@ class OtpRequestIn(BaseModel):
     @classmethod
     def validate_phone(cls, v: str) -> str:
         import re
-        
+
         v = v.replace(" ", "").replace("-", "")
 
         if not re.match(r"^\+91[6-9]\d{9}$", v):
@@ -84,3 +84,4 @@ class UserMeOut(BaseModel):
     role: str
     name: str | None = None
     district: str | None = None
+    pond_ids: list[str] = []

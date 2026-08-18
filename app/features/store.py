@@ -53,6 +53,12 @@ async def get_historical_features(
 
         serialized_entities.append({"pond_id": pond_id_str, "timestamp": ts_str})
 
+    # NB: use CAST(... AS jsonb), not `:entities_json::jsonb` — SQLAlchemy's
+    # text() bind-param regex requires a non-colon character immediately
+    # after the param name, so a trailing `::cast` makes it backtrack and
+    # swallow the name's last character into the (then-literal) SQL text,
+    # silently registering a bind param one character short of the one
+    # passed to execute() below and producing a Postgres syntax error.
     query = text("""
         SELECT
             e.pond_id,
@@ -64,7 +70,7 @@ async def get_historical_features(
             l.ammonia_nh3_mgl,
             l.turbidity_ntu,
             l.recorded_at AS feature_time
-        FROM jsonb_to_recordset(:entities_json::jsonb) AS e(pond_id uuid, timestamp timestamptz)
+        FROM jsonb_to_recordset(CAST(:entities_json AS jsonb)) AS e(pond_id uuid, timestamp timestamptz)
         LEFT JOIN LATERAL (
             SELECT
                 temperature_c,

@@ -81,8 +81,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     );
   }
 
-  void selectRole(String role) {
+  void selectRole(String role) async {
     state = state.copyWith(selectedRole: role);
+    final flagStore = await OnboardingFlagStore.create();
+    await flagStore.setSelectedRole(role);
   }
 
   Future<bool> sendOtp() async {

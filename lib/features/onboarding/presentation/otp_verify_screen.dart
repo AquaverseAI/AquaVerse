@@ -198,18 +198,25 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
         // Start continuous looping radial glow
         _glowController.repeat(reverse: true);
 
-        // Check onboarding status
+        // Check onboarding status and persist selected role
         final flagStore = await OnboardingFlagStore.create();
+        final state = ref.read(onboardingControllerProvider);
+        await flagStore.setSelectedRole(state.selectedRole);
+        await flagStore.setSelectedLanguage(state.selectedLanguage);
+        await flagStore.setMobileNumber(state.mobileNumber);
+
         final hasOnboardedAlready = flagStore.hasOnboarded;
 
         final String nextRoute;
-        if (hasOnboardedAlready) {
-          // Returning user / re-login -> Go directly to home dashboard
-          final mob = ref.read(onboardingControllerProvider).mobileNumber;
-          await flagStore.setMobileNumber(mob);
-          nextRoute = flagStore.selectedRole == 'officer' ? '/officer/dashboard' : '/today';
+        if (state.selectedRole == 'officer') {
+          // Extension Officer role -> Always route directly to Officer Dashboard
+          await flagStore.setHasOnboarded(true);
+          nextRoute = '/officer/dashboard';
+        } else if (hasOnboardedAlready) {
+          // Returning farmer user -> Go directly to Today dashboard
+          nextRoute = '/today';
         } else {
-          // First-time onboarding user -> Proceed to Role Selection
+          // First-time onboarding farmer -> Proceed to Role Selection
           nextRoute = '/onboarding/role';
         }
 

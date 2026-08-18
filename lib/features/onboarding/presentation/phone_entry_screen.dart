@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
@@ -30,6 +31,16 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
         _isFocused = _phoneFocusNode.hasFocus;
       });
     });
+
+    _loadStoredRole();
+  }
+
+  void _loadStoredRole() async {
+    final flagStore = await OnboardingFlagStore.create();
+    final role = flagStore.selectedRole;
+    if (mounted) {
+      ref.read(onboardingControllerProvider.notifier).selectRole(role);
+    }
   }
 
   @override

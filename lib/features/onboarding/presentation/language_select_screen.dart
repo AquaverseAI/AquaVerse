@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -123,7 +124,10 @@ class LanguageSelectScreen extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6.0),
                       child: InkWell(
-                        onTap: () => controller.selectLanguage(code),
+                        onTap: () {
+                          ref.read(appLanguageProvider.notifier).setLanguage(code);
+                          controller.selectLanguage(code);
+                        },
                         borderRadius: BorderRadius.circular(16),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),

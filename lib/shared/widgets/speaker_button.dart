@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/localization/app_translations.dart';
+import '../../core/services/bhashini_tts_service.dart';
 import '../../core/theme/app_colors.dart';
 
-/// SpeakerButton Component (PRD-AV-04 Mandatory Constraint).
-/// Every farmer-facing action/advisory text includes a SpeakerButton that reads
-/// text aloud in the farmer's preferred language (Tamil default).
-class SpeakerButton extends StatefulWidget {
+/// SpeakerButton Component with Bhashini Read-Aloud Integration.
+/// Every action/advisory text includes a SpeakerButton that reads text aloud
+/// in the farmer's preferred language (Tamil default / English switchable).
+class SpeakerButton extends ConsumerStatefulWidget {
   final String textToSpeak;
   final double size;
   final Color? color;
@@ -20,10 +23,10 @@ class SpeakerButton extends StatefulWidget {
   });
 
   @override
-  State<SpeakerButton> createState() => _SpeakerButtonState();
+  ConsumerState<SpeakerButton> createState() => _SpeakerButtonState();
 }
 
-class _SpeakerButtonState extends State<SpeakerButton>
+class _SpeakerButtonState extends ConsumerState<SpeakerButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _waveController;
   Timer? _autoStopTimer;
@@ -52,13 +55,33 @@ class _SpeakerButtonState extends State<SpeakerButton>
 
     _autoStopTimer?.cancel();
 
+    final currentLang = ref.read(appLanguageProvider);
+    final ttsService = ref.read(bhashiniTtsServiceProvider);
+
     setState(() {
       _isPlaying = !_isPlaying;
     });
 
     if (_isPlaying) {
       _waveController.repeat(reverse: true);
-      _autoStopTimer = Timer(const Duration(seconds: 3), () {
+
+      // Trigger Bhashini Audio Read Aloud
+      ttsService.speakText(text: widget.textToSpeak, langCode: currentLang);
+
+      final toastMsg = currentLang == 'ta'
+          ? '🔊 பாஷினி குரல் வழிகாட்டி: உரக்கப் படிக்கிறது…'
+          : '🔊 Bhashini Voice Assistant: Reading aloud…';
+
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(toastMsg),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      _autoStopTimer = Timer(const Duration(seconds: 4), () {
         if (mounted) {
           setState(() {
             _isPlaying = false;
@@ -68,6 +91,7 @@ class _SpeakerButtonState extends State<SpeakerButton>
         }
       });
     } else {
+      ttsService.stop();
       _waveController.stop();
       _waveController.reset();
     }

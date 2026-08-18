@@ -13,9 +13,11 @@ void main() {
   group('Shared Widgets Verification', () {
     testWidgets('SpeakerButton renders and handles tap', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SpeakerButton(textToSpeak: 'Test Audio Prompt'),
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SpeakerButton(textToSpeak: 'Test Audio Prompt'),
+            ),
           ),
         ),
       );
@@ -27,6 +29,7 @@ void main() {
       await tester.pump();
 
       expect(find.byIcon(Icons.volume_up_rounded), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
     });
 
     testWidgets('StatusDisc renders qualitative level', (WidgetTester tester) async {

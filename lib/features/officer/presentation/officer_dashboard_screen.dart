@@ -157,13 +157,29 @@ class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen>
                   icon: Icons.bar_chart_rounded,
                   label: currentLang == 'ta' ? 'அறிக்கைகளைப் பார்' : 'View Reports',
                   color: AppColors.warning,
-                  onTap: () => context.push('/officer/reports'),
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(currentLang == 'ta'
+                            ? 'அறிக்கை சேவை விரைவில் எதிர்பார்க்கப்படுகிறது'
+                            : 'Reports feature coming soon'),
+                      ),
+                    );
+                  },
                 ),
                 _QuickAction(
                   icon: Icons.phone_in_talk_rounded,
                   label: currentLang == 'ta' ? 'விவசாயியை அழை' : 'Call Farmer',
                   color: AppColors.critical,
-                  onTap: () => context.push('/officer/farmer-info'),
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(currentLang == 'ta'
+                            ? 'அழைப்பு சேவை விரைவில் எதிர்பார்க்கப்படுகிறது'
+                            : 'Farmer dialer feature coming soon'),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -264,7 +280,6 @@ class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen>
                 }
 
                 return AppCard(
-                  onTap: () => context.push('/officer/farmer-info', extra: p),
                   child: Row(
                     children: [
                       Container(
@@ -330,10 +345,16 @@ class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen>
                       IconButton(
                         icon: const Icon(Icons.phone_outlined,
                             color: AppColors.langAccentPrimary, size: 20),
-                        onPressed: () => context.push('/officer/farmer-info', extra: p),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(currentLang == 'ta'
+                                  ? 'அழைப்பு சேவை விரைவில் எதிர்பார்க்கப்படுகிறது'
+                                  : 'Farmer dialer coming soon'),
+                            ),
+                          );
+                        },
                       ),
-                      const Icon(Icons.chevron_right_rounded,
-                          color: AppColors.textMuted, size: 20),
                     ],
                   ),
                 );

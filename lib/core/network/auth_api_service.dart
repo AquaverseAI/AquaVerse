@@ -45,15 +45,15 @@ class AuthApiService {
         );
       }
     } catch (e) {
-      // Fallback/Demo path if offline or endpoint not yet deployed
+      return AuthResponse(
+        success: false,
+        message: 'Cannot send OTP — check your connection to backend server',
+      );
     }
 
-    // Simulated network delay
-    await Future.delayed(const Duration(milliseconds: 600));
-
     return AuthResponse(
-      success: true,
-      message: 'OTP sent to +91 $cleanMobile',
+      success: false,
+      message: 'Cannot send OTP — check your connection to backend server',
     );
   }
 
@@ -68,52 +68,39 @@ class AuthApiService {
       );
     }
 
-    String? token;
     try {
       if (_dio != null) {
         final response = await _dio.post('/v1/auth/otp/verify', data: {
           'mobile': '+91$mobileNumber',
           'otp': cleanOtp,
         });
-        if (response.data['success'] == true) {
-          token = response.data['token'] ?? 'demo_jwt_token_${DateTime.now().millisecondsSinceEpoch}';
+        if (response.data['success'] == true && response.data['token'] != null) {
+          final token = response.data['token'] as String;
           try {
             await _storage.write(key: 'auth_token', value: token);
-          } catch (_) {
-            // Storage fallback for environments where FlutterSecureStorage is limited
-          }
+          } catch (_) {}
           return AuthResponse(
             success: true,
             message: response.data['message'] ?? 'OTP verified successfully',
             token: token,
           );
+        } else {
+          return AuthResponse(
+            success: false,
+            message: response.data['message'] ?? 'Invalid OTP code',
+          );
         }
       }
     } catch (e) {
-      // Fallback/Demo path
-    }
-
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    // Demo rule: '123456' or any valid 6-digit code except '000000' is accepted
-    if (cleanOtp == '000000') {
       return AuthResponse(
         success: false,
-        message: 'Invalid OTP code. Please check and try again.',
+        message: 'Cannot verify — check your connection to backend server',
       );
     }
 
-    token = 'demo_jwt_token_${DateTime.now().millisecondsSinceEpoch}';
-    try {
-      await _storage.write(key: 'auth_token', value: token);
-    } catch (_) {
-      // Storage fallback
-    }
-
     return AuthResponse(
-      success: true,
-      message: 'OTP verified successfully',
-      token: token,
+      success: false,
+      message: 'Cannot verify — check your connection to backend server',
     );
   }
 

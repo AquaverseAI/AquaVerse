@@ -65,23 +65,12 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
       await Future.delayed(const Duration(seconds: 1));
       if (!mounted) return;
 
-      final sampleAnswer = currentLang == 'ta'
-          ? 'குளம் TN-01-001 தகவல்களின்படி (நாள் 45, பங்கீசியஸ் மீன்):\n\n'
-            '• இன்றைய மொத்த தீவன அளவு: 18 கிலோ (3 வேளைகளாகப் பிரிக்கவும்)\n'
-            '• காலை 7 மணி: 6 கிலோ\n'
-            '• மதியம் 1 மணி: 6 கிலோ\n'
-            '• மாலை 7 மணி: 6 கிலோ\n\n'
-            'குறிப்பு: இன்று இரவு ஆக்சிஜன் அளவு குறைய வாய்ப்புள்ளது. ஆக்சிஜன் 4.0 mg/L கீழே குறைந்தால் மாலை தீவனத்தை 20% குறைக்கவும். '
-            'இது AI மதிப்பீடு — முக்கிய முடிவுகளுக்கு உங்கள் விரிவாக்க அலுவலரைத் தொடர்பு கொள்ளவும்.'
-          : 'Based on today\'s data for pond TN-01-001 (Day 45, Pangasius):\n\n'
-            '• Feed 18 kg, split into 3 equal portions\n'
-            '• Morning 7 AM: 6 kg\n'
-            '• Afternoon 1 PM: 6 kg\n'
-            '• Evening 7 PM: 6 kg\n\n'
-            'Note: DO is forecast to drop tonight. Reduce evening feed by 20% if DO falls below 4.0 mg/L. '
-            'This is an AI estimate — confirm with your extension officer if in doubt.';
+      // Honest offline / unreachable state: Ask requires an internet connection
+      final offlineNotice = currentLang == 'ta'
+          ? 'அக்வா AI நேரலை செயலாக்கத்திற்கு இணைய இணைப்பு தேவை. உங்கள் பிணைய இணைப்பைச் சரிபார்க்கவும்.'
+          : 'Aqua AI requires an active internet connection to backend server. Please check your connection and try again.';
 
-      ref.read(answerTextProvider.notifier).state = sampleAnswer;
+      ref.read(answerTextProvider.notifier).state = offlineNotice;
       ref.read(askStateProvider.notifier).state = AskState.response;
     } else {
       ref.read(askStateProvider.notifier).state = AskState.idle;
@@ -101,20 +90,12 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
 
-    final answer = currentLang == 'ta'
-        ? 'உங்கள் கேள்வி: "$text"\n\n'
-          'குளம் TN-01-001 நேரலைத் தரவுகள் பரிசீலிக்கப்பட்டது…\n'
-          '• கரைந்த ஆக்சிஜன் (DO): 5.2 mg/L — பாதுகாப்பான அளவில் உள்ளது.\n'
-          '• pH நிலை: 7.8 — உகந்த நிலை.\n'
-          '• இன்றைய தீவனப் பரிந்துரை: 18 கிலோ/நாள்.\n\n'
-          'குறிப்பு: இது AI பரிந்துரை — முக்கிய பண்ணை முடிவுகளுக்கு உங்கள் மாவட்ட விரிவாக்க அலுவலரைத் தொடர்பு கொள்ளவும்.'
-        : 'Based on your question: "$text"\n\n'
-          'Reviewing pond TN-01-001 data… '
-          'Dissolved oxygen is currently 5.2 mg/L — within safe range. '
-          'Feed recommendation: 18 kg/day. '
-          'This is an AI estimate — please confirm with your extension officer for important decisions.';
+    // Honest offline / unreachable state: Ask requires an internet connection
+    final offlineNotice = currentLang == 'ta'
+        ? 'அக்வா AI நேரலை செயலாக்கத்திற்கு இணைய இணைப்பு தேவை. உங்கள் பிணைய இணைப்பைச் சரிபார்க்கவும்.'
+        : 'Aqua AI requires an active internet connection to backend server. Please check your connection and try again.';
 
-    ref.read(answerTextProvider.notifier).state = answer;
+    ref.read(answerTextProvider.notifier).state = offlineNotice;
     ref.read(askStateProvider.notifier).state = AskState.response;
     _textController.clear();
   }

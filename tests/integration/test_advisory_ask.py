@@ -48,10 +48,30 @@ def _fail_on_any_outbound_socket(monkeypatch: pytest.MonkeyPatch) -> None:
     /v1/ask used to call out to a hardcoded Docker-host IP; this fixture
     makes it impossible for that pattern to silently reappear (and pass)
     just because nothing happens to be listening on 172.17.0.1:8001 in this
-    sandbox. Patches `socket.create_connection` rather than `httpx`
-    directly, because the `client` fixture itself is an httpx.AsyncClient
-    (over in-memory ASGITransport, opening no real socket) — patching
-    httpx.AsyncClient.post would also block the test's own request.
+    sandbox.
+
+    We patch `socket.socket.connect` / `connect_ex` — the lowest-level
+    methods every outbound connection funnels through, sync or async (this
+    is the same technique `pytest-socket`'s `disable_socket()` uses) —
+    rather than the module-level `socket.create_connection()` free
+    function. That free function is only called by httpcore's SYNC
+    backend; httpx.AsyncClient over asyncio routes through httpcore's
+    AnyIOBackend -> anyio's asyncio backend ->
+    `asyncio.base_events.BaseEventLoop.create_connection`, which builds a
+    raw `socket.socket()` and calls `.connect()`/`.connect_ex()` on it
+    directly, never touching `socket.create_connection()`. Patching only
+    the free function therefore left the async path (what /v1/ask actually
+    uses) completely unguarded — verified experimentally: a throwaway
+    async httpx call against an unreachable address sailed straight past
+    the old patch and hit a real `ConnectTimeout` instead of our
+    AssertionError. Patching `socket.socket.connect`/`connect_ex` catches
+    both paths. We keep the `socket.create_connection` patch too, as
+    belt-and-suspenders for any sync callers.
+
+    We do NOT patch `httpx.AsyncClient.post`/`.request` directly, because
+    the `client` fixture itself is an httpx.AsyncClient (over in-memory
+    ASGITransport, which opens no real socket at all) — blocking httpx
+    calls outright would also block the test's own request to the app.
     """
     import socket
 
@@ -61,7 +81,15 @@ def _fail_on_any_outbound_socket(monkeypatch: pytest.MonkeyPatch) -> None:
             "the M3 engine fully in-process (P0.3), no external service."
         )
 
+    def _forbidden_socket_connect(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        raise AssertionError(
+            "POST /v1/ask opened a real network connection — it must run "
+            "the M3 engine fully in-process (P0.3), no external service."
+        )
+
     monkeypatch.setattr(socket, "create_connection", _forbidden_connect)
+    monkeypatch.setattr(socket.socket, "connect", _forbidden_socket_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", _forbidden_socket_connect)
 
 
 @pytest.mark.integration

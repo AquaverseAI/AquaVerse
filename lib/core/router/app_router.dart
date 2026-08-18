@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../../shared/widgets/iris_transition.dart';
+import '../../shared/widgets/smooth_page_transition.dart';
 
 // Splash
 import '../../features/splash/splash_screen.dart';
@@ -11,6 +12,7 @@ import '../../features/onboarding/presentation/phone_entry_screen.dart';
 import '../../features/onboarding/presentation/otp_verify_screen.dart';
 import '../../features/onboarding/presentation/role_selection_screen.dart';
 import '../../features/onboarding/presentation/ai_intro_screen.dart';
+
 // Farmer Main
 import '../../features/today/presentation/today_screen.dart';
 import '../../features/log/presentation/log_entry_screen.dart';
@@ -59,89 +61,149 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/onboarding/mobile',
-      builder: (context, state) => const PhoneEntryScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const PhoneEntryScreen(),
+      ),
     ),
     GoRoute(
       path: '/onboarding/otp',
-      builder: (context, state) => const OtpVerifyScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const OtpVerifyScreen(),
+      ),
     ),
     GoRoute(
       path: '/onboarding/role',
-      builder: (context, state) => const RoleSelectionScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const RoleSelectionScreen(),
+      ),
     ),
     GoRoute(
       path: '/onboarding/intro',
-      builder: (context, state) => const AiIntroScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const AiIntroScreen(),
+      ),
     ),
 
-    // ── Farmer Main Screens ──────────────────────────────────────────────────
+    // ── Farmer Main Screens (Smooth Fade-Through Tab Transitions) ─────────────
     GoRoute(
       path: '/today',
-      builder: (context, state) => const TodayScreen(),
+      pageBuilder: (context, state) => buildSmoothFadeThroughPage(
+        key: state.pageKey,
+        child: const TodayScreen(),
+      ),
     ),
     GoRoute(
       path: '/log',
-      builder: (context, state) => const LogEntryScreen(),
+      pageBuilder: (context, state) => buildSmoothSlideUpPage(
+        key: state.pageKey,
+        child: const LogEntryScreen(),
+      ),
     ),
     GoRoute(
       path: '/ask',
-      builder: (context, state) => const AskScreen(),
+      pageBuilder: (context, state) => buildSmoothFadeThroughPage(
+        key: state.pageKey,
+        child: const AskScreen(),
+      ),
     ),
     GoRoute(
       path: '/alerts',
-      builder: (context, state) => const AlertsScreen(),
+      pageBuilder: (context, state) => buildSmoothFadeThroughPage(
+        key: state.pageKey,
+        child: const AlertsScreen(),
+      ),
     ),
     GoRoute(
       path: '/crop',
-      builder: (context, state) => const CropScreen(),
+      pageBuilder: (context, state) => buildSmoothFadeThroughPage(
+        key: state.pageKey,
+        child: const CropScreen(),
+      ),
     ),
 
-    // ── Secondary Screens ────────────────────────────────────────────────────
+    // ── Secondary Screens (Smooth Push & Slide Transitions) ───────────────────
     GoRoute(
       path: '/notifications',
-      builder: (context, state) => const NotificationsScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const NotificationsScreen(),
+      ),
     ),
     GoRoute(
       path: '/settings',
-      builder: (context, state) => const SettingsScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const SettingsScreen(),
+      ),
     ),
     GoRoute(
       path: '/profile',
-      builder: (context, state) => const ProfileScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const ProfileScreen(),
+      ),
     ),
     GoRoute(
       path: '/ponds',
-      builder: (context, state) => const MyPondsScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const MyPondsScreen(),
+      ),
     ),
     GoRoute(
       path: '/pond-details',
-      builder: (context, state) => const PondDetailsScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const PondDetailsScreen(),
+      ),
     ),
     GoRoute(
       path: '/help',
-      builder: (context, state) => const HelpCenterScreen(),
+      pageBuilder: (context, state) => buildSmoothSlideUpPage(
+        key: state.pageKey,
+        child: const HelpCenterScreen(),
+      ),
     ),
 
-    // ── Extension Officer Suite ──────────────────────────────────────────────
+    // ── Extension Officer Suite (Smooth Push & Slide Transitions) ────────────
     GoRoute(
       path: '/officer/dashboard',
-      builder: (context, state) => const OfficerDashboardScreen(),
+      pageBuilder: (context, state) => buildSmoothFadeThroughPage(
+        key: state.pageKey,
+        child: const OfficerDashboardScreen(),
+      ),
     ),
     GoRoute(
       path: '/officer/visit-log',
-      builder: (context, state) => const OfficerVisitLogScreen(),
+      pageBuilder: (context, state) => buildSmoothSlideUpPage(
+        key: state.pageKey,
+        child: const OfficerVisitLogScreen(),
+      ),
     ),
     GoRoute(
       path: '/officer/profile',
-      builder: (context, state) => const OfficerProfileScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const OfficerProfileScreen(),
+      ),
     ),
     GoRoute(
       path: '/officer/send-advice',
-      builder: (context, state) => const OfficerSendAdviceScreen(),
+      pageBuilder: (context, state) => buildSmoothSlideUpPage(
+        key: state.pageKey,
+        child: const OfficerSendAdviceScreen(),
+      ),
     ),
     GoRoute(
       path: '/officer/reports',
-      builder: (context, state) => const OfficerReportsScreen(),
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const OfficerReportsScreen(),
+      ),
     ),
   ],
 );

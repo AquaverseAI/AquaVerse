@@ -23,8 +23,9 @@ import time
 import os
 from contextlib import asynccontextmanager
 
-# Allow importing from root
+# Allow importing from root and current directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 import torch
 from fastapi import FastAPI, HTTPException
@@ -156,7 +157,7 @@ def check_hallucination(narration: str, payload_dict: dict) -> tuple[bool, set]:
     return len(suspicious) == 0, suspicious
 
 
-def generate_narration(instruction: str, payload_dict: dict | None = None) -> str:
+def generate_narration(instruction: str, payload_dict: dict | None = None, temperature: float = 0.05) -> str:
     if _mock_mode:
         time.sleep(1.5)  # simulate latency
         # Return a mocked narration that contains exactly the numbers required so it passes the hallucination check
@@ -170,8 +171,9 @@ def generate_narration(instruction: str, payload_dict: dict | None = None) -> st
         output_ids = _model.generate(
             **inputs,
             max_new_tokens=GENERATION_CONFIG["max_new_tokens"],
-            temperature=GENERATION_CONFIG["temperature"],
-            do_sample=True,
+            max_length=None,
+            temperature=temperature,
+            do_sample=True if temperature > 0 else False,
             repetition_penalty=GENERATION_CONFIG["repetition_penalty"],
             pad_token_id=_tokenizer.eos_token_id,
         )
@@ -199,26 +201,24 @@ async def reason_m3(req: PondSnapshotRequest) -> ReasonResponse:
     attempts = 0
     for attempt in range(1, MAX_REGENERATION_ATTEMPTS + 1):
         attempts = attempt
-        narration = generate_narration(instruction, payload_dict)
+        # On attempt 1 use configured temperature, on retry use greedy decoding (temperature=0.0) for strict adherence
+        temp = GENERATION_CONFIG["temperature"] if attempt == 1 else 0.0
+        narration = generate_narration(instruction, payload_dict, temperature=temp)
         passed, suspicious_numbers = check_hallucination(narration, payload_dict)
         if passed:
             break
         print(f"[WARN] pond={req.pond_id} attempt={attempt} hallucination check FAILED, "
-              f"suspicious numbers: {suspicious_numbers}. Regenerating...")
+              f"suspicious numbers: {suspicious_numbers}. Regenerating with greedy decoding...")
 
     if not passed:
-        # R1 is non-negotiable: never return an unverified response. Fall
-        # back to the structured payload alone rather than risk a wrong
-        # number reaching a farmer or analyst dashboard.
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "Narration failed the number-hallucination check after "
-                            f"{MAX_REGENERATION_ATTEMPTS} attempts. Structured payload is "
-                            "still valid and available in the 'payload' field of a direct "
-                            "decision-engine call — only narration is unavailable.",
-                "payload": payload_dict,
-            },
+        # Fall back to structured decision payload with notice when LLM narration fails hallucination check
+        narration = (
+            f"[LLM Narration Suppressed — Number Hallucination Gate Triggered]\n"
+            f"Structured Decision Payload is 100% valid:\n"
+            f"- Recommended Feed: {payload_dict.get('recommended_feed_kg', 0.0)} kg "
+            f"(Hold: {payload_dict.get('feed_hold_recommended', False)})\n"
+            f"- DO Forecast: {payload_dict.get('overnight_do_forecast_mg_l')} mg/L\n"
+            f"- Table: {payload_dict.get('manufacturer_table')}"
         )
 
     return ReasonResponse(

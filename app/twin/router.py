@@ -71,7 +71,7 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Digital Twin | Pond {{ state.pond_id }}</title>
+        <title>Digital Twin | Pond {state.pond_id}</title>
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
             :root {{
@@ -83,9 +83,9 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 --accent: #38bdf8;
                 --accent-glow: rgba(56, 189, 248, 0.4);
             }}
-            
+
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-            
+
             body {{
                 font-family: 'Outfit', sans-serif;
                 background: var(--bg-gradient);
@@ -97,13 +97,13 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 padding: 3rem 1rem;
                 overflow-x: hidden;
             }}
-            
+
             .header {{
                 text-align: center;
                 margin-bottom: 3rem;
                 animation: fadeInDown 0.8s ease-out;
             }}
-            
+
             .header h1 {{
                 font-size: 2.5rem;
                 font-weight: 700;
@@ -112,12 +112,12 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 -webkit-text-fill-color: transparent;
                 margin-bottom: 0.5rem;
             }}
-            
+
             .header p {{
                 color: var(--text-muted);
                 font-size: 1.1rem;
             }}
-            
+
             .dashboard {{
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -127,7 +127,7 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 animation: fadeInUp 0.8s ease-out forwards;
                 opacity: 0;
             }}
-            
+
             .metric-card {{
                 background: var(--card-bg);
                 border: 1px solid var(--card-border);
@@ -141,7 +141,7 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 overflow: hidden;
                 transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
             }}
-            
+
             .metric-card::before {{
                 content: '';
                 position: absolute;
@@ -150,17 +150,17 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 opacity: 0;
                 transition: opacity 0.3s ease;
             }}
-            
+
             .metric-card:hover {{
                 transform: translateY(-5px);
                 box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 20px -5px var(--accent-glow);
                 border-color: rgba(255, 255, 255, 0.15);
             }}
-            
+
             .metric-card:hover::before {{
                 opacity: 1;
             }}
-            
+
             .metric-label {{
                 font-size: 0.95rem;
                 color: var(--text-muted);
@@ -169,7 +169,7 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 letter-spacing: 0.05em;
                 margin-bottom: 0.75rem;
             }}
-            
+
             .metric-value {{
                 font-size: 2.5rem;
                 font-weight: 700;
@@ -178,13 +178,13 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 align-items: baseline;
                 gap: 0.25rem;
             }}
-            
+
             .metric-unit {{
                 font-size: 1.1rem;
                 font-weight: 400;
                 color: var(--text-muted);
             }}
-            
+
             .status-indicator {{
                 position: absolute;
                 top: 1.5rem;
@@ -195,7 +195,7 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 background-color: #10b981; /* Default healthy green */
                 box-shadow: 0 0 10px #10b981;
             }}
-            
+
             .status-warning {{ background-color: #f59e0b; box-shadow: 0 0 10px #f59e0b; }}
             .status-danger {{ background-color: #ef4444; box-shadow: 0 0 10px #ef4444; }}
 
@@ -203,12 +203,12 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 from {{ opacity: 0; transform: translateY(30px); }}
                 to {{ opacity: 1; transform: translateY(0); }}
             }}
-            
+
             @keyframes fadeInDown {{
                 from {{ opacity: 0; transform: translateY(-30px); }}
                 to {{ opacity: 1; transform: translateY(0); }}
             }}
-            
+
             /* Responsive delays for stagger effect */
             .metric-card:nth-child(1) {{ animation-delay: 0.1s; }}
             .metric-card:nth-child(2) {{ animation-delay: 0.2s; }}
@@ -246,51 +246,51 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
             <p>Pond ID: {state.pond_id}</p>
             {visualise_button}
         </div>
-        
+
         <div class="dashboard">
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.1s both;">
                 <div class="status-indicator"></div>
                 <div class="metric-label">Temperature</div>
                 <div class="metric-value">{state.temperature_c}<span class="metric-unit">°C</span></div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.2s both;">
                 <!-- Slightly lower DO could be warning, let's assume >4 is healthy but let's just make it look cool -->
                 <div class="status-indicator"></div>
                 <div class="metric-label">Dissolved Oxygen</div>
                 <div class="metric-value">{state.dissolved_oxygen_mgl}<span class="metric-unit">mg/L</span></div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.3s both;">
                 <div class="status-indicator"></div>
                 <div class="metric-label">pH Level</div>
                 <div class="metric-value">{state.ph}</div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.4s both;">
                 <div class="status-indicator"></div>
                 <div class="metric-label">Salinity</div>
                 <div class="metric-value">{state.salinity_ppt}<span class="metric-unit">ppt</span></div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.5s both;">
                 <div class="status-indicator status-warning"></div>
                 <div class="metric-label">Ammonia (NH3)</div>
                 <div class="metric-value">{state.ammonia_nh3_mgl}<span class="metric-unit">mg/L</span></div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.6s both;">
                 <div class="status-indicator"></div>
                 <div class="metric-label">Turbidity</div>
                 <div class="metric-value">{state.turbidity_ntu}<span class="metric-unit">NTU</span></div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.7s both;">
                 <div class="status-indicator"></div>
                 <div class="metric-label">Est. Biomass</div>
                 <div class="metric-value">{state.biomass_kg_estimated}<span class="metric-unit">kg</span></div>
             </div>
-            
+
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.8s both;">
                 <div class="status-indicator"></div>
                 <div class="metric-label">Est. FCR</div>

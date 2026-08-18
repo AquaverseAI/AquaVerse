@@ -23,7 +23,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
 os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
 os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
 
-from app.core.security import create_access_token  # noqa: E402
+from app.core.security import create_access_token
 
 FARMER_POND_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -75,13 +75,13 @@ def _fail_on_any_outbound_socket(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     import socket
 
-    def _forbidden_connect(*args, **kwargs):  # noqa: ANN002, ANN003
+    def _forbidden_connect(*args, **kwargs):
         raise AssertionError(
             "POST /v1/ask opened a real network connection — it must run "
             "the M3 engine fully in-process (P0.3), no external service."
         )
 
-    def _forbidden_socket_connect(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+    def _forbidden_socket_connect(self, *args, **kwargs):
         raise AssertionError(
             "POST /v1/ask opened a real network connection — it must run "
             "the M3 engine fully in-process (P0.3), no external service."

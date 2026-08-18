@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 from app.config import get_settings
 from app.core.security import create_access_token
+from app.db.models.pond import Pond
 from app.db.models.user import User
 from app.deps import CurrentUser
 from app.identity.otp import (
@@ -147,9 +148,19 @@ async def otp_verify(body: OtpVerifyIn) -> OtpVerifyOut:
             detail="Account not found or deactivated.",
         )
 
+    # `require_pond_scope` (core/rbac.py) checks farmer-role requests against
+    # this claim on every pond-scoped route (logs, media, /v1/ask, twin,
+    # risk/forecast, alerts) — staff/admin bypass it via their own role
+    # check, but a farmer with an empty claim can never pass it for a pond
+    # they actually own, so it must be populated here, not left to default.
+    async with get_async_session() as db:
+        owned = await db.execute(select(Pond.id).where(Pond.owner_user_id == user.id))
+        pond_ids = [str(pid) for pid in owned.scalars().all()]
+
     token = create_access_token(
         sub=str(user.id),
         role=user.role,
+        pond_ids=pond_ids,
         district=user.district,
         expires_in=3600,
     )
@@ -249,4 +260,5 @@ async def me(current_user: CurrentUser) -> UserMeOut:
         sub=current_user.sub,
         role=current_user.role,
         district=current_user.district,
+        pond_ids=[str(pid) for pid in current_user.pond_ids],
     )

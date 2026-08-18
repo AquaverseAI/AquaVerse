@@ -187,8 +187,9 @@ def _mount_routers(app: FastAPI) -> None:
 
 
 def _add_utility_endpoints(app: FastAPI) -> None:
-    from app.config import get_settings as _gs
     from fastapi.responses import HTMLResponse
+
+    from app.config import get_settings as _gs
 
     @app.get("/", tags=["Utility"], summary="Landing Page", response_class=HTMLResponse)
     async def root() -> str:

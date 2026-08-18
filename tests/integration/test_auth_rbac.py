@@ -18,18 +18,30 @@ Notes on scope:
     is unrelated to auth. The login-flow tests below work around it by
     asserting on that specific RuntimeError rather than a status code —
     see test_login_endpoints_not_gated_by_auth_header.
+  * P1.3 wired GET /v1/ponds/{id}/risk and GET /v1/risk/worklist onto real
+    Postgres (real Pond/Log/Crop queries + the real M2 LightGBM risk
+    engine). Their *success*-path assertions below have moved onto the
+    `db_session` + `db_client` fixtures (real lifespan, real testcontainers
+    Postgres — same pattern as tests/integration/test_ponds.py), with a
+    real seeded Pond row matching whatever hardcoded pond id the test
+    exercises. The pure-RBAC-*rejection* cases (403s) are unaffected and
+    stay on the plain `client` fixture, because rbac.require_pond_scope /
+    require_district raise before any query reaches the DB — same
+    precedent as GET /v1/logs going DB-backed under P0.2 (see git log for
+    that commit) and the Ponds domain doing the same under P1.2.
 """
 
 from __future__ import annotations
 
 import os
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 # Ensure env vars before app import (mirrors test_health.py / conftest.client fixture)
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
@@ -37,6 +49,7 @@ os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
 os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
 
 from app.core.security import create_access_token
+from app.db.models.pond import Pond
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -45,6 +58,19 @@ FARMER_POND_ID = "11111111-1111-1111-1111-111111111111"
 OTHER_POND_ID = "22222222-2222-2222-2222-222222222222"
 DISTRICT_A = "Nagapattinam"
 DISTRICT_B = "Thanjavur"
+
+
+async def _seed_pond(db_session: AsyncSession, pond_id: str, district: str = DISTRICT_A) -> Pond:
+    """Seed a minimal real Pond row for a risk-endpoint success-path test.
+
+    Owner is an unrelated random UUID — GET /v1/ponds/{id}/risk's
+    farmer-scoping check (rbac.require_pond_scope) works off the token's
+    `pond_ids` claim, not `Pond.owner_user_id`, so it doesn't need to match.
+    """
+    pond = Pond(id=UUID(pond_id), owner_user_id=uuid4(), name="RBAC Test Pond", district=district)
+    db_session.add(pond)
+    await db_session.commit()
+    return pond
 
 # Previously-open, now-protected GET endpoints (per audit / commit message).
 PROTECTED_GET_ENDPOINTS = [
@@ -133,21 +159,78 @@ async def test_smoke_test_stub_bearer_matches_401_not_500(client: AsyncClient, p
 
 
 # ---------------------------------------------------------------------------
-# 3. Farmer pond-scoping: own pond OK, other pond 403
+# 2b. Login endpoints are NOT gated behind the Authorization header
+#
+# Deliberately placed here, BEFORE any `db_client`-fixture test in this
+# file (see section 3 onward): `db_client`'s lifespan startup calls
+# app.db.session.init_db(), and its shutdown disposes the engine but does
+# NOT reset the module-level `AsyncSessionLocal` sessionmaker back to None
+# (app/db/session.py close_db() — a real, pre-existing gap, not something
+# this change fixes). Once any `db_client` test has run earlier in the same
+# process, `get_async_session()` stops raising RuntimeError("Database not
+# initialised") for the plain `client` fixture below — this test's
+# `pytest.raises(RuntimeError, ...)` would then fail with "DID NOT RAISE"
+# even though the actual DB-not-gated-behind-auth assertion is still true.
+# Verified empirically while wiring P1.3's risk endpoints onto `db_client`.
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_farmer_can_access_own_pond_risk(client: AsyncClient) -> None:
+async def test_login_endpoints_not_gated_by_auth_header(client: AsyncClient) -> None:
+    """POST /v1/auth/otp/request and POST /v1/auth/token must remain reachable
+    with no Authorization header — i.e. P0.1 must not have accidentally wired
+    CurrentUser/CurrentStaff into the login flow itself.
+
+    Neither route declares a CurrentUser/CurrentStaff dependency (verified by
+    reading app/identity/router.py), so a missing/invalid bearer token can
+    never produce a 401/403 for them. What *does* happen in this sandbox is
+    that both routes touch the DB (user lookup) and the `client` fixture's
+    ASGITransport never runs the app lifespan, so DB access raises a bare
+    RuntimeError("Database not initialised...") — the same pre-existing,
+    environmental condition responsible for the documented
+    test_all_stub_endpoints_return_non_500 baseline failure. That RuntimeError
+    is the signature of "reached DB code", proving these requests sailed
+    straight past any auth dependency instead of being rejected by one.
+    """
+    with pytest.raises(RuntimeError, match="Database not initialised"):
+        await client.post("/v1/auth/otp/request", json={"phone": "+919876543210"})
+
+    with pytest.raises(RuntimeError, match="Database not initialised"):
+        await client.post(
+            "/v1/auth/token",
+            json={"grant_type": "password", "username": "someuser", "password": "somepass"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# 3. Farmer pond-scoping: own pond OK, other pond 403
+# ---------------------------------------------------------------------------
+@pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
+async def test_farmer_can_access_own_pond_risk(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    await _seed_pond(db_session, FARMER_POND_ID)
     token = _farmer_token(pond_ids=[FARMER_POND_ID])
-    response = await client.get(f"/v1/ponds/{FARMER_POND_ID}/risk", headers=_auth(token))
+    response = await db_client.get(f"/v1/ponds/{FARMER_POND_ID}/risk", headers=_auth(token))
     assert response.status_code == 200, response.text
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_farmer_cannot_access_other_pond_risk(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_farmer_cannot_access_other_pond_risk(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: GET /v1/ponds/{id}/risk now declares a
+    `session: DbSession` dependency for its real DB-backed logic. FastAPI
+    resolves ALL declared top-level dependencies before the route body
+    runs, in signature order — `user: CurrentUser` succeeds for this valid
+    (if wrongly-scoped) farmer token, so `session: DbSession` still gets
+    resolved next regardless of what the body's `rbac.require_pond_scope`
+    check would decide. On the lifespan-less `client` fixture that raises a
+    bare RuntimeError before the 403 body check ever runs (verified
+    empirically). No Pond row needs seeding: require_pond_scope rejects
+    before any query is issued.
+    """
     token = _farmer_token(pond_ids=[FARMER_POND_ID])
-    response = await client.get(f"/v1/ponds/{OTHER_POND_ID}/risk", headers=_auth(token))
+    response = await db_client.get(f"/v1/ponds/{OTHER_POND_ID}/risk", headers=_auth(token))
     assert response.status_code == 403, response.text
 
 
@@ -189,9 +272,12 @@ async def test_farmer_cannot_access_risk_worklist(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_can_access_risk_worklist(client: AsyncClient) -> None:
-    response = await client.get("/v1/risk/worklist", headers=_auth(_staff_token()))
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_can_access_risk_worklist(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    await _seed_pond(db_session, str(uuid4()), district=DISTRICT_A)
+    response = await db_client.get("/v1/risk/worklist", headers=_auth(_staff_token()))
     assert response.status_code == 200, response.text
 
 
@@ -233,72 +319,54 @@ async def test_staff_can_broadcast_advisory(client: AsyncClient) -> None:
 # 5. District scoping (GET /v1/risk/worklist?district=...)
 # ---------------------------------------------------------------------------
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_district_mismatch_returns_403(client: AsyncClient) -> None:
-    token = _staff_token(district=DISTRICT_A)
-    response = await client.get(
-        "/v1/risk/worklist", params={"district": DISTRICT_B}, headers=_auth(token)
-    )
-    assert response.status_code == 403, response.text
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_district_match_returns_200(client: AsyncClient) -> None:
-    token = _staff_token(district=DISTRICT_A)
-    response = await client.get(
-        "/v1/risk/worklist", params={"district": DISTRICT_A}, headers=_auth(token)
-    )
-    assert response.status_code == 200, response.text
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_with_no_district_claim_fails_closed(client: AsyncClient) -> None:
-    """A staff token with no district claim must NOT be treated as unrestricted."""
-    token = _staff_token(district=None)
-    response = await client.get(
-        "/v1/risk/worklist", params={"district": DISTRICT_A}, headers=_auth(token)
-    )
-    assert response.status_code == 403, response.text
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_admin_bypasses_district_scoping(client: AsyncClient) -> None:
-    token = _admin_token(district=None)
-    response = await client.get(
-        "/v1/risk/worklist", params={"district": DISTRICT_B}, headers=_auth(token)
-    )
-    assert response.status_code == 200, response.text
-
-
-# ---------------------------------------------------------------------------
-# 6. Login endpoints are NOT gated behind the Authorization header
-# ---------------------------------------------------------------------------
-@pytest.mark.integration
-@pytest.mark.asyncio
-async def test_login_endpoints_not_gated_by_auth_header(client: AsyncClient) -> None:
-    """POST /v1/auth/otp/request and POST /v1/auth/token must remain reachable
-    with no Authorization header — i.e. P0.1 must not have accidentally wired
-    CurrentUser/CurrentStaff into the login flow itself.
-
-    Neither route declares a CurrentUser/CurrentStaff dependency (verified by
-    reading app/identity/router.py), so a missing/invalid bearer token can
-    never produce a 401/403 for them. What *does* happen in this sandbox is
-    that both routes touch the DB (user lookup) and the `client` fixture's
-    ASGITransport never runs the app lifespan, so DB access raises a bare
-    RuntimeError("Database not initialised...") — the same pre-existing,
-    environmental condition responsible for the documented
-    test_all_stub_endpoints_return_non_500 baseline failure. That RuntimeError
-    is the signature of "reached DB code", proving these requests sailed
-    straight past any auth dependency instead of being rejected by one.
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_district_mismatch_returns_403(db_client: AsyncClient) -> None:
+    """Uses `db_client`: see test_farmer_cannot_access_other_pond_risk's
+    docstring above — GET /v1/risk/worklist now declares `session:
+    DbSession` too, so the same dependency-resolution-order argument
+    applies (`user: CurrentStaff` succeeds for a valid staff token; the
+    district-mismatch rejection is a body-level `rbac.require_district`
+    call that only runs after `session` has already been resolved).
     """
-    with pytest.raises(RuntimeError, match="Database not initialised"):
-        await client.post("/v1/auth/otp/request", json={"phone": "+919876543210"})
+    token = _staff_token(district=DISTRICT_A)
+    response = await db_client.get(
+        "/v1/risk/worklist", params={"district": DISTRICT_B}, headers=_auth(token)
+    )
+    assert response.status_code == 403, response.text
 
-    with pytest.raises(RuntimeError, match="Database not initialised"):
-        await client.post(
-            "/v1/auth/token",
-            json={"grant_type": "password", "username": "someuser", "password": "somepass"},
-        )
+
+@pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_district_match_returns_200(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    await _seed_pond(db_session, str(uuid4()), district=DISTRICT_A)
+    token = _staff_token(district=DISTRICT_A)
+    response = await db_client.get(
+        "/v1/risk/worklist", params={"district": DISTRICT_A}, headers=_auth(token)
+    )
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_with_no_district_claim_fails_closed(db_client: AsyncClient) -> None:
+    """A staff token with no district claim must NOT be treated as
+    unrestricted. Uses `db_client` for the same reason as
+    test_staff_district_mismatch_returns_403 above."""
+    token = _staff_token(district=None)
+    response = await db_client.get(
+        "/v1/risk/worklist", params={"district": DISTRICT_A}, headers=_auth(token)
+    )
+    assert response.status_code == 403, response.text
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
+async def test_admin_bypasses_district_scoping(db_client: AsyncClient) -> None:
+    token = _admin_token(district=None)
+    response = await db_client.get(
+        "/v1/risk/worklist", params={"district": DISTRICT_B}, headers=_auth(token)
+    )
+    assert response.status_code == 200, response.text
+

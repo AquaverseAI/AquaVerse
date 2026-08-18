@@ -51,22 +51,22 @@ class _AuroraAiOrbState extends State<AuroraAiOrb>
   @override
   void initState() {
     super.initState();
-    // Continuous 5s aurora color sweep
+    // Continuous 2.5s aurora color sweep
     _colorController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 5),
+      duration: const Duration(milliseconds: 2500),
     )..repeat();
 
-    // 3s fluid shape morphing
+    // 1.0s quick fluid background wave animation
     _morphController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 1000),
     )..repeat();
 
-    // 1.2s state pulse
+    // 0.8s state pulse
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 800),
     );
 
     _updateControllers();
@@ -210,38 +210,32 @@ class _AuroraGlowPainter extends CustomPainter {
 
     canvas.drawCircle(center, baseRadius, haloPaint);
 
-    // Layer 2: Deforming Organic Fluid Ring
-    final wavePaint = Paint()
-      ..shader = SweepGradient(
-        transform: GradientRotation(morphValue * 2 * math.pi),
-        colors: [
-          color1.withValues(alpha: 0.7),
-          color2.withValues(alpha: 0.8),
-          color3.withValues(alpha: 0.6),
-          color1.withValues(alpha: 0.7),
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: baseRadius * 0.82))
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isListening ? 3.5 : 2.0;
+    // Layer 2: Fast & Fluid Organic Background Wave Rings
+    final waveSpeeds = [1.0, 1.3, 1.6];
+    final waveOffsets = [0.0, 0.33, 0.66];
+    final waveAlphas = [0.75, 0.45, 0.25];
+    final waveBaseRadii = [0.82, 0.90, 0.96];
 
-    final path = Path();
-    const int points = 8;
-    for (int i = 0; i <= points; i++) {
-      final angle = (i / points) * 2 * math.pi;
-      final waveOffset =
-          math.sin(angle * 3 + morphValue * 2 * math.pi) * (isListening ? 8.0 : 4.0);
-      final r = (baseRadius * 0.76) + waveOffset;
-      final x = center.dx + r * math.cos(angle);
-      final y = center.dy + r * math.sin(angle);
+    for (int waveIdx = 0; waveIdx < 3; waveIdx++) {
+      final waveMorph = (morphValue * waveSpeeds[waveIdx] + waveOffsets[waveIdx]) % 1.0;
+      final dynamicOffset = math.sin(waveMorph * 2 * math.pi) * (isListening ? 9.0 : 5.0);
+      final waveRadius = (baseRadius * waveBaseRadii[waveIdx]) + dynamicOffset;
 
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      final wavePaint = Paint()
+        ..shader = SweepGradient(
+          transform: GradientRotation(waveMorph * 2 * math.pi),
+          colors: [
+            color1.withValues(alpha: waveAlphas[waveIdx]),
+            color2.withValues(alpha: waveAlphas[waveIdx] * 0.8),
+            color3.withValues(alpha: waveAlphas[waveIdx] * 0.6),
+            color1.withValues(alpha: waveAlphas[waveIdx]),
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: waveRadius))
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isListening ? 3.0 : 2.0;
+
+      canvas.drawCircle(center, waveRadius, wavePaint);
     }
-    path.close();
-    canvas.drawPath(path, wavePaint);
 
     // Layer 3: Thinking Orbiting Dots
     if (isThinking) {

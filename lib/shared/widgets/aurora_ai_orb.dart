@@ -196,61 +196,35 @@ class _AuroraGlowPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final baseRadius = size.width / 2;
 
-    // Layer 1: Diffused Outer Aurora Halo
-    final haloPaint = Paint()
+    // Layer 1: Soft Outer Expanding Aura Wave
+    final auraR1 = baseRadius * (0.88 + 0.10 * math.sin(morphValue * 2 * math.pi));
+    final aura1Paint = Paint()
       ..shader = RadialGradient(
         colors: [
-          color1.withValues(alpha: isListening ? 0.35 : 0.22),
-          color2.withValues(alpha: 0.12),
+          color1.withValues(alpha: isListening ? 0.38 : (isThinking ? 0.30 : 0.22)),
+          color2.withValues(alpha: isListening ? 0.18 : 0.10),
           color3.withValues(alpha: 0.0),
         ],
-        stops: const [0.0, 0.60, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: baseRadius))
+        stops: const [0.0, 0.65, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: auraR1))
       ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(center, baseRadius, haloPaint);
+    canvas.drawCircle(center, auraR1, aura1Paint);
 
-    // Layer 2: Fast & Fluid Organic Background Wave Rings
-    final waveSpeeds = [1.0, 1.3, 1.6];
-    final waveOffsets = [0.0, 0.33, 0.66];
-    final waveAlphas = [0.75, 0.45, 0.25];
-    final waveBaseRadii = [0.82, 0.90, 0.96];
+    // Layer 2: Soft Inner Breathing Aura Pulse
+    final auraR2 = baseRadius * (0.78 + 0.06 * math.cos(morphValue * 2 * math.pi));
+    final aura2Paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          color2.withValues(alpha: isListening ? 0.48 : (isThinking ? 0.38 : 0.28)),
+          color1.withValues(alpha: 0.15),
+          color3.withValues(alpha: 0.0),
+        ],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: auraR2))
+      ..style = PaintingStyle.fill;
 
-    for (int waveIdx = 0; waveIdx < 3; waveIdx++) {
-      final waveMorph = (morphValue * waveSpeeds[waveIdx] + waveOffsets[waveIdx]) % 1.0;
-      final dynamicOffset = math.sin(waveMorph * 2 * math.pi) * (isListening ? 9.0 : 5.0);
-      final waveRadius = (baseRadius * waveBaseRadii[waveIdx]) + dynamicOffset;
-
-      final wavePaint = Paint()
-        ..shader = SweepGradient(
-          transform: GradientRotation(waveMorph * 2 * math.pi),
-          colors: [
-            color1.withValues(alpha: waveAlphas[waveIdx]),
-            color2.withValues(alpha: waveAlphas[waveIdx] * 0.8),
-            color3.withValues(alpha: waveAlphas[waveIdx] * 0.6),
-            color1.withValues(alpha: waveAlphas[waveIdx]),
-          ],
-        ).createShader(Rect.fromCircle(center: center, radius: waveRadius))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isListening ? 3.0 : 2.0;
-
-      canvas.drawCircle(center, waveRadius, wavePaint);
-    }
-
-    // Layer 3: Thinking Orbiting Dots
-    if (isThinking) {
-      final dotPaint = Paint()..style = PaintingStyle.fill;
-      for (int i = 0; i < 4; i++) {
-        final dotAngle =
-            (morphValue * 2 * math.pi * 2) + (i * math.pi / 2);
-        final dotR = baseRadius * 0.86;
-        final dotX = center.dx + dotR * math.cos(dotAngle);
-        final dotY = center.dy + dotR * math.sin(dotAngle);
-
-        dotPaint.color = (i % 2 == 0 ? color1 : color2).withValues(alpha: 0.85);
-        canvas.drawCircle(Offset(dotX, dotY), 3.5, dotPaint);
-      }
-    }
+    canvas.drawCircle(center, auraR2, aura2Paint);
   }
 
   @override

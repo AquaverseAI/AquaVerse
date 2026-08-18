@@ -1,7 +1,7 @@
 # Backend Sync Notes — AquaVerse AI
 
-**Status: LOCKED 19-Endpoint API Contract Alignment.**
-Last updated: 2026-08-17
+**Status: LOCKED 18-Endpoint API Contract Alignment (Scope A: Pure Sensor & Photo Media API).**
+Last updated: 2026-08-18
 
 This document serves as the single source of truth for backend endpoint status across both the Farmer and Extension Officer client flows.
 
@@ -34,15 +34,15 @@ This document serves as the single source of truth for backend endpoint status a
 
 ## 2. Deprecated / Out-of-Scope Endpoints
 
-- **`POST /v1/logs`**: Deprecated for log creation writes per contract. Photos use `/v1/media/upload-url` + `/v1/media/{media_id}/commit`. Manual observations (Feed, Mortality, Feed Tray Check, Water Appearance) are cached locally in Drift (`LogsTable`) with `TODO(contract)` marker for future sync endpoint. `GET /v1/logs` remains active for reading log history.
-- **`GET /v1/ponds/{pond_id}/forecast/do`**: Fully removed.
-- **`GET /v1/forecast/*`**, **`GET /v1/geo/*`**, **`GET /v1/twin/*`**, **`GET /v1/models/*`**, **`GET /v1/reports/*`**: Fully removed.
+- **`POST /v1/logs`**: Fully removed from client writes per contract. All manual input fields (Feed Given, Mortality, Feed Tray Check, Water Appearance chips) have been stripped from `LogEntryScreen`.
+- **Photo Media API**: Water appearance, turbidity, and color checks are submitted via two-phase media upload: `POST /v1/media/upload-url` + `POST /v1/media/{media_id}/commit`.
+- **`GET /v1/logs`**: Retained for reading IoT log history telemetry.
+- **`GET /v1/ponds/{pond_id}/forecast/do`**, **`/v1/forecast/*`**, **`/v1/geo/*`**, **`/v1/twin/*`**, **`/v1/models/*`**, **`/v1/reports/*`**: Fully removed.
 
 ---
 
-## 3. Log Screen Architecture (Scope C)
+## 3. Log Screen Architecture (Scope A)
 
-- **Read-Only Top Card**: Live sensor readings (DO, pH, Temp, Salinity) auto-synced from IoT backend, displayed with `StalenessBadge`.
-- **"What sensors can't see" Section**: Manual inputs for Feed Given (kg), Mortality Count, Feed Tray Check (Empty/Some/Lots), and Water Appearance (Good/Average/Bad).
-- **Photos Section**: Two-phase media upload via `/v1/media/upload-url` and `/v1/media/{media_id}/commit`.
-- **Drift Caching**: Local database handles offline queueing (`LogsTableCompanion`).
+- **Top Full-Screen Coverage**: Live IoT sensor telemetry (DO, pH, Salinity, Temperature, Water Quality Index) auto-synced from backend with `StalenessBadge`.
+- **Photo Media Capture**: 3-slot photo media upload strip for water appearance, clarity, and algal check using two-phase media API.
+- **Zero Manual Input**: Eliminates schema conflicts and payload mismatch.

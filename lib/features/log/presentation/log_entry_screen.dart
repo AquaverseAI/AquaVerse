@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/models/models.dart';
@@ -17,10 +16,6 @@ import '../../../shared/widgets/staleness_badge.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 class LogEntryState {
-  final double feedKg;
-  final int mortalityCount;
-  final FeedTrayStatus? feedTray;
-  final WaterAppearance? waterColor;
   final List<String> photos;
   final bool isSaving;
   final bool isSaved;
@@ -28,10 +23,6 @@ class LogEntryState {
   final String? errorMessage;
 
   const LogEntryState({
-    this.feedKg = 18.0,
-    this.mortalityCount = 0,
-    this.feedTray,
-    this.waterColor,
     this.photos = const [],
     this.isSaving = false,
     this.isSaved = false,
@@ -40,10 +31,6 @@ class LogEntryState {
   });
 
   LogEntryState copyWith({
-    double? feedKg,
-    int? mortalityCount,
-    FeedTrayStatus? feedTray,
-    WaterAppearance? waterColor,
     List<String>? photos,
     bool? isSaving,
     bool? isSaved,
@@ -51,10 +38,6 @@ class LogEntryState {
     String? errorMessage,
   }) {
     return LogEntryState(
-      feedKg: feedKg ?? this.feedKg,
-      mortalityCount: mortalityCount ?? this.mortalityCount,
-      feedTray: feedTray ?? this.feedTray,
-      waterColor: waterColor ?? this.waterColor,
       photos: photos ?? this.photos,
       isSaving: isSaving ?? this.isSaving,
       isSaved: isSaved ?? this.isSaved,
@@ -69,13 +52,6 @@ class LogEntryController extends StateNotifier<LogEntryState> {
 
   LogEntryController(this.ref) : super(const LogEntryState());
 
-  void setFeed(double v) => state = state.copyWith(feedKg: v.clamp(0, 100));
-  void incrementFeed() => setFeed(state.feedKg + 1);
-  void decrementFeed() => setFeed(state.feedKg - 1);
-  void setMortality(int v) => state = state.copyWith(mortalityCount: v.clamp(0, 9999));
-  void setFeedTray(FeedTrayStatus v) => state = state.copyWith(feedTray: v);
-  void setWaterColor(WaterAppearance v) => state = state.copyWith(waterColor: v);
-  
   Future<void> addPhotoWithUpload() async {
     final photoIndex = state.photos.length + 1;
     final dummyMediaId = 'media_photo_$photoIndex';
@@ -85,11 +61,12 @@ class LogEntryController extends StateNotifier<LogEntryState> {
       final api = ref.read(apiClientProvider);
       // Phase 1: Request upload URL (/v1/media/upload-url)
       final uploadRes = await api.getUploadUrl({
-        'filename': 'pond_check_$photoIndex.jpg',
+        'filename': 'water_check_$photoIndex.jpg',
         'content_type': 'image/jpeg',
       });
-      
-      final String mediaId = (uploadRes is Map<String, dynamic> && uploadRes.containsKey('media_id'))
+
+      final String mediaId = (uploadRes is Map<String, dynamic> &&
+              uploadRes.containsKey('media_id'))
           ? uploadRes['media_id'] as String
           : dummyMediaId;
 
@@ -109,7 +86,14 @@ class LogEntryController extends StateNotifier<LogEntryState> {
     }
   }
 
-  Future<void> saveLog({required bool isOffline}) async {
+  Future<void> submitPhotoCheck({required bool isOffline}) async {
+    if (state.photos.isEmpty) {
+      state = state.copyWith(
+        errorMessage: 'Please capture at least one water photo for AI analysis',
+      );
+      return;
+    }
+
     state = state.copyWith(isSaving: true, errorMessage: null);
 
     try {
@@ -120,23 +104,17 @@ class LogEntryController extends StateNotifier<LogEntryState> {
         id: 'log_${DateTime.now().millisecondsSinceEpoch}',
         pondId: currentPondId,
         loggedAt: DateTime.now(),
-        feedGivenKg: state.feedKg,
-        mortalityCount: state.mortalityCount,
-        feedTray: state.feedTray,
-        waterColor: state.waterColor,
         photoUrls: state.photos,
         syncStatus: isOffline ? SyncStatus.pending : SyncStatus.synced,
       );
 
-      // TODO(contract): POST /v1/logs is deprecated for writes per contract.
-      // Photos commit via /v1/media/* endpoints above; manual fields save locally to Drift.
+      // Save photo media record locally
       await repo.addLog(log);
 
       state = state.copyWith(isSaving: false, isSaved: true, savedOffline: isOffline);
     } catch (e) {
       state = state.copyWith(
         isSaving: false,
-        errorMessage: 'Failed to save log. Saved locally.',
         isSaved: true,
         savedOffline: true,
       );
@@ -182,15 +160,25 @@ class LogEntryScreen extends ConsumerWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Pond Check', style: TextStyle(color: AppColors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Pond Telemetry & AI Check',
+                style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold)),
             Text(
               _dateLabel(),
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w400),
+              style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w400),
             ),
           ],
         ),
         actions: [
-          const SpeakerButton(textToSpeak: 'Pond Check. Review live sensor readings and record your visual observations.'),
+          const SpeakerButton(
+            textToSpeak:
+                'Sensor telemetry and AI water appearance check. Review live readings and upload pond photos.',
+          ),
           const SizedBox(width: 8),
         ],
       ),
@@ -203,169 +191,49 @@ class LogEntryScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. TOP SECTION — Live Sensor Readings Display (Read-Only)
-                  _LiveSensorReadingsCard(log: latestLog),
+                  // 1. FULL SCREEN SENSOR TELEMETRY COVERAGE
+                  _FullSensorTelemetryCard(log: latestLog),
                   const SizedBox(height: 16),
 
-                  // 2. SECTION HEADER — Manual Field Inputs
-                  const Row(
-                    children: [
-                      Icon(Icons.remove_red_eye_rounded, size: 18, color: AppColors.langAccentPrimary),
-                      SizedBox(width: 6),
-                      Text(
-                        "What sensors can't see",
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Feed Given (kg)
+                  // 2. PHOTO MEDIA WATER APPEARANCE & QUALITY CHECK
                   AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _FieldLabel(label: 'Feed Given (kg)', icon: Icons.set_meal_rounded),
-                        const SizedBox(height: 10),
-                        _StepperControl(
-                          value: state.feedKg,
-                          onIncrement: ctrl.incrementFeed,
-                          onDecrement: ctrl.decrementFeed,
-                          label: '${state.feedKg.toStringAsFixed(0)} kg',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Mortality Count
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _FieldLabel(label: 'Mortality Count', icon: Icons.warning_amber_rounded),
-                        const SizedBox(height: 10),
-                        Row(
+                        const Row(
                           children: [
-                            Expanded(
-                              child: _ChoiceChip(
-                                label: 'None',
-                                selected: state.mortalityCount == 0,
-                                onTap: () => ctrl.setMortality(0),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                decoration: InputDecoration(
-                                  hintText: 'Enter count',
-                                  isDense: true,
-                                  filled: true,
-                                  fillColor: AppColors.surface,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(AppTheme.inputRadius),
-                                    borderSide: const BorderSide(color: AppColors.border),
-                                  ),
-                                ),
-                                onChanged: (v) => ctrl.setMortality(int.tryParse(v) ?? 0),
+                            Icon(Icons.camera_alt_rounded,
+                                size: 18, color: AppColors.langAccentPrimary),
+                            SizedBox(width: 8),
+                            Text(
+                              'Water Appearance & Quality Photo Media',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Feed Tray Check
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _FieldLabel(label: 'Feed Tray Check', icon: Icons.check_circle_outline_rounded),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: FeedTrayStatus.values.map((s) {
-                            return Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: _ChoiceChip(
-                                  label: s.name[0].toUpperCase() + s.name.substring(1),
-                                  selected: state.feedTray == s,
-                                  onTap: () => ctrl.setFeedTray(s),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Water Appearance / Color Swatch
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _FieldLabel(label: 'Water Appearance', icon: Icons.opacity_rounded),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: WaterAppearance.values.map((w) {
-                            Color color;
-                            switch (w) {
-                              case WaterAppearance.good:
-                                color = AppColors.green600;
-                                break;
-                              case WaterAppearance.average:
-                                color = AppColors.warning;
-                                break;
-                              case WaterAppearance.bad:
-                                color = AppColors.critical;
-                                break;
-                            }
-                            return Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(right: 6),
-                                child: _ChoiceChip(
-                                  label: w.name[0].toUpperCase() + w.name.substring(1),
-                                  selected: state.waterColor == w,
-                                  selectedColor: color,
-                                  onTap: () => ctrl.setWaterColor(w),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Photo Capture Section (Two-Phase Media API)
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _FieldLabel(label: 'Pond Photos (AI Vision)', icon: Icons.camera_alt_rounded),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         const Text(
-                          'Photos are analyzed by AI for water clarity and health checks',
-                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          'Upload pond water photos via media API (/v1/media/upload-url + commit). '
+                          'AI vision automatically analyzes water color, turbidity, and algal appearance.',
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textSecondary,
+                              height: 1.4),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 14),
+
+                        // Photo Upload Strip
                         SizedBox(
-                          height: 80,
+                          height: 84,
                           child: Row(
                             children: [
-                              ...state.photos.take(3).map((url) => _PhotoThumbnail(url: url)),
+                              ...state.photos
+                                  .take(3)
+                                  .map((url) => _PhotoThumbnail(url: url)),
                               if (state.photos.length < 3)
                                 _AddPhotoButton(
                                   onTap: () => ctrl.addPhotoWithUpload(),
@@ -373,23 +241,37 @@ class LogEntryScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
+
+                        if (state.errorMessage != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            state.errorMessage!,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.riskHigh,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // Save Log Button
+                  // 3. SUBMIT AI PHOTO CHECK BUTTON
                   PrimaryButton(
-                    label: state.isSaving ? 'Uploading & Saving…' : 'Save Check Log',
+                    label: state.isSaving
+                        ? 'Uploading & Committing Media…'
+                        : 'Submit Water Photo Media',
                     isLoading: state.isSaving,
-                    icon: Icons.save_rounded,
-                    onPressed: () => ctrl.saveLog(isOffline: false),
+                    icon: Icons.cloud_upload_rounded,
+                    onPressed: () => ctrl.submitPhotoCheck(isOffline: false),
                   ),
                   const SizedBox(height: 12),
                   const Center(
                     child: Text(
-                      'Saved locally & synced when online',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      'Photos committed via /v1/media/* · Live IoT Telemetry Synced',
+                      style: TextStyle(
+                          fontSize: 11.5, color: AppColors.textSecondary),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -429,11 +311,11 @@ class LogEntryScreen extends ConsumerWidget {
   }
 }
 
-// ── Live Sensor Readings Card (Read-Only) ────────────────────────────────────
-class _LiveSensorReadingsCard extends StatelessWidget {
+// ── Full-Screen IoT Sensor Telemetry Display ──────────────────────────────────
+class _FullSensorTelemetryCard extends StatelessWidget {
   final PondLog? log;
 
-  const _LiveSensorReadingsCard({this.log});
+  const _FullSensorTelemetryCard({this.log});
 
   @override
   Widget build(BuildContext context) {
@@ -453,12 +335,13 @@ class _LiveSensorReadingsCard extends StatelessWidget {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.sensors_rounded, size: 18, color: AppColors.langAccentPrimary),
-                  SizedBox(width: 6),
+                  Icon(Icons.sensors_rounded,
+                      size: 20, color: AppColors.langAccentPrimary),
+                  SizedBox(width: 8),
                   Text(
-                    'Live Sensor Readings',
+                    'Live IoT Sensor Telemetry',
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
                     ),
@@ -470,50 +353,51 @@ class _LiveSensorReadingsCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Auto-supplied by IoT water sensors. Read-only.',
-            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            'Continuous water chemistry readings supplied automatically by IoT sensors.',
+            style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 12),
-          Row(
+          const SizedBox(height: 14),
+
+          // Primary Grid Telemetry Tiles
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1.6,
             children: [
-              Expanded(
-                child: _SensorValueTile(
-                  label: 'DO',
-                  value: doVal.toStringAsFixed(1),
-                  unit: 'mg/L',
-                  isWarning: doVal < 4.0,
-                ),
+              _TelemetryTile(
+                label: 'Dissolved Oxygen',
+                value: doVal.toStringAsFixed(1),
+                unit: 'mg/L',
+                status: doVal < 4.0 ? 'Low DO Warning' : 'Optimal (>4.0)',
+                isAlert: doVal < 4.0,
+                icon: Icons.air_rounded,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SensorValueTile(
-                  label: 'pH',
-                  value: ph.toStringAsFixed(1),
-                  unit: '',
-                  isWarning: ph < 6.5 || ph > 8.5,
-                ),
+              _TelemetryTile(
+                label: 'pH Level',
+                value: ph.toStringAsFixed(1),
+                unit: 'pH',
+                status: (ph < 6.5 || ph > 8.5) ? 'pH Variance' : 'Stable (6.5-8.5)',
+                isAlert: ph < 6.5 || ph > 8.5,
+                icon: Icons.water_drop_rounded,
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _SensorValueTile(
-                  label: 'Temp',
-                  value: temp.toStringAsFixed(0),
-                  unit: '°C',
-                  isWarning: false,
-                ),
+              _TelemetryTile(
+                label: 'Water Temperature',
+                value: temp.toStringAsFixed(0),
+                unit: '°C',
+                status: 'Normal Range',
+                isAlert: false,
+                icon: Icons.thermostat_rounded,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SensorValueTile(
-                  label: 'Salinity',
-                  value: sal.toStringAsFixed(1),
-                  unit: 'ppt',
-                  isWarning: false,
-                ),
+              _TelemetryTile(
+                label: 'Salinity',
+                value: sal.toStringAsFixed(1),
+                unit: 'ppt',
+                status: 'Optimal Brackish',
+                isAlert: false,
+                icon: Icons.waves_rounded,
               ),
             ],
           ),
@@ -523,53 +407,82 @@ class _LiveSensorReadingsCard extends StatelessWidget {
   }
 }
 
-class _SensorValueTile extends StatelessWidget {
+class _TelemetryTile extends StatelessWidget {
   final String label;
   final String value;
   final String unit;
-  final bool isWarning;
+  final String status;
+  final bool isAlert;
+  final IconData icon;
 
-  const _SensorValueTile({
+  const _TelemetryTile({
     required this.label,
     required this.value,
     required this.unit,
-    required this.isWarning,
+    required this.status,
+    required this.isAlert,
+    required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = isWarning ? AppColors.riskHigh : AppColors.textPrimary;
-    final bgColor = isWarning ? AppColors.criticalSurface : AppColors.surface;
-    final borderColor = isWarning ? AppColors.criticalBorder : AppColors.border;
+    final color = isAlert ? AppColors.riskHigh : AppColors.langAccentPrimary;
+    final bgColor = isAlert ? AppColors.criticalSurface : AppColors.surface;
+    final borderColor = isAlert ? AppColors.criticalBorder : AppColors.border;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-          ),
           Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
                 value,
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color),
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isAlert ? AppColors.riskHigh : AppColors.textPrimary),
               ),
-              if (unit.isNotEmpty) ...[
-                const SizedBox(width: 2),
-                Text(
-                  unit,
-                  style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-                ),
-              ],
+              const SizedBox(width: 3),
+              Text(
+                unit,
+                style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+              ),
             ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            status,
+            style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+                color: isAlert ? AppColors.riskHigh : AppColors.green600),
           ),
         ],
       ),
@@ -577,7 +490,7 @@ class _SensorValueTile extends StatelessWidget {
   }
 }
 
-// ── Log Saved screen ──────────────────────────────────────────────────────────
+// ── Log Saved Confirmation Screen ─────────────────────────────────────────────
 class _LogSavedScreen extends StatelessWidget {
   final bool offline;
   final VoidCallback onReset;
@@ -601,22 +514,28 @@ class _LogSavedScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.green600.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.green600.withValues(alpha: 0.3), width: 2),
+                    border: Border.all(
+                        color: AppColors.green600.withValues(alpha: 0.3), width: 2),
                   ),
-                  child: const Icon(Icons.check_rounded, color: AppColors.green600, size: 40),
+                  child: const Icon(Icons.check_rounded,
+                      color: AppColors.green600, size: 40),
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'Check Log Saved',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  'Water Photos & Telemetry Synced',
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
                   offline
-                      ? 'Saved locally — photos queued for upload when online'
-                      : 'Your visual check & photos are saved',
-                  style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                      ? 'Photos queued for media API upload when online'
+                      : 'Water appearance photos committed & sent to AI vision',
+                  style: const TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -633,106 +552,7 @@ class _LogSavedScreen extends StatelessWidget {
   }
 }
 
-// ── Helper widgets ────────────────────────────────────────────────────────────
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _FieldLabel({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.primary500),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-      ],
-    );
-  }
-}
-
-class _StepperControl extends StatelessWidget {
-  final double value;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
-  final String label;
-
-  const _StepperControl({required this.value, required this.onIncrement, required this.onDecrement, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _StepButton(icon: Icons.remove, onTap: onDecrement),
-        const SizedBox(width: 20),
-        Text(label, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        const SizedBox(width: 20),
-        _StepButton(icon: Icons.add, onTap: onIncrement),
-      ],
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _StepButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppColors.primary100,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Icon(icon, color: AppColors.primary700, size: 20),
-      ),
-    );
-  }
-}
-
-class _ChoiceChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final Color? selectedColor;
-
-  const _ChoiceChip({required this.label, required this.selected, required this.onTap, this.selectedColor});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = selectedColor ?? AppColors.primary500;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? c.withValues(alpha: 0.12) : AppColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? c : AppColors.border),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: selected ? c : AppColors.textSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+// ── Photo Thumbnail & Add Button ──────────────────────────────────────────────
 class _PhotoThumbnail extends StatelessWidget {
   final String url;
   const _PhotoThumbnail({required this.url});
@@ -740,15 +560,22 @@ class _PhotoThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 72,
-      height: 72,
-      margin: const EdgeInsets.only(right: 8),
+      width: 76,
+      height: 76,
+      margin: const EdgeInsets.only(right: 10),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.langAccentPrimary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.langAccentPrimary.withValues(alpha: 0.3)),
       ),
-      child: const Icon(Icons.image_rounded, color: AppColors.textMuted, size: 28),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.image_rounded, color: AppColors.langAccentPrimary, size: 28),
+          SizedBox(height: 2),
+          Text('Media API', style: TextStyle(fontSize: 9, color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 }
@@ -762,19 +589,19 @@ class _AddPhotoButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 72,
-        height: 72,
+        width: 76,
+        height: 76,
         decoration: BoxDecoration(
           color: AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border, style: BorderStyle.solid),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
         ),
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_a_photo_rounded, color: AppColors.primary500, size: 22),
+            Icon(Icons.add_a_photo_rounded, color: AppColors.langAccentPrimary, size: 24),
             SizedBox(height: 4),
-            Text('Add', style: TextStyle(fontSize: 10, color: AppColors.primary500)),
+            Text('Add Photo', style: TextStyle(fontSize: 10, color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

@@ -50,7 +50,16 @@ def compute_features(df: pd.DataFrame, stocking_weight_g: float, stocking_count:
     nightly = night_min.reset_index()
     nightly.columns = ["night_key", "night_do_min"]
     nightly = nightly.sort_values("night_key").reset_index(drop=True)
-    slopes = [np.nan, np.nan]
+    # BUGFIX (P1.3, app/ml_inference/numeric/m2_risk_engine.py): this used to
+    # unconditionally seed `slopes` with 2 NaNs regardless of `len(nightly)`,
+    # which raised a length-mismatch ValueError from the assignment below
+    # whenever a pond had fewer than 2 distinct nights of history (0 or 1
+    # night — e.g. a brand-new pond, or the M2 engine's no-data placeholder
+    # row). `min(2, len(nightly))` keeps the exact same output for every
+    # pond with >=2 nights of history (unchanged: first two entries NaN,
+    # then real slopes from i=2 on) and only fixes the previously-crashing
+    # 0/1-night edge case.
+    slopes = [np.nan] * min(2, len(nightly))
     for i in range(2, len(nightly)):
         y = nightly["night_do_min"].iloc[i - 2:i + 1].values
         x = np.arange(3)

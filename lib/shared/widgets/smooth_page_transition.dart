@@ -5,11 +5,12 @@ import 'package:go_router/go_router.dart';
 CustomTransitionPage<T> buildSmoothFadeThroughPage<T>({
   required LocalKey key,
   required Widget child,
-  Duration duration = const Duration(milliseconds: 280),
+  Duration duration = const Duration(milliseconds: 240),
 }) {
   return CustomTransitionPage<T>(
     key: key,
     child: child,
+    opaque: true,
     transitionDuration: duration,
     reverseTransitionDuration: duration,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -17,7 +18,7 @@ CustomTransitionPage<T> buildSmoothFadeThroughPage<T>({
         parent: animation,
         curve: Curves.easeOutCubic,
       );
-      final scaleAnimation = Tween<double>(begin: 0.96, end: 1.0).animate(
+      final scaleAnimation = Tween<double>(begin: 0.98, end: 1.0).animate(
         CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
       );
 
@@ -36,16 +37,17 @@ CustomTransitionPage<T> buildSmoothFadeThroughPage<T>({
 CustomTransitionPage<T> buildSmoothSlideUpPage<T>({
   required LocalKey key,
   required Widget child,
-  Duration duration = const Duration(milliseconds: 300),
+  Duration duration = const Duration(milliseconds: 260),
 }) {
   return CustomTransitionPage<T>(
     key: key,
     child: child,
+    opaque: true,
     transitionDuration: duration,
     reverseTransitionDuration: duration,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final slideAnimation = Tween<Offset>(
-        begin: const Offset(0.0, 0.08),
+        begin: const Offset(0.0, 0.06),
         end: Offset.zero,
       ).animate(CurvedAnimation(parent: animation, curve: Curves.fastOutSlowIn));
 
@@ -69,16 +71,17 @@ CustomTransitionPage<T> buildSmoothSlideUpPage<T>({
 CustomTransitionPage<T> buildSmoothPushPage<T>({
   required LocalKey key,
   required Widget child,
-  Duration duration = const Duration(milliseconds: 260),
+  Duration duration = const Duration(milliseconds: 240),
 }) {
   return CustomTransitionPage<T>(
     key: key,
     child: child,
+    opaque: true,
     transitionDuration: duration,
     reverseTransitionDuration: duration,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final slideAnimation = Tween<Offset>(
-        begin: const Offset(0.06, 0.0),
+        begin: const Offset(0.04, 0.0),
         end: Offset.zero,
       ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
 

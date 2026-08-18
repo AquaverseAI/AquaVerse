@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
+import '../../../core/network/auth_api_service.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -148,25 +150,28 @@ class OfficerProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
     const officerName = 'Dr. K. Arunkumar';
-    const officerRole = 'Senior Aquaculture Extension Officer';
+    final officerRole = currentLang == 'ta' ? 'மூத்த மீன்வள விரிவாக்க அலுவலர்' : 'Senior Aquaculture Extension Officer';
     const officerId = 'OFF-TN-804';
-    const districtCluster = 'Nagapattinam District · Cluster 3';
+    final districtCluster = currentLang == 'ta' ? 'நாகப்பட்டினம் மாவட்டம் · குழு 3' : 'Nagapattinam District · Cluster 3';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/officer/dashboard')),
-        title: const Text(
-          'Officer Profile',
-          style: TextStyle(
+        title: Text(
+          currentLang == 'ta' ? 'அலுவலர் விவரங்கள்' : 'Officer Profile',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
-          const SpeakerButton(
-            textToSpeak: 'Officer Profile for Dr. K. Arunkumar. Nagapattinam Cluster 3.',
+          SpeakerButton(
+            textToSpeak: currentLang == 'ta'
+                ? 'அலுவலர் விவரங்கள் - முனைவர் K. அருண்குமார். நாகப்பட்டினம் குழு 3.'
+                : 'Officer Profile for Dr. K. Arunkumar. Nagapattinam Cluster 3.',
           ),
           const SizedBox(width: 8),
         ],
@@ -241,9 +246,9 @@ class OfficerProfileScreen extends ConsumerWidget {
                             color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Text(
+                          child: Text(
                             '$officerId · $districtCluster',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
@@ -259,9 +264,9 @@ class OfficerProfileScreen extends ConsumerWidget {
             const SizedBox(height: 16),
 
             // ── Cluster Statistics Grid ─────────────────────────────────────
-            const Text(
-              'Cluster Overview',
-              style: TextStyle(
+            Text(
+              currentLang == 'ta' ? 'குழுப் பார்வை' : 'Cluster Overview',
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
@@ -275,28 +280,28 @@ class OfficerProfileScreen extends ConsumerWidget {
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               childAspectRatio: 1.8,
-              children: const [
+              children: [
                 _StatTile(
-                  label: 'Supervised Ponds',
-                  value: '12 Ponds',
+                  label: currentLang == 'ta' ? 'கண்காணிக்கப்படும் குளங்கள்' : 'Supervised Ponds',
+                  value: currentLang == 'ta' ? '12 குளங்கள்' : '12 Ponds',
                   icon: Icons.water_rounded,
                   color: AppColors.langAccentPrimary,
                 ),
                 _StatTile(
-                  label: 'Assigned Farmers',
-                  value: '8 Farmers',
+                  label: currentLang == 'ta' ? 'ஒதுக்கப்பட்ட விவசாயிகள்' : 'Assigned Farmers',
+                  value: currentLang == 'ta' ? '8 விவசாயிகள்' : '8 Farmers',
                   icon: Icons.people_alt_rounded,
                   color: AppColors.primary700,
                 ),
                 _StatTile(
-                  label: 'Active Harvests',
-                  value: '5 Active',
+                  label: currentLang == 'ta' ? 'நடப்பு அறுவடைகள்' : 'Active Harvests',
+                  value: currentLang == 'ta' ? '5 நடப்பில்' : '5 Active',
                   icon: Icons.trending_up_rounded,
                   color: AppColors.green600,
                 ),
                 _StatTile(
-                  label: 'Pending Visits',
-                  value: '3 Scheduled',
+                  label: currentLang == 'ta' ? 'நிலுவையிலுள்ள பார்வைகள்' : 'Pending Visits',
+                  value: currentLang == 'ta' ? '3 திட்டமிடப்பட்டவை' : '3 Scheduled',
                   icon: Icons.calendar_today_rounded,
                   color: AppColors.warning,
                 ),
@@ -305,9 +310,9 @@ class OfficerProfileScreen extends ConsumerWidget {
             const SizedBox(height: 20),
 
             // ── Quick Settings & Actions ────────────────────────────────────
-            const Text(
-              'Officer Management',
-              style: TextStyle(
+            Text(
+              currentLang == 'ta' ? 'அலுவலர் நிர்வாகம்' : 'Officer Management',
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
@@ -320,37 +325,37 @@ class OfficerProfileScreen extends ConsumerWidget {
                 children: [
                   _OptionTile(
                     icon: Icons.location_city_rounded,
-                    title: 'Assigned District Cluster',
-                    subtitle: 'Nagapattinam Cluster 3 (12 Ponds)',
+                    title: currentLang == 'ta' ? 'ஒதுக்கப்பட்ட மாவட்டக் குழு' : 'Assigned District Cluster',
+                    subtitle: currentLang == 'ta' ? 'நாகப்பட்டினம் குழு 3 (12 குளங்கள்)' : 'Nagapattinam Cluster 3 (12 Ponds)',
                     onTap: () => _showClusterDetailsDialog(context),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
                     icon: Icons.sync_rounded,
-                    title: 'Offline Report Queue',
-                    subtitle: '2 visit logs queued for sync',
-                    trailingBadge: '2 Pending',
+                    title: currentLang == 'ta' ? 'ஆஃப்லைன் அறிக்கை வரிசை' : 'Offline Report Queue',
+                    subtitle: currentLang == 'ta' ? '2 பார்வைகள் இணைக்க நிலுவையில் உள்ளன' : '2 visit logs queued for sync',
+                    trailingBadge: currentLang == 'ta' ? '2 நிலுவை' : '2 Pending',
                     onTap: () => _showOfflineQueueDialog(context),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
                     icon: Icons.language_rounded,
-                    title: 'App Language',
-                    subtitle: 'Tamil (தமிழ்) / English',
-                    onTap: () => context.push('/onboarding/language'),
+                    title: currentLang == 'ta' ? 'செயலி மொழி' : 'App Language',
+                    subtitle: currentLang == 'ta' ? 'தமிழ் (Tamil) / English' : 'English / Tamil (தமிழ்)',
+                    onTap: () => context.push('/settings'),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
                     icon: Icons.support_agent_rounded,
-                    title: 'Aqua Master Helpline',
-                    subtitle: 'Direct escalation line for urgent outbreaks',
+                    title: currentLang == 'ta' ? 'அக்வா மாஸ்டர் உதவி எண்' : 'Aqua Master Helpline',
+                    subtitle: currentLang == 'ta' ? 'அவசர நோய்ப் பரவலுக்கான நேரடித் தொடர்பு' : 'Direct escalation line for urgent outbreaks',
                     onTap: () => context.push('/help'),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
                     icon: Icons.info_rounded,
-                    title: 'About Extension Portal',
-                    subtitle: 'Version 1.2.0 · Platform specs',
+                    title: currentLang == 'ta' ? 'விரிவாக்கத் தளம் பற்றி' : 'About Extension Portal',
+                    subtitle: currentLang == 'ta' ? 'பதிப்பு v1.2.0 · தள விவரக்குறிப்புகள்' : 'Version 1.2.0 · Platform specs',
                     onTap: () => _showAboutDialog(context),
                   ),
                 ],
@@ -358,15 +363,17 @@ class OfficerProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // ── Clean Sign Out Button (No unnecessary words) ────────────────
+            // ── Clean Sign Out Button ────────────────
             SecondaryButton(
-              label: 'Sign Out',
+              label: currentLang == 'ta' ? 'வெளியேறு' : 'Sign Out',
               icon: Icons.logout_rounded,
               onPressed: () async {
+                final authService = AuthApiService();
+                await authService.logout();
                 final flagStore = await OnboardingFlagStore.create();
-                await flagStore.clearAll();
+                await flagStore.clearSession();
                 if (context.mounted) {
-                  context.go('/onboarding/role');
+                  context.go('/onboarding/mobile');
                 }
               },
             ),

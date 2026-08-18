@@ -204,7 +204,7 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
             ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: 5,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, i) {
                 final day = DateTime.now().subtract(Duration(days: i));
                 return AppCard(

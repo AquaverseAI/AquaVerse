@@ -40,6 +40,11 @@ class OnboardingFlagStore {
     await _prefs.setString(_keyMobileNumber, mobile);
   }
 
+  Future<void> clearSession() async {
+    // Preserves has_onboarded, selected_language, and selected_role.
+    await _prefs.remove(_keyMobileNumber);
+  }
+
   Future<void> clearAll() async {
     await _prefs.remove(_keyHasOnboarded);
     await _prefs.remove(_keySelectedLanguage);

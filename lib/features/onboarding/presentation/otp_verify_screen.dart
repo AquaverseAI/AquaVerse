@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
@@ -105,15 +105,35 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
   void _onDigitChanged(int index, String value) {
     if (_animState == OtpAnimState.verifying || _animState == OtpAnimState.success) return;
 
-    if (value.isNotEmpty) {
-      if (index < 5) {
-        _focusNodes[index + 1].requestFocus();
+    final digitsOnly = value.replaceAll(RegExp(r'\D'), '');
+
+    if (digitsOnly.length > 1) {
+      // Handle pasting multi-digit OTP code
+      for (int i = 0; i < 6; i++) {
+        if (i < digitsOnly.length) {
+          _controllers[i].text = digitsOnly[i];
+        } else {
+          _controllers[i].clear();
+        }
+      }
+      final nextIndex = digitsOnly.length >= 6 ? 5 : digitsOnly.length;
+      if (digitsOnly.length >= 6) {
+        _focusNodes[nextIndex].unfocus();
       } else {
-        _focusNodes[index].unfocus();
+        _focusNodes[nextIndex].requestFocus();
       }
     } else {
-      if (index > 0) {
-        _focusNodes[index - 1].requestFocus();
+      // Single digit entry / backspace
+      if (value.isNotEmpty) {
+        if (index < 5) {
+          _focusNodes[index + 1].requestFocus();
+        } else {
+          _focusNodes[index].unfocus();
+        }
+      } else {
+        if (index > 0) {
+          _focusNodes[index - 1].requestFocus();
+        }
       }
     }
 
@@ -125,60 +145,84 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
     }
   }
 
+  void _triggerErrorFlow() async {
+    if (!mounted) return;
+    setState(() {
+      _animState = OtpAnimState.error;
+    });
+    _shakeController.forward(from: 0.0);
+
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() {
+        _animState = OtpAnimState.filling;
+        for (var c in _controllers) {
+          c.clear();
+        }
+        _focusNodes[0].requestFocus();
+      });
+    }
+  }
+
   void _startVerificationChoreography() async {
+    if (_animState == OtpAnimState.verifying || _animState == OtpAnimState.success) return;
+
     setState(() {
       _animState = OtpAnimState.verifying;
     });
 
-    // Run Choreography Sequence
-    // Step A: Cascade Bounce
-    _cascadeController.forward(from: 0.0);
-    await Future.delayed(const Duration(milliseconds: 250));
+    try {
+      // Run Choreography Sequence
+      // Step A: Cascade Bounce
+      _cascadeController.forward(from: 0.0);
+      await Future.delayed(const Duration(milliseconds: 250));
 
-    // Step B: Connector Trace
-    _traceController.forward(from: 0.0);
-    await Future.delayed(const Duration(milliseconds: 450));
+      // Step B: Connector Trace
+      _traceController.forward(from: 0.0);
+      await Future.delayed(const Duration(milliseconds: 450));
 
-    // Step C: Trigger Backend Verification
-    final controller = ref.read(onboardingControllerProvider.notifier);
-    final success = await controller.verifyOtp();
+      // Step C: Trigger Backend Verification
+      final controller = ref.read(onboardingControllerProvider.notifier);
+      final success = await controller.verifyOtp();
 
-    if (success) {
-      // Step D: Morph Collapse
-      await _collapseController.forward(from: 0.0);
+      if (success) {
+        // Step D: Morph Collapse
+        await _collapseController.forward(from: 0.0);
 
-      setState(() {
-        _animState = OtpAnimState.success;
-      });
+        if (mounted) {
+          setState(() {
+            _animState = OtpAnimState.success;
+          });
+        }
 
-      // Start continuous looping radial glow
-      _glowController.repeat(reverse: true);
+        // Start continuous looping radial glow
+        _glowController.repeat(reverse: true);
 
-      // Complete onboarding and set has_onboarded = true flag
-      final nextRoute = await controller.completeOnboarding();
+        // Check onboarding status
+        final flagStore = await OnboardingFlagStore.create();
+        final hasOnboardedAlready = flagStore.hasOnboarded;
 
-      // Brief delay to wows user with success state before route transition
-      await Future.delayed(const Duration(milliseconds: 1600));
-      if (mounted) {
-        context.go(nextRoute);
+        final String nextRoute;
+        if (hasOnboardedAlready) {
+          // Returning user / re-login -> Go directly to home dashboard
+          final mob = ref.read(onboardingControllerProvider).mobileNumber;
+          await flagStore.setMobileNumber(mob);
+          nextRoute = flagStore.selectedRole == 'officer' ? '/officer/dashboard' : '/today';
+        } else {
+          // First-time onboarding user -> Proceed to Role Selection
+          nextRoute = '/onboarding/role';
+        }
+
+        // Brief delay to wow user with success state before route transition
+        await Future.delayed(const Duration(milliseconds: 1600));
+        if (mounted) {
+          context.go(nextRoute);
+        }
+      } else {
+        _triggerErrorFlow();
       }
-    } else {
-      // Error Path
-      setState(() {
-        _animState = OtpAnimState.error;
-      });
-      _shakeController.forward(from: 0.0);
-
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        setState(() {
-          _animState = OtpAnimState.filling;
-          for (var c in _controllers) {
-            c.clear();
-          }
-          _focusNodes[0].requestFocus();
-        });
-      }
+    } catch (e) {
+      _triggerErrorFlow();
     }
   }
 
@@ -217,12 +261,18 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
             ),
 
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Spacer(flex: 2),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 16),
 
                     // Animated Header Text Crossfade (Section 3.5 spec)
                     AnimatedCrossFade(
@@ -393,7 +443,7 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                                                 ),
                                                 inputFormatters: [
                                                   FilteringTextInputFormatter.digitsOnly,
-                                                  LengthLimitingTextInputFormatter(1),
+                                                  LengthLimitingTextInputFormatter(6),
                                                 ],
                                                 decoration: const InputDecoration(
                                                   border: InputBorder.none,
@@ -595,8 +645,12 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
                       ),
 
                     const SizedBox(height: 24),
-                  ],
-                ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

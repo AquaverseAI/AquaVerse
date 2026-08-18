@@ -31,78 +31,88 @@ class AiIntroScreen extends ConsumerWidget {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageMargin, vertical: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title & Subtitle Row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Meet Aqua, Your AI Assistant',
-                          style: Theme.of(context).textTheme.headlineLarge,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageMargin, vertical: 12.0),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight - 24),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title & Subtitle Row
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Meet Aqua, Your AI Assistant',
+                                  style: Theme.of(context).textTheme.headlineLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Always here to help you manage your pond and boost your harvest.',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SpeakerButton(
+                            textToSpeak: 'Meet Aqua, Your AI Assistant. Always here to help you manage your pond and boost your harvest.',
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Center(
+                        child: Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary100,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary500.withValues(alpha: 0.3),
+                                blurRadius: 40,
+                                spreadRadius: 10,
+                              )
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.assistant_rounded,
+                            size: 72,
+                            color: AppColors.primary700,
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Always here to help you manage your pond and boost your harvest.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SpeakerButton(
-                    textToSpeak: 'Meet Aqua, Your AI Assistant. Always here to help you manage your pond and boost your harvest.',
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Center(
-                child: Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary100,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary500.withValues(alpha: 0.3),
-                        blurRadius: 40,
-                        spreadRadius: 10,
-                      )
+                      ),
+                      const Spacer(),
+                      // Features list
+                      const _FeatureRow(icon: Icons.mic_rounded, text: 'Use your voice in local language'),
+                      const SizedBox(height: 16),
+                      const _FeatureRow(icon: Icons.camera_alt_rounded, text: 'Take photos to diagnose diseases'),
+                      const SizedBox(height: 16),
+                      const _FeatureRow(icon: Icons.timeline_rounded, text: 'Get daily predictions and alerts'),
+                      const SizedBox(height: 32),
+
+                      PrimaryButton(
+                        label: 'Get Started',
+                        onPressed: () => _onContinue(context, ref),
+                        icon: Icons.check_circle_rounded,
+                      ),
+                      const SizedBox(height: 12),
                     ],
-                  ),
-                  child: const Icon(
-                    Icons.assistant_rounded,
-                    size: 72,
-                    color: AppColors.primary700,
                   ),
                 ),
               ),
-              const Spacer(),
-              // Features list
-              _FeatureRow(icon: Icons.mic_rounded, text: 'Use your voice in local language'),
-              const SizedBox(height: 16),
-              _FeatureRow(icon: Icons.camera_alt_rounded, text: 'Take photos to diagnose diseases'),
-              const SizedBox(height: 16),
-              _FeatureRow(icon: Icons.timeline_rounded, text: 'Get daily predictions and alerts'),
-              const SizedBox(height: 48),
-
-              PrimaryButton(
-                label: 'Get Started',
-                onPressed: () => _onContinue(context, ref),
-                icon: Icons.check_circle_rounded,
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

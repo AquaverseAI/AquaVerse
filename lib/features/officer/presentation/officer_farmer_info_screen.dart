@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
 
-class OfficerFarmerInfoScreen extends StatelessWidget {
+class OfficerFarmerInfoScreen extends ConsumerWidget {
   final Map<String, dynamic>? farmerData;
 
   const OfficerFarmerInfoScreen({super.key, this.farmerData});
@@ -42,7 +44,8 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
     final name = farmerData?['farmerName'] ?? 'M. Selvam';
     final phone = farmerData?['phone'] ?? '+91 98765 43210';
     final pondId = farmerData?['pondId'] ?? 'TN-01-001';
@@ -62,13 +65,17 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
         statusColor = AppColors.green600;
     }
 
+    final riskLabel = currentLang == 'ta'
+        ? (risk == 'High' ? 'அதிக அபாயம்' : risk == 'Medium' ? 'நடுத்தர அபாயம்' : 'குறைந்த அபாயம்')
+        : '$risk Risk';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/officer/dashboard')),
-        title: const Text(
-          'Farmer Information',
-          style: TextStyle(
+        title: Text(
+          currentLang == 'ta' ? 'விவசாயி விவரங்கள்' : 'Farmer Information',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
           ),
@@ -151,7 +158,7 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                'Pond $pondId · $location',
+                                currentLang == 'ta' ? 'குளம் $pondId · $location' : 'Pond $pondId · $location',
                                 style: const TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -180,7 +187,7 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.phone_in_talk_rounded, size: 22),
                     label: Text(
-                      'Call $name ($phone)',
+                      currentLang == 'ta' ? '$name ஐ அழை ($phone)' : 'Call $name ($phone)',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -193,9 +200,9 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // ── Culture & Pond Details ──────────────────────────────────────
-            const Text(
-              'Farm & Pond Specification',
-              style: TextStyle(
+            Text(
+              currentLang == 'ta' ? 'பண்ணை மற்றும் குளத்து விவரங்கள்' : 'Farm & Pond Specification',
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
@@ -206,17 +213,17 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
             AppCard(
               child: Column(
                 children: [
-                  _InfoRow(label: 'Assigned Pond ID', value: pondId),
+                  _InfoRow(label: currentLang == 'ta' ? 'ஒதுக்கப்பட்ட குளத்து எண்' : 'Assigned Pond ID', value: pondId),
                   const Divider(height: 12),
-                  _InfoRow(label: 'Location', value: '$location District Cluster 3'),
+                  _InfoRow(label: currentLang == 'ta' ? 'இடம்' : 'Location', value: currentLang == 'ta' ? '$location மாவட்டம் குழு 3' : '$location District Cluster 3'),
                   const Divider(height: 12),
-                  _InfoRow(label: 'Cultured Species', value: 'Litopenaeus vannamei'),
+                  _InfoRow(label: currentLang == 'ta' ? 'வளர்ப்பு இனம்' : 'Cultured Species', value: 'Litopenaeus vannamei'),
                   const Divider(height: 12),
-                  _InfoRow(label: 'Pond Water Area', value: '4,000 m² (0.4 Ha)'),
+                  _InfoRow(label: currentLang == 'ta' ? 'குளத்தின் பரப்பளவு' : 'Pond Water Area', value: currentLang == 'ta' ? '4,000 சதுர மீட்டர் (0.4 ஹெக்டேர்)' : '4,000 m² (0.4 Ha)'),
                   const Divider(height: 12),
-                  _InfoRow(label: 'Culture Risk Status', value: '$risk Risk', valueColor: statusColor),
+                  _InfoRow(label: currentLang == 'ta' ? 'வளர்ப்பு அபாய நிலை' : 'Culture Risk Status', value: riskLabel, valueColor: statusColor),
                   const Divider(height: 12),
-                  _InfoRow(label: 'Last Field Visit', value: lastVisit),
+                  _InfoRow(label: currentLang == 'ta' ? 'கடைசி களப் பார்வை' : 'Last Field Visit', value: lastVisit),
                 ],
               ),
             ),
@@ -224,13 +231,13 @@ class OfficerFarmerInfoScreen extends StatelessWidget {
 
             // ── Actions ───────────────────────────────────────────────────
             PrimaryButton(
-              label: 'Send Direct Advisory',
+              label: currentLang == 'ta' ? 'நேரடி ஆலோசனை அனுப்பு' : 'Send Direct Advisory',
               icon: Icons.send_rounded,
               onPressed: () => context.push('/officer/send-advice'),
             ),
             const SizedBox(height: 12),
             SecondaryButton(
-              label: 'Log Field Visit',
+              label: currentLang == 'ta' ? 'களப் பார்வை பதிவு செய்' : 'Log Field Visit',
               icon: Icons.add_location_alt_rounded,
               onPressed: () => context.push('/officer/visit-log'),
             ),

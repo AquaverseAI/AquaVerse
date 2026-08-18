@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_translations.dart';
-import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
@@ -28,9 +27,7 @@ class LanguageSelectScreen extends ConsumerWidget {
     },
   ];
 
-  void _onContinue(BuildContext context) async {
-    final store = await OnboardingFlagStore.create();
-    await store.setHasOnboarded(true);
+  void _onContinue(BuildContext context) {
     if (context.mounted) {
       context.push('/onboarding/mobile');
     }

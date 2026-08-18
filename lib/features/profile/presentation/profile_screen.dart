@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/auth_api_service.dart';
 import '../../../core/services/demo_data_service.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
@@ -238,10 +239,12 @@ class ProfileScreen extends StatelessWidget {
               label: 'Sign Out',
               icon: Icons.logout_rounded,
               onPressed: () async {
+                final authService = AuthApiService();
+                await authService.logout();
                 final store = await OnboardingFlagStore.create();
-                await store.clearAll();
+                await store.clearSession();
                 if (context.mounted) {
-                  context.go('/onboarding/role');
+                  context.go('/onboarding/mobile');
                 }
               },
             ),

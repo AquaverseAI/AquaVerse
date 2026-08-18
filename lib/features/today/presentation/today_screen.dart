@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/data_providers.dart';
 import '../../../core/services/demo_data_service.dart';
@@ -98,9 +99,9 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
     _isReducedMotion =
         WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations;
 
-    // 9-section staggered entrance (~60ms stagger)
+    // 10-section staggered entrance (~60ms stagger)
     _loadInControllers = List.generate(
-      9,
+      10,
       (i) => AnimationController(vsync: this, duration: const Duration(milliseconds: 280)),
     );
     _loadInFades = _loadInControllers
@@ -140,7 +141,7 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
       opacity: _loadInFades[index],
       child: AnimatedBuilder(
         animation: _loadInRises[index],
-        builder: (_, __) => Transform.translate(
+        builder: (_, _) => Transform.translate(
           offset: Offset(0, _loadInRises[index].value),
           child: child,
         ),
@@ -316,10 +317,21 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
                   ),
                 ),
 
-                // §3.8 Advisories Card — Tier 1, calm display
+                // §3.8 Forecast Card — Stubbed state per unresolved contract gap
                 SliverToBoxAdapter(
                   child: _sectionFadeRise(
                     7,
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: _ForecastStubCard(),
+                    ),
+                  ),
+                ),
+
+                // §3.9 Advisories Card — Tier 1, calm display
+                SliverToBoxAdapter(
+                  child: _sectionFadeRise(
+                    8,
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                       child: _AdvisoriesCard(advisories: advisories),
@@ -330,9 +342,9 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
             ),
           ),
 
-          // §3.9 Sticky Footer Bar — Clean steady CTA bar
+          // §3.10 Sticky Footer Bar — Clean steady CTA bar
           _sectionFadeRise(
-            8,
+            9,
             const _StickyFooterBar(),
           ),
         ],
@@ -344,7 +356,7 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
 // ─────────────────────────────────────────────────────────────────────────────
 // §3.2 Header — Tier 0 (no card, clean static bell)
 // ─────────────────────────────────────────────────────────────────────────────
-class _DashboardHeader extends StatelessWidget {
+class _DashboardHeader extends ConsumerWidget {
   final String farmerName;
   final List<Pond> ponds;
   final Pond selectedPond;
@@ -360,8 +372,10 @@ class _DashboardHeader extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hasMultiplePonds = ponds.length > 1;
+    final currentLang = ref.watch(appLanguageProvider);
+    final greeting = AppTranslations.getText('vanakkam', currentLang);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
@@ -375,7 +389,7 @@ class _DashboardHeader extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        'Vanakkam, $farmerName 👋',
+                        '$greeting $farmerName 👋',
                         style: const TextStyle(
                           fontSize: 19,
                           fontWeight: FontWeight.bold,
@@ -490,7 +504,7 @@ class _DashboardHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // §3.3 Risk Disc Block — Tier 2: steady 3D disc with subtle static highlight
 // ─────────────────────────────────────────────────────────────────────────────
-class _RiskDiscBlock extends StatelessWidget {
+class _RiskDiscBlock extends ConsumerWidget {
   final PondRisk risk;
 
   const _RiskDiscBlock({required this.risk});
@@ -521,27 +535,27 @@ class _RiskDiscBlock extends StatelessWidget {
     }
   }
 
-  String get _tierLabel {
+  String _getTierLabel(String lang) {
     switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
-        return 'High Risk';
+        return AppTranslations.getText('highRisk', lang);
       case 'medium':
-        return 'Medium Risk';
+        return AppTranslations.getText('mediumRisk', lang);
       default:
-        return 'Low Risk';
+        return AppTranslations.getText('lowRisk', lang);
     }
   }
 
-  String get _tierDescription {
+  String _getTierDescription(String lang) {
     switch (risk.effectiveTier) {
       case 'high':
       case 'critical':
-        return 'Attention required! Environmental conditions warrant immediate check.';
+        return AppTranslations.getText('highRiskDesc', lang);
       case 'medium':
-        return 'Parameters show slight variance. Monitor closely today.';
+        return AppTranslations.getText('mediumRiskDesc', lang);
       default:
-        return 'Pond environment is stable and optimal for crop growth.';
+        return AppTranslations.getText('lowRiskDesc', lang);
     }
   }
 
@@ -558,7 +572,11 @@ class _RiskDiscBlock extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
+    final tierLabel = _getTierLabel(currentLang);
+    final tierDesc = _getTierDescription(currentLang);
+
     final scoreDisplay =
         risk.score != null ? '${(risk.score! * 100).toInt()}%' : null;
 
@@ -633,9 +651,9 @@ class _RiskDiscBlock extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Overall Pond Risk',
-                      style: TextStyle(
+                    Text(
+                      AppTranslations.getText('overallPondRisk', currentLang),
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary,
@@ -645,7 +663,7 @@ class _RiskDiscBlock extends StatelessWidget {
                     const Spacer(),
                     SpeakerButton(
                         textToSpeak:
-                            'Overall pond risk is $_tierLabel. $_tierDescription'),
+                            'Overall pond risk is $tierLabel. $tierDesc'),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -659,7 +677,7 @@ class _RiskDiscBlock extends StatelessWidget {
                         color: _tierGlowColor.withValues(alpha: 0.3), width: 1),
                   ),
                   child: Text(
-                    _tierLabel.toUpperCase(),
+                    tierLabel.toUpperCase(),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -670,7 +688,7 @@ class _RiskDiscBlock extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _tierDescription,
+                  tierDesc,
                   style: const TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textSecondary,
@@ -691,18 +709,23 @@ class _RiskDiscBlock extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // §3.5 Metrics Scroll Row — Tier 1 MetricChip glass chips
 // ─────────────────────────────────────────────────────────────────────────────
-class _MetricsScrollRow extends StatelessWidget {
+class _MetricsScrollRow extends ConsumerWidget {
   final PondLog? log;
 
   const _MetricsScrollRow({this.log});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
     final ph = log?.ph ?? 7.8;
     final doVal = log?.dissolvedOxygen ?? 5.4;
     final temp = log?.temperature ?? 28.0;
     final sal = log?.salinity ?? 15.0;
     final syncedAt = log?.loggedAt;
+
+    final doLabel = currentLang == 'ta' ? 'கரைந்த ஆக்சிஜன்' : 'DO';
+    final tempLabel = currentLang == 'ta' ? 'வெப்பநிலை' : 'Temp';
+    final salLabel = currentLang == 'ta' ? 'உவர்ப்புத் தன்மை' : 'Salinity';
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -710,7 +733,7 @@ class _MetricsScrollRow extends StatelessWidget {
       child: Row(
         children: [
           MetricChip(
-            label: 'DO',
+            label: doLabel,
             value: doVal.toStringAsFixed(1),
             unit: 'mg/L',
             syncedAt: syncedAt,
@@ -725,14 +748,14 @@ class _MetricsScrollRow extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           MetricChip(
-            label: 'Temp',
+            label: tempLabel,
             value: temp.toStringAsFixed(0),
             unit: '°C',
             syncedAt: syncedAt,
           ),
           const SizedBox(width: 10),
           MetricChip(
-            label: 'Salinity',
+            label: salLabel,
             value: sal.toStringAsFixed(1),
             unit: 'ppt',
             syncedAt: syncedAt,
@@ -747,26 +770,32 @@ class _MetricsScrollRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // §3.6 Event Timeline Card — Tier 1, nested icon chips
 // ─────────────────────────────────────────────────────────────────────────────
-class _EventTimelineCard extends StatelessWidget {
+class _EventTimelineCard extends ConsumerWidget {
   final List<PondEvent> events;
 
   const _EventTimelineCard({required this.events});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
+
     final displayEvents = events.isNotEmpty
         ? events.take(3).toList()
         : [
             PondEvent(
               id: 'ev-1',
               type: 'sensor',
-              summary: 'DO Sensor calibrated successfully',
+              summary: currentLang == 'ta'
+                  ? 'DO சென்சார் வெற்றிகரமாக அளவீடு செய்யப்பட்டது'
+                  : 'DO Sensor calibrated successfully',
               timestamp: DateTime.now().subtract(const Duration(hours: 2)),
             ),
             PondEvent(
               id: 'ev-2',
               type: 'photo',
-              summary: 'Pond water color photo submitted',
+              summary: currentLang == 'ta'
+                  ? 'குளத்து நீரின் புகைப்படம் சமர்ப்பிக்கப்பட்டது'
+                  : 'Pond water color photo submitted',
               timestamp: DateTime.now().subtract(const Duration(hours: 6)),
             ),
           ];
@@ -778,9 +807,9 @@ class _EventTimelineCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Recent Pond Events',
-                style: TextStyle(
+              Text(
+                AppTranslations.getText('recentEvents', currentLang),
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
@@ -788,7 +817,7 @@ class _EventTimelineCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${displayEvents.length} events',
+                currentLang == 'ta' ? '${displayEvents.length} நிகழ்வுகள்' : '${displayEvents.length} events',
                 style: const TextStyle(
                     fontSize: 12, color: AppColors.textMuted),
               ),
@@ -938,8 +967,53 @@ class _AlertsCard extends StatelessWidget {
   }
 }
 
+// TODO(contract): Dedicated forecast endpoint (/v1/forecast/do) is missing from confirmed endpoint contract.
+// Displaying a calm "Forecast Unavailable" state until response shape inside /v1/ponds/{pond_id}/risk is confirmed.
+class _ForecastStubCard extends StatelessWidget {
+  const _ForecastStubCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Tier1GlassCard(
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.textMuted.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.show_chart_rounded, color: AppColors.textSecondary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '24-Hour DO Forecast',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Forecast band pending backend contract confirmation',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// §3.8 Advisories Card — Tier 1, calm display
+// §3.9 Advisories Card — Tier 1, calm display
 // ─────────────────────────────────────────────────────────────────────────────
 class _AdvisoriesCard extends StatelessWidget {
   final List<Recommendation> advisories;
@@ -1123,13 +1197,8 @@ class _StickyFooterBarState extends State<_StickyFooterBar> {
 class _Tier1GlassCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
-  final EdgeInsets padding;
 
-  const _Tier1GlassCard({
-    required this.child,
-    this.onTap,
-    this.padding = const EdgeInsets.all(16),
-  });
+  const _Tier1GlassCard({required this.child, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1151,9 +1220,15 @@ class _Tier1GlassCard extends StatelessWidget {
           ? InkWell(
               onTap: onTap,
               borderRadius: BorderRadius.circular(18),
-              child: Padding(padding: padding, child: child),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: child,
+              ),
             )
-          : Padding(padding: padding, child: child),
+          : Padding(
+              padding: const EdgeInsets.all(16),
+              child: child,
+            ),
     );
   }
 }
@@ -1161,14 +1236,8 @@ class _Tier1GlassCard extends StatelessWidget {
 /// Tier 2 — Elevated glass card.
 class _Tier2GlassCard extends StatelessWidget {
   final Widget child;
-  final VoidCallback? onTap;
-  final EdgeInsets padding;
 
-  const _Tier2GlassCard({
-    required this.child,
-    this.onTap,
-    this.padding = const EdgeInsets.all(18),
-  });
+  const _Tier2GlassCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -1187,13 +1256,10 @@ class _Tier2GlassCard extends StatelessWidget {
           ),
         ],
       ),
-      child: onTap != null
-          ? InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(padding: padding, child: child),
-            )
-          : Padding(padding: padding, child: child),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: child,
+      ),
     );
   }
 }

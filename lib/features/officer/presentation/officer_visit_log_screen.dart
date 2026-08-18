@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -74,6 +75,8 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
       return;
     }
 
+    // TODO(contract): POST /v1/logs is missing from confirmed endpoint contract. See openapi_contract.md.
+    // Officer visit log report queued in local SQLite outbox until write endpoint is confirmed.
     setState(() => _isSaving = true);
     await Future.delayed(const Duration(milliseconds: 700));
     setState(() {
@@ -84,6 +87,8 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentLang = ref.watch(appLanguageProvider);
+
     if (_isSaved) {
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -107,21 +112,25 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
                         color: AppColors.green600, size: 36),
                   ),
                   const SizedBox(height: 20),
-                  const Text('Field Visit Log Saved',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary)),
+                  Text(
+                    currentLang == 'ta' ? 'பார்வைப் பதிவு சேமிக்கப்பட்டது' : 'Field Visit Log Saved',
+                    style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary),
+                  ),
                   const SizedBox(height: 8),
                   Text(
-                    'Pond $_selectedPond visit report queued for sync.',
+                    currentLang == 'ta'
+                        ? 'குளம் $_selectedPond பார்வை அறிக்கை இணைக்கப்பட்டது.'
+                        : 'Pond $_selectedPond visit report queued for sync.',
                     style: const TextStyle(
                         fontSize: 14, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
                   PrimaryButton(
-                    label: 'Back to Officer Dashboard',
+                    label: currentLang == 'ta' ? 'அலுவலர் முகப்பிற்குத் திரும்பு' : 'Back to Officer Dashboard',
                     onPressed: () => context.go('/officer/dashboard'),
                   ),
                 ],
@@ -135,13 +144,17 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Field Visit Log Entry',
-            style: TextStyle(
-                color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text(
+          currentLang == 'ta' ? 'களப் பார்வைப் பதிவு' : 'Field Visit Log Entry',
+          style: const TextStyle(
+              color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+        ),
         leading: BackButton(onPressed: () => context.go('/officer/dashboard')),
         actions: [
-          const SpeakerButton(
-            textToSpeak: 'Extension Officer Visit Log. Record observations and farmer advice.',
+          SpeakerButton(
+            textToSpeak: currentLang == 'ta'
+                ? 'விரிவாக்க அலுவலர் பார்வைப் பதிவு. களக் அவதானிப்புகள் மற்றும் ஆலோசனைகளைப் பதிவு செய்யவும்.'
+                : 'Extension Officer Visit Log. Record observations and farmer advice.',
           ),
           const SizedBox(width: 8),
         ],
@@ -156,8 +169,8 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Select Target Pond',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'இலக்குக் குளத்தைத் தேர்ந்தெடுக்கவும்' : 'Select Target Pond',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -197,8 +210,8 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Field Observations',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'களக் அவதானிப்புகள்' : 'Field Observations',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -207,8 +220,9 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
                     controller: _observationsCtrl,
                     maxLines: 4,
                     decoration: InputDecoration(
-                      hintText:
-                          'Describe pond water condition, feeding vigor, aeration checks…',
+                      hintText: currentLang == 'ta'
+                          ? 'குளத்து நீரின் நிலை, தீவன நுகர்வு, காற்றுப்பான் சோதனைகளை விவரிக்கவும்…'
+                          : 'Describe pond water condition, feeding vigor, aeration checks…',
                       filled: true,
                       fillColor: AppColors.surface,
                       border: OutlineInputBorder(
@@ -228,8 +242,8 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Action Recommendations for Farmer',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'விவசாயிக்கான செயல்பாட்டுப் பரிந்துரைகள்' : 'Action Recommendations for Farmer',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -238,8 +252,9 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
                     controller: _suggestionsCtrl,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      hintText:
-                          'Specific action steps given to farmer during visit…',
+                      hintText: currentLang == 'ta'
+                          ? 'பார்வையின் போது விவசாயிக்கு வழங்கப்பட்ட குறிப்பிட்ட நடவடிக்கைகள்…'
+                          : 'Specific action steps given to farmer during visit…',
                       filled: true,
                       fillColor: AppColors.surface,
                       border: OutlineInputBorder(
@@ -259,8 +274,8 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Visit Photos (Media API)',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'பார்வைப் புகைப்படங்கள்' : 'Visit Photos (Media API)',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -289,7 +304,9 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
             const SizedBox(height: 20),
 
             PrimaryButton(
-              label: _isSaving ? 'Submitting…' : 'Save Visit Report',
+              label: _isSaving
+                  ? (currentLang == 'ta' ? 'சமர்ப்பிக்கப்படுகிறது…' : 'Submitting…')
+                  : (currentLang == 'ta' ? 'பார்வை அறிக்கையைச் சேமி' : 'Save Visit Report'),
               isLoading: _isSaving,
               icon: Icons.save_rounded,
               onPressed: _save,

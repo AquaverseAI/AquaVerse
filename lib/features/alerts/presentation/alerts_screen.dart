@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -18,10 +19,14 @@ class AlertsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final alerts  = ref.watch(alertsProvider);
-    final tabIdx  = ref.watch(alertsTabProvider);
+    final alerts = ref.watch(alertsProvider);
+    final tabIdx = ref.watch(alertsTabProvider);
+    final currentLang = ref.watch(appLanguageProvider);
 
-    final tabs = ['All', 'Critical', 'Attention', 'Info'];
+    final tabs = currentLang == 'ta'
+        ? ['அனைத்தும்', 'அவசியம்', 'கவனம்', 'தகவல்']
+        : ['All', 'Critical', 'Attention', 'Info'];
+
     List<AlertItem> filtered;
     switch (tabIdx) {
       case 1: filtered = alerts.where((a) => a.severity == AlertSeverity.critical).toList(); break;
@@ -37,15 +42,17 @@ class AlertsScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/today')),
-        title: const Text('Alerts', style: TextStyle(color: AppColors.textPrimary)),
+        title: Text(AppTranslations.getText('alerts', currentLang), style: const TextStyle(color: AppColors.textPrimary)),
         actions: [
           TextButton(
             onPressed: () {
-              // Mark all as acknowledged
               final updated = alerts.map((a) => a.copyWith(acknowledged: true)).toList();
               ref.read(alertsProvider.notifier).state = updated;
             },
-            child: const Text('Mark all read', style: TextStyle(fontSize: 12, color: AppColors.primary500)),
+            child: Text(
+              currentLang == 'ta' ? 'அனைத்தும் சரி' : 'Mark all read',
+              style: const TextStyle(fontSize: 12, color: AppColors.primary500),
+            ),
           ),
         ],
       ),
@@ -105,10 +112,11 @@ class AlertsScreen extends ConsumerWidget {
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, i) => _AlertCard(
                       alert: filtered[i],
                       onAck: () {
+                        // POST /v1/alerts/{alert_id}/ack
                         final idx = alerts.indexWhere((a) => a.id == filtered[i].id);
                         if (idx >= 0) {
                           final updated = List<AlertItem>.from(alerts);
@@ -117,6 +125,7 @@ class AlertsScreen extends ConsumerWidget {
                         }
                       },
                       onFeedback: (fb) {
+                        // POST /v1/alerts/{alert_id}/feedback — labeled-data flywheel
                         final idx = alerts.indexWhere((a) => a.id == filtered[i].id);
                         if (idx >= 0) {
                           final updated = List<AlertItem>.from(alerts);

@@ -15,6 +15,10 @@ abstract class ApiClient {
   @POST('/v1/auth/otp/verify')
   Future<dynamic> verifyOtp(@Body() Map<String, dynamic> body);
 
+  // TODO(contract): Revisit if staff/admin login (/v1/auth/token) is confirmed for Extension Officers
+  @POST('/v1/auth/token')
+  Future<dynamic> staffTokenLogin(@Body() Map<String, dynamic> body);
+
   @GET('/v1/auth/me')
   Future<dynamic> getMe();
 
@@ -28,6 +32,7 @@ abstract class ApiClient {
   @GET('/v1/ponds/{pond_id}/events')
   Future<dynamic> getPondEvents(@Path('pond_id') String pondId);
 
+  // TODO(contract): Dedicated forecast endpoint is missing. Risk score/tier comes from /v1/ponds/{pond_id}/risk.
   @GET('/v1/ponds/{pond_id}/risk')
   Future<dynamic> getPondRisk(@Path('pond_id') String pondId);
 
@@ -38,6 +43,9 @@ abstract class ApiClient {
   // -- Logs --
   @GET('/v1/logs')
   Future<List<PondLog>> getLogs();
+
+  // TODO(contract): POST /v1/logs is missing from confirmed endpoint contract. See openapi_contract.md.
+  // Farmer & Extension Officer observation writes are stored in local SQLite outbox until write endpoint is confirmed.
 
   // -- Media --
   @POST('/v1/media/upload-url')

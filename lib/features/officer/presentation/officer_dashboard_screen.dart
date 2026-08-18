@@ -1,24 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
 
-class OfficerDashboardScreen extends StatefulWidget {
+class OfficerDashboardScreen extends ConsumerStatefulWidget {
   const OfficerDashboardScreen({super.key});
 
   @override
-  State<OfficerDashboardScreen> createState() => _OfficerDashboardScreenState();
+  ConsumerState<OfficerDashboardScreen> createState() => _OfficerDashboardScreenState();
 }
 
-class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
+class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen> {
   String _search = '';
   String _filter = 'All'; // All | High Risk | Medium Risk | Low Risk
 
   @override
   Widget build(BuildContext context) {
+    final currentLang = ref.watch(appLanguageProvider);
     final ponds = DemoDataService.officerPonds;
     final filtered = ponds.where((p) {
       final matchFilter =
@@ -34,19 +37,27 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
     final medRisk = ponds.where((p) => p['risk'] == 'Medium').length;
     final good = ponds.where((p) => p['risk'] == 'Low').length;
 
+    final filterTabs = currentLang == 'ta'
+        ? ['All', 'High Risk', 'Medium Risk', 'Low Risk']
+        : ['All', 'High Risk', 'Medium Risk', 'Low Risk'];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Extension Officer Portal',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold)),
-            Text('Nagapattinam District · Cluster 3',
-                style: TextStyle(color: Colors.white70, fontSize: 11)),
+            Text(
+              currentLang == 'ta' ? 'விரிவாக்க அலுவலர் தளம்' : 'Extension Officer Portal',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold),
+            ),
+            Text(
+              currentLang == 'ta' ? 'நாகப்பட்டினம் மாவட்டம் · குழு 3' : 'Nagapattinam District · Cluster 3',
+              style: const TextStyle(color: Colors.white70, fontSize: 11),
+            ),
           ],
         ),
         backgroundColor: AppColors.langAccentSeagreen,
@@ -96,20 +107,20 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
             child: Row(
               children: [
                 _StatBadge(
-                    label: 'Total Ponds', value: '$total', color: Colors.white),
+                    label: currentLang == 'ta' ? 'மொத்தக் குளங்கள்' : 'Total Ponds', value: '$total', color: Colors.white),
                 const SizedBox(width: 8),
                 _StatBadge(
-                    label: 'High Risk',
+                    label: currentLang == 'ta' ? 'அதிக அபாயம்' : 'High Risk',
                     value: '$highRisk',
                     color: AppColors.critical),
                 const SizedBox(width: 8),
                 _StatBadge(
-                    label: 'Medium',
+                    label: currentLang == 'ta' ? 'நடுத்தரம்' : 'Medium',
                     value: '$medRisk',
                     color: AppColors.warning),
                 const SizedBox(width: 8),
                 _StatBadge(
-                    label: 'Good', value: '$good', color: AppColors.green600),
+                    label: currentLang == 'ta' ? 'சிறந்தது' : 'Good', value: '$good', color: AppColors.green600),
               ],
             ),
           ),
@@ -132,25 +143,25 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
               children: [
                 _QuickAction(
                   icon: Icons.send_rounded,
-                  label: 'Send Advice',
+                  label: currentLang == 'ta' ? 'ஆலோசனை அனுப்பு' : 'Send Advice',
                   color: AppColors.langAccentPrimary,
                   onTap: () => context.push('/officer/send-advice'),
                 ),
                 _QuickAction(
                   icon: Icons.add_location_alt_rounded,
-                  label: 'Add Visit',
+                  label: currentLang == 'ta' ? 'பார்வை பதிவு' : 'Add Visit',
                   color: AppColors.primary700,
                   onTap: () => context.push('/officer/visit-log'),
                 ),
                 _QuickAction(
                   icon: Icons.bar_chart_rounded,
-                  label: 'View Reports',
+                  label: currentLang == 'ta' ? 'அறிக்கைகளைப் பார்' : 'View Reports',
                   color: AppColors.warning,
                   onTap: () => context.push('/officer/reports'),
                 ),
                 _QuickAction(
                   icon: Icons.phone_in_talk_rounded,
-                  label: 'Call Farmer',
+                  label: currentLang == 'ta' ? 'விவசாயியை அழை' : 'Call Farmer',
                   color: AppColors.critical,
                   onTap: () => context.push('/officer/farmer-info'),
                 ),
@@ -163,7 +174,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
             child: TextField(
               decoration: InputDecoration(
-                hintText: 'Search ponds or farmers…',
+                hintText: currentLang == 'ta' ? 'குளங்கள் அல்லது விவசாயிகளைத் தேடுங்கள்…' : 'Search ponds or farmers…',
                 prefixIcon: const Icon(Icons.search_rounded,
                     size: 18, color: AppColors.textSecondary),
                 isDense: true,
@@ -185,8 +196,17 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Row(
-              children: ['All', 'High Risk', 'Medium Risk', 'Low Risk'].map((f) {
+              children: filterTabs.map((f) {
                 final isActive = _filter == f;
+                final displayLabel = currentLang == 'ta'
+                    ? (f == 'All'
+                        ? 'அனைத்தும்'
+                        : f == 'High Risk'
+                            ? 'அதிக அபாயம்'
+                            : f == 'Medium Risk'
+                                ? 'நடுத்தர அபாயம்'
+                                : 'குறைந்த அபாயம்')
+                    : f;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: GestureDetector(
@@ -206,7 +226,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
                                 : AppColors.border),
                       ),
                       child: Text(
-                        f,
+                        displayLabel,
                         style: TextStyle(
                           fontSize: 12,
                           color: isActive ? Colors.white : AppColors.textSecondary,
@@ -226,7 +246,7 @@ class _OfficerDashboardScreenState extends State<OfficerDashboardScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               itemCount: filtered.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
               itemBuilder: (context, i) {
                 final p = filtered[i];
                 final status = p['status'] as PondStatus;

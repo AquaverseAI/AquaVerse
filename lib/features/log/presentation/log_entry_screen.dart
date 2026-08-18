@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/data_providers.dart';
 import '../../../core/providers/providers.dart';
@@ -100,6 +101,8 @@ class LogEntryController extends StateNotifier<LogEntryState> {
       final currentPondId = ref.read(currentPondIdProvider);
       final repo = ref.read(logRepositoryProvider);
 
+      // TODO(contract): POST /v1/logs is missing from confirmed endpoint contract. See openapi_contract.md.
+      // Farmer observation writes are stored in local SQLite outbox until write endpoint is confirmed.
       final log = PondLog(
         id: 'log_${DateTime.now().millisecondsSinceEpoch}',
         pondId: currentPondId,
@@ -140,6 +143,7 @@ class LogEntryScreen extends ConsumerWidget {
     final state = ref.watch(logEntryControllerProvider);
     final ctrl = ref.read(logEntryControllerProvider.notifier);
     final logsAsync = ref.watch(pondLogsProvider);
+    final currentLang = ref.watch(appLanguageProvider);
     final logs = logsAsync.valueOrNull ?? [];
     final latestLog = logs.isNotEmpty ? logs.first : null;
 
@@ -160,11 +164,13 @@ class LogEntryScreen extends ConsumerWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Pond Telemetry & AI Check',
-                style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold)),
+            Text(
+              AppTranslations.getText('pondTelemetryAndAi', currentLang),
+              style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold),
+            ),
             Text(
               _dateLabel(),
               style: const TextStyle(
@@ -175,16 +181,16 @@ class LogEntryScreen extends ConsumerWidget {
           ],
         ),
         actions: [
-          const SpeakerButton(
+          SpeakerButton(
             textToSpeak:
-                'Sensor telemetry and AI water appearance check. Review live readings and upload pond photos.',
+                AppTranslations.getText('pondTelemetryAndAi', currentLang),
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
-          const OfflineBanner(),
+          OfflineBanner(message: AppTranslations.getText('offlineNotice', currentLang)),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppTheme.pageMargin),
@@ -200,14 +206,14 @@ class LogEntryScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(Icons.camera_alt_rounded,
+                            const Icon(Icons.camera_alt_rounded,
                                 size: 18, color: AppColors.langAccentPrimary),
-                            SizedBox(width: 8),
+                            const SizedBox(width: 8),
                             Text(
-                              'Water Appearance & Quality Photo Media',
-                              style: TextStyle(
+                              AppTranslations.getText('waterPhotosMedia', currentLang),
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary,
@@ -216,10 +222,11 @@ class LogEntryScreen extends ConsumerWidget {
                           ],
                         ),
                         const SizedBox(height: 6),
-                        const Text(
-                          'Upload pond water photos via media API (/v1/media/upload-url + commit). '
-                          'AI vision automatically analyzes water color, turbidity, and algal appearance.',
-                          style: TextStyle(
+                        Text(
+                          currentLang == 'ta'
+                              ? 'குளத்து நீரின் புகைப்படங்களைச் சமர்ப்பித்து AI பரிசோதனை செய்யவும்.'
+                              : 'Upload pond water photos via media API (/v1/media/upload-url + commit). AI vision automatically analyzes water quality.',
+                          style: const TextStyle(
                               fontSize: 11.5,
                               color: AppColors.textSecondary,
                               height: 1.4),
@@ -260,8 +267,8 @@ class LogEntryScreen extends ConsumerWidget {
                   // 3. SUBMIT AI PHOTO CHECK BUTTON
                   PrimaryButton(
                     label: state.isSaving
-                        ? 'Uploading & Committing Media…'
-                        : 'Submit Water Photo Media',
+                        ? (currentLang == 'ta' ? 'பதிவேற்றப்படுகிறது…' : 'Uploading Media…')
+                        : AppTranslations.getText('submitWaterPhotos', currentLang),
                     isLoading: state.isSaving,
                     icon: Icons.cloud_upload_rounded,
                     onPressed: () => ctrl.submitPhotoCheck(isOffline: false),
@@ -312,13 +319,14 @@ class LogEntryScreen extends ConsumerWidget {
 }
 
 // ── Full-Screen IoT Sensor Telemetry Display ──────────────────────────────────
-class _FullSensorTelemetryCard extends StatelessWidget {
+class _FullSensorTelemetryCard extends ConsumerWidget {
   final PondLog? log;
 
   const _FullSensorTelemetryCard({this.log});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
     final ph = log?.ph ?? 7.8;
     final doVal = log?.dissolvedOxygen ?? 5.4;
     final temp = log?.temperature ?? 28.0;
@@ -333,14 +341,14 @@ class _FullSensorTelemetryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.sensors_rounded,
+                  const Icon(Icons.sensors_rounded,
                       size: 20, color: AppColors.langAccentPrimary),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
-                    'Live IoT Sensor Telemetry',
-                    style: TextStyle(
+                    AppTranslations.getText('sensorReadings', currentLang),
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
@@ -352,9 +360,11 @@ class _FullSensorTelemetryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Continuous water chemistry readings supplied automatically by IoT sensors.',
-            style: TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+          Text(
+            currentLang == 'ta'
+                ? 'நேரலை சென்சார்களிலிருந்து பெறப்பட்ட குளத்து நீர் அளவீடுகள்.'
+                : 'Continuous water chemistry readings supplied automatically by IoT sensors.',
+            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 14),
 
@@ -368,34 +378,38 @@ class _FullSensorTelemetryCard extends StatelessWidget {
             childAspectRatio: 1.6,
             children: [
               _TelemetryTile(
-                label: 'Dissolved Oxygen',
+                label: AppTranslations.getText('dissolvedOxygen', currentLang),
                 value: doVal.toStringAsFixed(1),
                 unit: 'mg/L',
-                status: doVal < 4.0 ? 'Low DO Warning' : 'Optimal (>4.0)',
+                status: doVal < 4.0
+                    ? (currentLang == 'ta' ? 'குறைந்த DO எச்சரிக்கை' : 'Low DO Warning')
+                    : (currentLang == 'ta' ? 'உகந்தது (>4.0)' : 'Optimal (>4.0)'),
                 isAlert: doVal < 4.0,
                 icon: Icons.air_rounded,
               ),
               _TelemetryTile(
-                label: 'pH Level',
+                label: AppTranslations.getText('pHLevel', currentLang),
                 value: ph.toStringAsFixed(1),
                 unit: 'pH',
-                status: (ph < 6.5 || ph > 8.5) ? 'pH Variance' : 'Stable (6.5-8.5)',
+                status: (ph < 6.5 || ph > 8.5)
+                    ? (currentLang == 'ta' ? 'pH வேறுபாடு' : 'pH Variance')
+                    : (currentLang == 'ta' ? 'சீரானது (6.5-8.5)' : 'Stable (6.5-8.5)'),
                 isAlert: ph < 6.5 || ph > 8.5,
                 icon: Icons.water_drop_rounded,
               ),
               _TelemetryTile(
-                label: 'Water Temperature',
+                label: AppTranslations.getText('temperature', currentLang),
                 value: temp.toStringAsFixed(0),
                 unit: '°C',
-                status: 'Normal Range',
+                status: currentLang == 'ta' ? 'சாதாரண அளவு' : 'Normal Range',
                 isAlert: false,
                 icon: Icons.thermostat_rounded,
               ),
               _TelemetryTile(
-                label: 'Salinity',
+                label: AppTranslations.getText('salinity', currentLang),
                 value: sal.toStringAsFixed(1),
                 unit: 'ppt',
-                status: 'Optimal Brackish',
+                status: currentLang == 'ta' ? 'உகந்த உவர்ப்பு' : 'Optimal Brackish',
                 isAlert: false,
                 icon: Icons.waves_rounded,
               ),

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
@@ -72,8 +71,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
             ),
           ),
 
-          // White gradient scrim — guarantees text readability over
-          // the light mint/teal aquaculture background.
+          // White gradient scrim
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -91,11 +89,11 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
             ),
           ),
 
-          // 2. Safe Area Content Layout
+          // 2. Safe Area Content Layout with Scrollable LayoutBuilder Overflow Protection
           SafeArea(
             child: Column(
               children: [
-                // Top Navigation Bar: Pinned Back Arrow (left) & Speaker Button (right)
+                // Top Navigation Bar
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   child: Row(
@@ -114,13 +112,18 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                 ),
 
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Vertical centering top spacer
-                        const Spacer(flex: 2),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: IntrinsicHeight(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 16),
 
                         // Centered Title & Subtitle
                         const Text(
@@ -520,8 +523,12 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen> {
                         ),
 
                         const SizedBox(height: 24),
-                      ],
-                    ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],

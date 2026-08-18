@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 
@@ -16,25 +17,47 @@ class SettingsScreen extends ConsumerWidget {
     final pushNotif = ref.watch(pushNotifProvider);
     final alertPref = ref.watch(alertPrefProvider);
     final unit      = ref.watch(selectedUnitProvider);
+    final currentLang = ref.watch(appLanguageProvider);
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(AppTranslations.getText('settings', currentLang))),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── General ──────────────────────────────────────────────────────
-            _SectionTitle('General'),
+            _SectionTitle(currentLang == 'ta' ? 'பொது' : 'General'),
             AppCard(
               child: Column(
                 children: [
-                  _TileRow(icon: Icons.language_rounded, label: 'Language', trailing: const Text('தமிழ்', style: TextStyle(color: AppColors.seaGreen, fontWeight: FontWeight.w600))),
+                  _TileRow(
+                    icon: Icons.language_rounded,
+                    label: currentLang == 'ta' ? 'மொழி / Language' : 'Language / மொழி',
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _LangBadge(
+                          code: 'ta',
+                          label: 'தமிழ்',
+                          isSelected: currentLang == 'ta',
+                          onTap: () => ref.read(appLanguageProvider.notifier).setLanguage('ta'),
+                        ),
+                        const SizedBox(width: 6),
+                        _LangBadge(
+                          code: 'en',
+                          label: 'English',
+                          isSelected: currentLang == 'en',
+                          onTap: () => ref.read(appLanguageProvider.notifier).setLanguage('en'),
+                        ),
+                      ],
+                    ),
+                  ),
                   const Divider(height: 1),
                   _TileRow(
                     icon: Icons.straighten_rounded,
-                    label: 'Units',
+                    label: currentLang == 'ta' ? 'அளவீட்டு முறை' : 'Units',
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: ['metric', 'imperial'].map((u) {
@@ -120,7 +143,7 @@ class _TileRow extends StatelessWidget {
           Icon(icon, size: 18, color: AppColors.seaGreen),
           const SizedBox(width: 12),
           Expanded(child: Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary))),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     ),
@@ -150,4 +173,44 @@ class _SwitchTile extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _LangBadge extends StatelessWidget {
+  final String code;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _LangBadge({
+    required this.code,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.seaGreen : AppColors.scaffoldBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? AppColors.seaGreen : AppColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -1,39 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 
-class MyPondsScreen extends StatelessWidget {
+class MyPondsScreen extends ConsumerWidget {
   const MyPondsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
     final ponds = [DemoDataService.pond];
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
-        title: const Text('My Ponds'),
+        title: Text(currentLang == 'ta' ? 'என் குளங்கள்' : 'My Ponds'),
         actions: [
           IconButton(
-            onPressed: () => _showAddPond(context),
+            onPressed: () => _showAddPond(context, currentLang),
             icon: const Icon(Icons.add_rounded),
-            tooltip: 'Add Pond',
+            tooltip: currentLang == 'ta' ? 'குளம் சேர்' : 'Add Pond',
           ),
         ],
       ),
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: ponds.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, i) {
           if (i == ponds.length) {
             return PrimaryButton(
-              label: '+ Add Pond',
-              onPressed: () => _showAddPond(context),
+              label: currentLang == 'ta' ? '+ புதிய குளம் சேர்' : '+ Add Pond',
+              onPressed: () => _showAddPond(context, currentLang),
             );
           }
           final pond = ponds[i];
@@ -42,15 +45,15 @@ class MyPondsScreen extends StatelessWidget {
           switch (pond.status) {
             case PondStatus.good:
               statusColor = AppColors.success;
-              statusLabel = 'Good';
+              statusLabel = currentLang == 'ta' ? 'சீராக உள்ளது' : 'Good';
               break;
             case PondStatus.caution:
               statusColor = AppColors.warning;
-              statusLabel = 'Caution';
+              statusLabel = currentLang == 'ta' ? 'கவனம்' : 'Caution';
               break;
             case PondStatus.critical:
               statusColor = AppColors.critical;
-              statusLabel = 'Critical';
+              statusLabel = currentLang == 'ta' ? 'அபாயம்' : 'Critical';
               break;
           }
 
@@ -75,7 +78,7 @@ class MyPondsScreen extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(pond.name, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                       const SizedBox(height: 4),
-                      Text('Updated ${_timeAgo(pond.lastUpdated)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                      Text(currentLang == 'ta' ? 'புதுப்பிக்கப்பட்டது ${_timeAgo(pond.lastUpdated, currentLang)}' : 'Updated ${_timeAgo(pond.lastUpdated, currentLang)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                     ],
                   ),
                 ),
@@ -98,7 +101,7 @@ class MyPondsScreen extends StatelessWidget {
     );
   }
 
-  void _showAddPond(BuildContext context) {
+  void _showAddPond(BuildContext context, String lang) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -108,16 +111,16 @@ class MyPondsScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Add New Pond', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(lang == 'ta' ? 'புதிய குளம் சேர்க்க' : 'Add New Pond', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
-            const TextField(decoration: InputDecoration(labelText: 'Pond ID', hintText: 'e.g. TN-01-002')),
+            TextField(decoration: InputDecoration(labelText: lang == 'ta' ? 'குளத்து எண் (ID)' : 'Pond ID', hintText: 'e.g. TN-01-002')),
             const SizedBox(height: 10),
-            const TextField(decoration: InputDecoration(labelText: 'Pond Name')),
+            TextField(decoration: InputDecoration(labelText: lang == 'ta' ? 'குளத்தின் பெயர்' : 'Pond Name')),
             const SizedBox(height: 10),
-            const TextField(decoration: InputDecoration(labelText: 'Location')),
+            TextField(decoration: InputDecoration(labelText: lang == 'ta' ? 'இடம் / மாவட்டம்' : 'Location')),
             const SizedBox(height: 16),
             PrimaryButton(
-              label: 'Save Pond',
+              label: lang == 'ta' ? 'குளத்தைச் சேமி' : 'Save Pond',
               onPressed: () => Navigator.pop(context),
             ),
             const SizedBox(height: 10),
@@ -127,10 +130,10 @@ class MyPondsScreen extends StatelessWidget {
     );
   }
 
-  String _timeAgo(DateTime t) {
+  String _timeAgo(DateTime t, String lang) {
     final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    if (diff.inMinutes < 60) return lang == 'ta' ? '${diff.inMinutes} நிமிடம் முன்' : '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return lang == 'ta' ? '${diff.inHours} மணி நேரம் முன்' : '${diff.inHours}h ago';
+    return lang == 'ta' ? '${diff.inDays} நாள் முன்' : '${diff.inDays}d ago';
   }
 }

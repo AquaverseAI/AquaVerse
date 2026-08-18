@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 
-class OfficerSendAdviceScreen extends StatefulWidget {
+class OfficerSendAdviceScreen extends ConsumerStatefulWidget {
   const OfficerSendAdviceScreen({super.key});
 
   @override
-  State<OfficerSendAdviceScreen> createState() => _OfficerSendAdviceScreenState();
+  ConsumerState<OfficerSendAdviceScreen> createState() => _OfficerSendAdviceScreenState();
 }
 
-class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
+class _OfficerSendAdviceScreenState extends ConsumerState<OfficerSendAdviceScreen> {
   String _selectedPond = 'TN-01-001';
   String _selectedCategory = 'Feed Adjustment';
   final _titleController = TextEditingController();
@@ -44,13 +46,13 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
     super.dispose();
   }
 
-  Future<void> _sendAdvice() async {
+  Future<void> _sendAdvice(String lang) async {
     final title = _titleController.text.trim();
     final advice = _adviceController.text.trim();
 
     if (title.isEmpty || advice.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter both title and recommendation text')),
+        SnackBar(content: Text(lang == 'ta' ? 'தலைப்பு மற்றும் பரிந்துரையை உள்ளிடவும்' : 'Please enter both title and recommendation text')),
       );
       return;
     }
@@ -65,6 +67,8 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentLang = ref.watch(appLanguageProvider);
+
     if (_isSent) {
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -88,9 +92,9 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
                         color: AppColors.green600, size: 40),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Advisory Sent Successfully',
-                    style: TextStyle(
+                  Text(
+                    currentLang == 'ta' ? 'ஆலோசனை வெற்றிகரமாக அனுப்பப்பட்டது' : 'Advisory Sent Successfully',
+                    style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary),
@@ -98,14 +102,16 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Pond $_selectedPond farmer notified via app & SMS broadcast.',
+                    currentLang == 'ta'
+                        ? 'குளம் $_selectedPond விவசாயிக்கு பயன்பாடு மற்றும் SMS மூலம் அறிவிக்கப்பட்டது.'
+                        : 'Pond $_selectedPond farmer notified via app & SMS broadcast.',
                     style: const TextStyle(
                         fontSize: 14, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
                   PrimaryButton(
-                    label: 'Back to Dashboard',
+                    label: currentLang == 'ta' ? 'முகப்பிற்குத் திரும்பு' : 'Back to Dashboard',
                     onPressed: () => context.go('/officer/dashboard'),
                   ),
                 ],
@@ -120,9 +126,11 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/officer/dashboard')),
-        title: const Text('Send Farmer Advice',
-            style: TextStyle(
-                color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text(
+          currentLang == 'ta' ? 'விவசாயிக்கு ஆலோசனை அனுப்பு' : 'Send Farmer Advice',
+          style: const TextStyle(
+              color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppTheme.pageMargin),
@@ -134,8 +142,8 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Target Farmer & Pond',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'இலக்கு விவசாயி மற்றும் குளம்' : 'Target Farmer & Pond',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -177,8 +185,8 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Advisory Category',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'ஆலோசனை வகை' : 'Advisory Category',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -216,8 +224,8 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Advisory Title',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'ஆலோசனைத் தலைப்பு' : 'Advisory Title',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -225,7 +233,9 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
                   TextField(
                     controller: _titleController,
                     decoration: InputDecoration(
-                      hintText: 'e.g. Reduce Feed Portion by 20% Tonight',
+                      hintText: currentLang == 'ta'
+                          ? 'எ.கா. இன்று இரவு தீவனத்தை 20% குறைக்கவும்'
+                          : 'e.g. Reduce Feed Portion by 20% Tonight',
                       filled: true,
                       fillColor: AppColors.surface,
                       isDense: true,
@@ -237,8 +247,8 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text('Detailed Recommendation',
-                      style: TextStyle(
+                  Text(currentLang == 'ta' ? 'விரிவான பரிந்துரை' : 'Detailed Recommendation',
+                      style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
@@ -247,8 +257,9 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
                     controller: _adviceController,
                     maxLines: 4,
                     decoration: InputDecoration(
-                      hintText:
-                          'Explain exact steps for the farmer (aerator runtime, dosing, water exchange…)',
+                      hintText: currentLang == 'ta'
+                          ? 'விவசாயிக்கான துல்லியமான வழிமுறைகளை எழுதவும் (காற்றுப்பான் இயக்கம், மருந்து அளவு, நீர் மாற்றம்…)'
+                          : 'Explain exact steps for the farmer (aerator runtime, dosing, water exchange…)',
                       filled: true,
                       fillColor: AppColors.surface,
                       border: OutlineInputBorder(
@@ -267,17 +278,19 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
             AppCard(
               child: SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Mark as High Priority Alert',
-                    style: TextStyle(
+                title: Text(currentLang == 'ta' ? 'முக்கிய எச்சரிக்கையாகக் குறிக்க' : 'Mark as High Priority Alert',
+                    style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary)),
-                subtitle: const Text(
-                    'Sends push notification & SMS alert immediately',
-                    style: TextStyle(
+                subtitle: Text(
+                    currentLang == 'ta'
+                        ? 'உடனடியாக மொபைல் அறிவிப்பு மற்றும் SMS அனுப்பப்படும்'
+                        : 'Sends push notification & SMS alert immediately',
+                    style: const TextStyle(
                         fontSize: 11, color: AppColors.textSecondary)),
                 value: _isUrgent,
-                activeColor: AppColors.critical,
+                activeThumbColor: AppColors.critical,
                 onChanged: (val) => setState(() => _isUrgent = val),
               ),
             ),
@@ -285,10 +298,12 @@ class _OfficerSendAdviceScreenState extends State<OfficerSendAdviceScreen> {
 
             // ── Submit Button ───────────────────────────────────────────────
             PrimaryButton(
-              label: _isSending ? 'Transmitting…' : 'Send Recommendation',
+              label: _isSending
+                  ? (currentLang == 'ta' ? 'அனுப்பப்படுகிறது…' : 'Transmitting…')
+                  : (currentLang == 'ta' ? 'பரிந்துரையை அனுப்பு' : 'Send Recommendation'),
               isLoading: _isSending,
               icon: Icons.send_rounded,
-              onPressed: _sendAdvice,
+              onPressed: () => _sendAdvice(currentLang),
             ),
             const SizedBox(height: 24),
           ],

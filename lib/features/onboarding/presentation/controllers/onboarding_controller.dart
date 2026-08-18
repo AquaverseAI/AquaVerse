@@ -24,13 +24,15 @@ class OnboardingState {
     this.isOtpInvalid = false,
   });
 
+  static const _sentinel = Object();
+
   OnboardingState copyWith({
     String? selectedLanguage,
     String? mobileNumber,
     String? otpCode,
     String? selectedRole,
     bool? isLoading,
-    String? errorMessage,
+    Object? errorMessage = _sentinel,
     int? resendCountdown,
     bool? isOtpInvalid,
   }) {
@@ -40,7 +42,7 @@ class OnboardingState {
       otpCode: otpCode ?? this.otpCode,
       selectedRole: selectedRole ?? this.selectedRole,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage,
+      errorMessage: errorMessage == _sentinel ? this.errorMessage : errorMessage as String?,
       resendCountdown: resendCountdown ?? this.resendCountdown,
       isOtpInvalid: isOtpInvalid ?? this.isOtpInvalid,
     );
@@ -90,14 +92,22 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
 
     state = state.copyWith(isLoading: true, errorMessage: null);
-    final response = await _authApiService.requestOtp(state.mobileNumber);
-    state = state.copyWith(isLoading: false);
+    try {
+      final response = await _authApiService.requestOtp(state.mobileNumber);
+      state = state.copyWith(isLoading: false);
 
-    if (response.success) {
-      startResendTimer();
-      return true;
-    } else {
-      state = state.copyWith(errorMessage: response.message);
+      if (response.success) {
+        startResendTimer();
+        return true;
+      } else {
+        state = state.copyWith(errorMessage: response.message);
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to send OTP. Please try again.',
+      );
       return false;
     }
   }
@@ -125,14 +135,23 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
 
     state = state.copyWith(isLoading: true, errorMessage: null, isOtpInvalid: false);
-    final response = await _authApiService.verifyOtp(state.mobileNumber, state.otpCode);
-    state = state.copyWith(isLoading: false);
+    try {
+      final response = await _authApiService.verifyOtp(state.mobileNumber, state.otpCode);
+      state = state.copyWith(isLoading: false);
 
-    if (response.success) {
-      return true;
-    } else {
+      if (response.success) {
+        return true;
+      } else {
+        state = state.copyWith(
+          errorMessage: response.message,
+          isOtpInvalid: true,
+        );
+        return false;
+      }
+    } catch (e) {
       state = state.copyWith(
-        errorMessage: response.message,
+        isLoading: false,
+        errorMessage: 'Verification failed. Please check your connection and try again.',
         isOtpInvalid: true,
       );
       return false;

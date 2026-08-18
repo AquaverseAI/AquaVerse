@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -46,25 +47,41 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
 
   Future<void> _onMicTap() async {
     final currentState = ref.read(askStateProvider);
+    final currentLang = ref.read(appLanguageProvider);
+
     if (currentState == AskState.idle || currentState == AskState.response) {
       ref.read(askStateProvider.notifier).state = AskState.listening;
       _waveController.repeat();
       await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
-      ref.read(recognizedTextProvider.notifier).state =
-          'இன்று மீன்களுக்கு எவ்வளவு தீவனம் போட வேண்டும்?';
+
+      final sampleQuestion = currentLang == 'ta'
+          ? 'இன்று மீன்களுக்கு எவ்வளவு தீவனம் போட வேண்டும்?'
+          : 'How much feed should I give today?';
+
+      ref.read(recognizedTextProvider.notifier).state = sampleQuestion;
       ref.read(askStateProvider.notifier).state = AskState.thinking;
       _waveController.stop();
       await Future.delayed(const Duration(seconds: 1));
       if (!mounted) return;
-      ref.read(answerTextProvider.notifier).state =
-          'Based on today\'s data for pond TN-01-001 (Day 45, Pangasius):\n\n'
-          '• Feed 18 kg, split into 3 equal portions\n'
-          '• Morning 7 AM: 6 kg\n'
-          '• Afternoon 1 PM: 6 kg\n'
-          '• Evening 7 PM: 6 kg\n\n'
-          'Note: DO is forecast to drop tonight. Reduce evening feed by 20% if DO falls below 4.0 mg/L. '
-          'This is an AI estimate — confirm with your extension officer if in doubt.';
+
+      final sampleAnswer = currentLang == 'ta'
+          ? 'குளம் TN-01-001 தகவல்களின்படி (நாள் 45, பங்கீசியஸ் மீன்):\n\n'
+            '• இன்றைய மொத்த தீவன அளவு: 18 கிலோ (3 வேளைகளாகப் பிரிக்கவும்)\n'
+            '• காலை 7 மணி: 6 கிலோ\n'
+            '• மதியம் 1 மணி: 6 கிலோ\n'
+            '• மாலை 7 மணி: 6 கிலோ\n\n'
+            'குறிப்பு: இன்று இரவு ஆக்சிஜன் அளவு குறைய வாய்ப்புள்ளது. ஆக்சிஜன் 4.0 mg/L கீழே குறைந்தால் மாலை தீவனத்தை 20% குறைக்கவும். '
+            'இது AI மதிப்பீடு — முக்கிய முடிவுகளுக்கு உங்கள் விரிவாக்க அலுவலரைத் தொடர்பு கொள்ளவும்.'
+          : 'Based on today\'s data for pond TN-01-001 (Day 45, Pangasius):\n\n'
+            '• Feed 18 kg, split into 3 equal portions\n'
+            '• Morning 7 AM: 6 kg\n'
+            '• Afternoon 1 PM: 6 kg\n'
+            '• Evening 7 PM: 6 kg\n\n'
+            'Note: DO is forecast to drop tonight. Reduce evening feed by 20% if DO falls below 4.0 mg/L. '
+            'This is an AI estimate — confirm with your extension officer if in doubt.';
+
+      ref.read(answerTextProvider.notifier).state = sampleAnswer;
       ref.read(askStateProvider.notifier).state = AskState.response;
     } else {
       ref.read(askStateProvider.notifier).state = AskState.idle;
@@ -74,19 +91,30 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     }
   }
 
-  Future<void> _onTextSubmit() async {
-    final text = _textController.text.trim();
+  Future<void> _onTextSubmit([String? customText]) async {
+    final text = (customText ?? _textController.text).trim();
     if (text.isEmpty) return;
+
+    final currentLang = ref.read(appLanguageProvider);
     ref.read(recognizedTextProvider.notifier).state = text;
     ref.read(askStateProvider.notifier).state = AskState.thinking;
     await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-    ref.read(answerTextProvider.notifier).state =
-        'Based on your question: "$text"\n\n'
-        'Reviewing pond TN-01-001 data… '
-        'Dissolved oxygen is currently 5.2 mg/L — within safe range. '
-        'Feed recommendation: 18 kg/day. '
-        'This is an AI estimate — please confirm with your extension officer for important decisions.';
+
+    final answer = currentLang == 'ta'
+        ? 'உங்கள் கேள்வி: "$text"\n\n'
+          'குளம் TN-01-001 நேரலைத் தரவுகள் பரிசீலிக்கப்பட்டது…\n'
+          '• கரைந்த ஆக்சிஜன் (DO): 5.2 mg/L — பாதுகாப்பான அளவில் உள்ளது.\n'
+          '• pH நிலை: 7.8 — உகந்த நிலை.\n'
+          '• இன்றைய தீவனப் பரிந்துரை: 18 கிலோ/நாள்.\n\n'
+          'குறிப்பு: இது AI பரிந்துரை — முக்கிய பண்ணை முடிவுகளுக்கு உங்கள் மாவட்ட விரிவாக்க அலுவலரைத் தொடர்பு கொள்ளவும்.'
+        : 'Based on your question: "$text"\n\n'
+          'Reviewing pond TN-01-001 data… '
+          'Dissolved oxygen is currently 5.2 mg/L — within safe range. '
+          'Feed recommendation: 18 kg/day. '
+          'This is an AI estimate — please confirm with your extension officer for important decisions.';
+
+    ref.read(answerTextProvider.notifier).state = answer;
     ref.read(askStateProvider.notifier).state = AskState.response;
     _textController.clear();
   }
@@ -96,12 +124,25 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     final askState = ref.watch(askStateProvider);
     final recognized = ref.watch(recognizedTextProvider);
     final answer = ref.watch(answerTextProvider);
+    final currentLang = ref.watch(appLanguageProvider);
+
+    final recentQuestionsList = currentLang == 'ta'
+        ? [
+            'இன்று மீன்களுக்கு எவ்வளவு தீவனம் போட வேண்டும்?',
+            'ஆக்சிஜன் 4 mg/L கீழே குறைந்தால் என்ன செய்ய வேண்டும்?',
+            'மழைக்காலத்தில் pH சமநிலை பராமரிப்பது எப்படி?',
+            'அமோனியா அளவை எவ்வாறு கட்டுப்படுத்துவது?',
+          ]
+        : DemoDataService.recentQuestions;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/today')),
-        title: const Text('Ask Aqua', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text(
+          AppTranslations.getText('askTitle', currentLang),
+          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             onPressed: () => context.push('/notifications'),
@@ -111,8 +152,8 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
       ),
       body: Column(
         children: [
-          const OfflineBanner(
-            message: 'Ask Aqua needs internet. Connect to get answers.',
+          OfflineBanner(
+            message: AppTranslations.getText('offlineNotice', currentLang),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -121,7 +162,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                 children: [
                   const SizedBox(height: 12),
                   // ── Pixel-Perfect Aurora AI Voice Assistant Orb ─────────────
-                  _buildAuroraMicSection(askState),
+                  _buildAuroraMicSection(askState, currentLang),
                   const SizedBox(height: 24),
 
                   // ── Recognized speech from user ─────────────────────────────
@@ -162,7 +203,10 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                                 child: const Icon(Icons.assistant_rounded, color: AppColors.primary700, size: 18),
                               ),
                               const SizedBox(width: 8),
-                              const Text('Aqua\'s Answer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                              Text(
+                                AppTranslations.getText('aquaAnswer', currentLang),
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                              ),
                               const Spacer(),
                               SpeakerButton(textToSpeak: answer),
                             ],
@@ -173,7 +217,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                             style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.6),
                           ),
                           const SizedBox(height: 12),
-                          _buildSymptomTriageCard(),
+                          _buildSymptomTriageCard(currentLang),
                           const SizedBox(height: 12),
                           SizedBox(
                             width: double.infinity,
@@ -186,7 +230,10 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
                               icon: const Icon(Icons.phone_rounded, size: 16),
-                              label: const Text('Call Officer', style: TextStyle(fontWeight: FontWeight.w600)),
+                              label: Text(
+                                AppTranslations.getText('callOfficer', currentLang),
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ),
                         ],
@@ -202,8 +249,8 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                         Expanded(
                           child: TextField(
                             controller: _textController,
-                            decoration: const InputDecoration(
-                              hintText: 'Type your question…',
+                            decoration: InputDecoration(
+                              hintText: AppTranslations.getText('typeQuestion', currentLang),
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
@@ -214,7 +261,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                           ),
                         ),
                         IconButton(
-                          onPressed: _onTextSubmit,
+                          onPressed: () => _onTextSubmit(),
                           icon: const Icon(Icons.send_rounded, color: AppColors.primary500),
                         ),
                       ],
@@ -222,13 +269,19 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
                   ),
                   const SizedBox(height: 20),
 
-                  // ── Recent Farmer Questions ──────────────────────────────────
-                  const Align(
+                  // ── Recent Questions Header & Chips ───────────────────────
+                  Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Recent Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                    child: Text(
+                      AppTranslations.getText('recentQuestions', currentLang),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
                   ),
                   const SizedBox(height: 10),
-                  ...DemoDataService.recentQuestions.map((q) => _RecentQuestion(text: q)),
+                  ...recentQuestionsList.map((q) => _RecentQuestion(
+                        text: q,
+                        onTap: () => _onTextSubmit(q),
+                      )),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -260,27 +313,27 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildAuroraMicSection(AskState askState) {
+  Widget _buildAuroraMicSection(AskState askState, String currentLang) {
     String stateText;
     switch (askState) {
       case AskState.listening:
-        stateText = 'Listening… Speak your question';
+        stateText = AppTranslations.getText('listeningText', currentLang);
         break;
       case AskState.thinking:
-        stateText = 'Aqua AI is processing…';
+        stateText = AppTranslations.getText('thinkingText', currentLang);
         break;
       case AskState.response:
-        stateText = 'Tap Aurora AI for new question';
+        stateText = AppTranslations.getText('responsePrompt', currentLang);
         break;
       default:
-        stateText = 'Tap Aurora AI and ask your question';
+        stateText = AppTranslations.getText('tapToAsk', currentLang);
     }
 
     return Column(
       children: [
-        const Text(
-          'AQUA AI ASSISTANT',
-          style: TextStyle(
+        Text(
+          AppTranslations.getText('aquaAiAssistant', currentLang),
+          style: const TextStyle(
             fontSize: 11,
             letterSpacing: 1.5,
             color: AppColors.langAccentPrimary,
@@ -344,7 +397,11 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     );
   }
 
-  Widget _buildSymptomTriageCard() {
+  Widget _buildSymptomTriageCard(String currentLang) {
+    final triageText = currentLang == 'ta'
+        ? 'வெள்ளைப்புள்ளி நோய் அறிகுறி கண்டறியப்பட்டது — குளத்தைப் பிரிக்கவும், நீர் மாற்றத்தை உடனடியாக நிறுத்தவும்.'
+        : 'Consistent with white spot — isolate pond, stop water exchange, confirm with officer.';
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -352,14 +409,14 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.warningBorder),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 16),
-          SizedBox(width: 8),
+          const Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 16),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Consistent with white spot — isolate pond, stop water exchange, confirm with officer.',
-              style: TextStyle(fontSize: 12, color: AppColors.textPrimary, height: 1.4),
+              triageText,
+              style: const TextStyle(fontSize: 12, color: AppColors.textPrimary, height: 1.4),
             ),
           ),
         ],
@@ -437,7 +494,9 @@ class _WaveformWidget extends StatelessWidget {
 
 class _RecentQuestion extends StatelessWidget {
   final String text;
-  const _RecentQuestion({required this.text});
+  final VoidCallback? onTap;
+
+  const _RecentQuestion({required this.text, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -445,7 +504,7 @@ class _RecentQuestion extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () {},
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(

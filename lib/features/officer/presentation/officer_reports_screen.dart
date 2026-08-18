@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
 
-class OfficerReportsScreen extends StatefulWidget {
+class OfficerReportsScreen extends ConsumerStatefulWidget {
   const OfficerReportsScreen({super.key});
 
   @override
-  State<OfficerReportsScreen> createState() => _OfficerReportsScreenState();
+  ConsumerState<OfficerReportsScreen> createState() => _OfficerReportsScreenState();
 }
 
-class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
+class _OfficerReportsScreenState extends ConsumerState<OfficerReportsScreen> {
   bool _isGeneratingPdf = false;
 
   void _handleBackNavigation(BuildContext context) {
@@ -265,6 +267,8 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentLang = ref.watch(appLanguageProvider);
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -279,17 +283,18 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
             icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
             onPressed: () => _handleBackNavigation(context),
           ),
-          title: const Text(
-            'Cluster Analytics & Reports',
-            style: TextStyle(
+          title: Text(
+            currentLang == 'ta' ? 'குழு பகுப்பாய்வு & அறிக்கைகள்' : 'Cluster Analytics & Reports',
+            style: const TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
           actions: [
-            const SpeakerButton(
-              textToSpeak:
-                  'Cluster Analytics & Reports. Export District Cluster report as PDF.',
+            SpeakerButton(
+              textToSpeak: currentLang == 'ta'
+                  ? 'குழு பகுப்பாய்வு & அறிக்கைகள். மாவட்டக் குழு அறிக்கையை PDF ஆக பதிவிறக்கவும்.'
+                  : 'Cluster Analytics & Reports. Export District Cluster report as PDF.',
             ),
             IconButton(
               onPressed: () => _generateAndDownloadPdf(context),
@@ -320,22 +325,22 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
                           color: AppColors.langAccentPrimary, size: 28),
                     ),
                     const SizedBox(width: 14),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Cluster Health Index',
-                              style: TextStyle(
+                          Text(currentLang == 'ta' ? 'குழு ஆரோக்கியக் குறியீடு' : 'Cluster Health Index',
+                              style: const TextStyle(
                                   fontSize: 12, color: AppColors.textSecondary)),
-                          SizedBox(height: 2),
-                          Text('84.2% Optimal',
-                              style: TextStyle(
+                          const SizedBox(height: 2),
+                          Text(currentLang == 'ta' ? '84.2% உகந்தது' : '84.2% Optimal',
+                              style: const TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.langAccentPrimary)),
-                          SizedBox(height: 2),
-                          Text('Nagapattinam District Cluster 3 · 12 Ponds',
-                              style: TextStyle(
+                          const SizedBox(height: 2),
+                          Text(currentLang == 'ta' ? 'நாகப்பட்டினம் மாவட்டக் குழு 3 · 12 குளங்கள்' : 'Nagapattinam District Cluster 3 · 12 Ponds',
+                              style: const TextStyle(
                                   fontSize: 11, color: AppColors.textSecondary)),
                         ],
                       ),
@@ -346,8 +351,8 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
               const SizedBox(height: 16),
 
               // ── Parameter Averages Grid ─────────────────────────────────────
-              const Text('Cluster Parameter Averages',
-                  style: TextStyle(
+              Text(currentLang == 'ta' ? 'குழு அளவீடுகளின் சராசரி' : 'Cluster Parameter Averages',
+                  style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary)),
@@ -359,29 +364,29 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
                 childAspectRatio: 1.8,
-                children: const [
+                children: [
                   _ReportTile(
-                    label: 'Average DO',
+                    label: currentLang == 'ta' ? 'சராசரி DO' : 'Average DO',
                     value: '5.6 mg/L',
-                    sub: 'Normal (>4.0 mg/L)',
+                    sub: currentLang == 'ta' ? 'சாதாரண (>4.0 mg/L)' : 'Normal (>4.0 mg/L)',
                     color: AppColors.green600,
                   ),
                   _ReportTile(
-                    label: 'Average pH',
+                    label: currentLang == 'ta' ? 'சராசரி pH' : 'Average pH',
                     value: '7.6 pH',
-                    sub: 'Stable (6.5 - 8.5)',
+                    sub: currentLang == 'ta' ? 'சீரானது (6.5 - 8.5)' : 'Stable (6.5 - 8.5)',
                     color: AppColors.langAccentPrimary,
                   ),
                   _ReportTile(
-                    label: 'Average Salinity',
+                    label: currentLang == 'ta' ? 'சராசரி உவர்ப்பு' : 'Average Salinity',
                     value: '14.8 ppt',
-                    sub: 'Optimal Range',
+                    sub: currentLang == 'ta' ? 'உகந்த அளவு' : 'Optimal Range',
                     color: AppColors.primary700,
                   ),
                   _ReportTile(
-                    label: 'Water Temp',
+                    label: currentLang == 'ta' ? 'நீர் வெப்பநிலை' : 'Water Temp',
                     value: '28.2 °C',
-                    sub: 'Seasonal Average',
+                    sub: currentLang == 'ta' ? 'பருவகால சராசரி' : 'Seasonal Average',
                     color: AppColors.warning,
                   ),
                 ],
@@ -389,8 +394,8 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
               const SizedBox(height: 20),
 
               // ── High Risk Ponds Needing Attention ──────────────────────────
-              const Text('Priority Ponds (Requires Visit)',
-                  style: TextStyle(
+              Text(currentLang == 'ta' ? 'முன்னுரிமைக் குளங்கள் (பார்வை தேவை)' : 'Priority Ponds (Requires Visit)',
+                  style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary)),
@@ -399,16 +404,16 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
               _RiskPondItem(
                 pondId: 'TN-01-002',
                 farmerName: 'R. Kumar',
-                issue: 'Low DO Warning (3.8 mg/L at 4 AM check)',
-                riskTier: 'High Risk',
+                issue: currentLang == 'ta' ? 'குறைந்த DO எச்சரிக்கை (3.8 mg/L)' : 'Low DO Warning (3.8 mg/L at 4 AM check)',
+                riskTier: currentLang == 'ta' ? 'அதிக அபாயம்' : 'High Risk',
                 riskColor: AppColors.critical,
               ),
               const SizedBox(height: 10),
               _RiskPondItem(
                 pondId: 'TN-01-004',
                 farmerName: 'S. Murugan',
-                issue: 'Slight pH Variance (8.6 pH evening reading)',
-                riskTier: 'Medium Risk',
+                issue: currentLang == 'ta' ? 'pH சிறிய வேறுபாடு (8.6 pH)' : 'Slight pH Variance (8.6 pH evening reading)',
+                riskTier: currentLang == 'ta' ? 'நடுத்தர அபாயம்' : 'Medium Risk',
                 riskColor: AppColors.warning,
               ),
               const SizedBox(height: 24),
@@ -416,8 +421,8 @@ class _OfficerReportsScreenState extends State<OfficerReportsScreen> {
               // ── PDF Download Primary Action Button ──────────────────────────
               PrimaryButton(
                 label: _isGeneratingPdf
-                    ? 'Generating PDF Document…'
-                    : 'Download Full District Report (PDF)',
+                    ? (currentLang == 'ta' ? 'PDF உருவாகிறது…' : 'Generating PDF Document…')
+                    : (currentLang == 'ta' ? 'மாவட்ட முழு அறிக்கை பதிவிறக்கு (PDF)' : 'Download Full District Report (PDF)'),
                 isLoading: _isGeneratingPdf,
                 icon: Icons.picture_as_pdf_rounded,
                 onPressed: () => _generateAndDownloadPdf(context),

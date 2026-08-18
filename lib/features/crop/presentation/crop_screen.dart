@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,15 +14,26 @@ class CropScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // TODO(contract): Dedicated crop metrics endpoint missing from contract.
+    // Crop telemetry metrics (DOC, FCR, expected harvest) are aggregated client-side
+    // from GET /v1/ponds/{pond_id}, GET /v1/ponds/{pond_id}/events, and GET /v1/logs.
+    // See openapi_contract.md for details.
+    final currentLang = ref.watch(appLanguageProvider);
     final crop = DemoDataService.cropCycle;
     final now  = DateTime.now();
     final doc  = now.difference(crop.stockingDate).inDays;
+
+    final docLabel = currentLang == 'ta' ? 'வளர்ப்பு நாட்கள்' : 'Days of Culture';
+    final docVal = currentLang == 'ta' ? '$doc நாட்கள்' : '$doc days';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/today')),
-        title: Text('Crop / Cycle — ${DemoDataService.farmer.pondId}', style: const TextStyle(color: AppColors.textPrimary)),
+        title: Text(
+          currentLang == 'ta' ? 'பயிர்ப் பருவம் — ${DemoDataService.farmer.pondId}' : 'Crop / Cycle — ${DemoDataService.farmer.pondId}',
+          style: const TextStyle(color: AppColors.textPrimary),
+        ),
         actions: [
           IconButton(
             onPressed: () {
@@ -34,7 +46,7 @@ class CropScreen extends ConsumerWidget {
                 'Expected Profit: ₹${_formatNum(crop.expectedProfitMin)}–₹${_formatNum(crop.expectedProfitMax)}';
               Clipboard.setData(ClipboardData(text: text));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Crop summary copied to clipboard')),
+                SnackBar(content: Text(currentLang == 'ta' ? 'பயிர்ப் பருவ விவரம் நகலெடுக்கப்பட்டது' : 'Crop summary copied to clipboard')),
               );
             },
             icon: const Icon(Icons.share_rounded, color: AppColors.textPrimary),
@@ -55,10 +67,10 @@ class CropScreen extends ConsumerWidget {
               mainAxisSpacing: 10,
               childAspectRatio: 2.1,
               children: [
-                _MetricCard(label: 'Days of Culture', value: '$doc days', icon: Icons.calendar_today_rounded, color: AppColors.primary500),
+                _MetricCard(label: docLabel, value: docVal, icon: Icons.calendar_today_rounded, color: AppColors.primary500),
                 _MetricCard(label: 'FCR', value: crop.fcr.toStringAsFixed(2), icon: Icons.bar_chart_rounded, color: AppColors.primary700),
-                _MetricCard(label: 'Cost/kg', value: '₹${crop.costPerKg.toInt()}', icon: Icons.account_balance_wallet_rounded, color: AppColors.warning),
-                _MetricCard(label: 'Market Price/kg', value: '₹${crop.marketPricePerKg.toInt()}', icon: Icons.trending_up_rounded, color: AppColors.green600),
+                _MetricCard(label: currentLang == 'ta' ? 'உற்பத்திச் செலவு/கிலோ' : 'Cost/kg', value: '₹${crop.costPerKg.toInt()}', icon: Icons.account_balance_wallet_rounded, color: AppColors.warning),
+                _MetricCard(label: currentLang == 'ta' ? 'சந்தை விலை/கிலோ' : 'Market Price/kg', value: '₹${crop.marketPricePerKg.toInt()}', icon: Icons.trending_up_rounded, color: AppColors.green600),
               ],
             ),
             const SizedBox(height: 16),
@@ -81,16 +93,21 @@ class CropScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Expected Profit', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        Text(
+                          currentLang == 'ta' ? 'எதிர்பார்க்கப்படும் லாபம்' : 'Expected Profit',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           '₹${_formatNum(crop.expectedProfitMin)} – ₹${_formatNum(crop.expectedProfitMax)}',
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.green600),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          'Range estimate — actual depends on harvest weight & market price',
-                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
+                        Text(
+                          currentLang == 'ta'
+                              ? 'மதிப்பீடு — அறுவடை எடை மற்றும் சந்தை விலையைப் பொறுத்தது'
+                              : 'Range estimate — actual depends on harvest weight & market price',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
                         ),
                       ],
                     ),
@@ -105,7 +122,10 @@ class CropScreen extends ConsumerWidget {
               children: [
                 Expanded(child: AppCard(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Cumulative Feed', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    Text(
+                      currentLang == 'ta' ? 'மொத்தத் தீவனம்' : 'Cumulative Feed',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
                     const SizedBox(height: 4),
                     Text('${crop.cumulativeFeedKg.toInt()} kg', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   ]),
@@ -113,7 +133,10 @@ class CropScreen extends ConsumerWidget {
                 const SizedBox(width: 10),
                 Expanded(child: AppCard(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Expected Harvest', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                    Text(
+                      currentLang == 'ta' ? 'எதிர்பார்க்கப்படும் அறுவடை' : 'Expected Harvest',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
                     const SizedBox(height: 4),
                     Text('${crop.expectedHarvestKg.toInt()} kg', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   ]),
@@ -123,7 +146,10 @@ class CropScreen extends ConsumerWidget {
             const SizedBox(height: 20),
 
             // ── Timeline ──────────────────────────────────────────────────────
-            const Text('Crop Timeline', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            Text(
+              currentLang == 'ta' ? 'பயிர்ப் பருவக் காலவரிசை' : 'Crop Timeline',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            ),
             const SizedBox(height: 12),
 
             ...crop.timeline.asMap().entries.map((e) {

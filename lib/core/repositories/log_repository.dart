@@ -92,23 +92,6 @@ class LogRepository {
 
     for (final pending in pendingLogs) {
       try {
-        final log = PondLog(
-          id: pending.id,
-          pondId: pending.pondId,
-          loggedAt: pending.loggedAt,
-          feedGivenKg: pending.feedGivenKg,
-          mortalityCount: pending.mortalityCount,
-          feedTray: pending.feedTray != null ? FeedTrayStatus.values[pending.feedTray!] : null,
-          waterColor: pending.waterColor != null ? WaterAppearance.values[pending.waterColor!] : null,
-          ph: pending.ph,
-          dissolvedOxygen: pending.dissolvedOxygen,
-          temperature: pending.temperature,
-          salinity: pending.salinity,
-          photoUrls: List<String>.from(jsonDecode(pending.photoUrlsJson)),
-          syncStatus: SyncStatus.synced,
-          notes: pending.notes,
-        );
-
         await db.updateLogSyncStatus(pending.id, SyncStatus.uploading.index);
         // TODO(contract): POST /v1/logs is not in locked endpoint list.
         // Photo upload is done via /v1/media/* endpoints. Mark local log synced.

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_, or_, select
 
 from app.core import rbac
-from app.core.pagination import CursorPage
+from app.core.pagination import CursorPage, clamp_limit, decode_keyset_cursor, encode_keyset_cursor
 from app.core.timezones import utcnow
-from app.deps import CurrentStaff, CurrentUser
+from app.db.models.log import Log
+from app.db.models.pond import Pond
+from app.deps import CurrentStaff, CurrentUser, DbSession
 from app.ml_inference.schemas import (
     DataQualityOut,
     DriftReport,
@@ -39,41 +42,89 @@ _STUB_MODEL_ID = UUID("00000000-0000-0000-0000-000000000002")
 @router.get("/ponds", response_model=CursorPage[PondOut], summary="List accessible ponds")
 async def list_ponds(
     user: CurrentUser,
+    session: DbSession,
+    district: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int | None = Query(default=None),
 ) -> CursorPage[PondOut]:
-    now = utcnow()
-    stub = PondOut(
-        id=_STUB_POND_ID,
-        name="Kalaiselvi Pond - Block A",
-        district="Nagapattinam",
-        taluk="Sirkali",
-        species="Litopenaeus vannamei",
-        area_hectares=2.5,
-        depth_meters=1.2,
-        owner_user_id=uuid4(),
-        created_at=now,
-        updated_at=now,
-    )
-    return CursorPage[PondOut](items=[stub], next_cursor=None)
+    """Real keyset pagination — sorted by created_at DESC, id DESC.
+
+    Scoping:
+      * admin — unrestricted, or filtered to `district` if given.
+      * staff — filtered to `district` (validated via rbac.require_district)
+        if given, else defaulted to the caller's own district claim; a
+        staff token with no district claim gets an empty page (fail closed).
+      * farmer — always scoped to ponds they own; `district` is ignored.
+    """
+    effective_limit = clamp_limit(limit)
+    stmt = select(Pond)
+
+    if user.role == "admin":
+        if district is not None:
+            stmt = stmt.where(Pond.district == district)
+    elif user.role == "staff":
+        if district is not None:
+            rbac.require_district(user.district, district, user.role)
+            stmt = stmt.where(Pond.district == district)
+        elif user.district is None:
+            # No district claim and no explicit filter — fail closed, not
+            # an unscoped global list.
+            return CursorPage[PondOut](items=[], next_cursor=None)
+        else:
+            stmt = stmt.where(Pond.district == user.district)
+    else:  # farmer
+        try:
+            owner_id = UUID(user.sub)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Token 'sub' claim is not a valid UUID."
+            ) from exc
+        stmt = stmt.where(Pond.owner_user_id == owner_id)
+
+    decoded = decode_keyset_cursor(cursor)
+    if decoded is not None:
+        last_created_at_raw, last_id_raw = decoded
+        try:
+            last_created_at = datetime.fromisoformat(last_created_at_raw)
+            last_id = UUID(last_id_raw)
+        except ValueError:
+            last_created_at = None
+            last_id = None
+
+        if last_created_at is not None and last_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Pond.created_at < last_created_at,
+                    and_(Pond.created_at == last_created_at, Pond.id < last_id),
+                )
+            )
+
+    stmt = stmt.order_by(Pond.created_at.desc(), Pond.id.desc())
+    stmt = stmt.limit(effective_limit + 1)
+
+    result = await session.execute(stmt)
+    ponds = list(result.scalars().all())
+
+    has_next = len(ponds) > effective_limit
+    ponds = ponds[:effective_limit]
+
+    next_cursor: str | None = None
+    if has_next and ponds:
+        last_row = ponds[-1]
+        next_cursor = encode_keyset_cursor(last_row.created_at.isoformat(), last_row.id)
+
+    items = [PondOut.model_validate(pond, from_attributes=True) for pond in ponds]
+    return CursorPage[PondOut](items=items, next_cursor=next_cursor)
 
 
 @router.get("/ponds/{pond_id}", response_model=PondOut, summary="Get pond details")
-async def get_pond(pond_id: UUID, user: CurrentUser) -> PondOut:
+async def get_pond(pond_id: UUID, user: CurrentUser, session: DbSession) -> PondOut:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
-    now = utcnow()
-    return PondOut(
-        id=pond_id,
-        name="Kalaiselvi Pond - Block A",
-        district="Nagapattinam",
-        species="Litopenaeus vannamei",
-        area_hectares=2.5,
-        depth_meters=1.2,
-        owner_user_id=uuid4(),
-        created_at=now,
-        updated_at=now,
-    )
+    pond = await session.get(Pond, pond_id)
+    if pond is None:
+        raise HTTPException(status_code=404, detail="Pond not found")
+    return PondOut.model_validate(pond, from_attributes=True)
 
 
 @router.get(
@@ -88,26 +139,78 @@ async def get_pond(pond_id: UUID, user: CurrentUser) -> PondOut:
 async def get_pond_timeseries(
     pond_id: UUID,
     user: CurrentUser,
+    session: DbSession,
     parameter: str = Query(default="dissolved_oxygen_mgl"),
     from_ts: datetime | None = Query(default=None),
     to_ts: datetime | None = Query(default=None),
     cursor: str | None = Query(default=None),
-    limit: int = Query(default=200, ge=1, le=1000),
+    limit: int | None = Query(default=None),
 ) -> PondTimeseriesOut:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
-    now = utcnow()
+
+    pond_exists = (
+        await session.execute(select(Pond.id).where(Pond.id == pond_id))
+    ).scalar_one_or_none()
+    if pond_exists is None:
+        raise HTTPException(status_code=404, detail="Pond not found")
+
+    effective_limit = clamp_limit(limit)
+    stmt = select(Log).where(Log.pond_id == pond_id)
+    if from_ts is not None:
+        stmt = stmt.where(Log.recorded_at >= from_ts)
+    if to_ts is not None:
+        stmt = stmt.where(Log.recorded_at <= to_ts)
+
+    decoded = decode_keyset_cursor(cursor)
+    if decoded is not None:
+        last_recorded_at_raw, last_id_raw = decoded
+        try:
+            last_recorded_at = datetime.fromisoformat(last_recorded_at_raw)
+            last_id = UUID(last_id_raw)
+        except ValueError:
+            last_recorded_at = None
+            last_id = None
+
+        if last_recorded_at is not None and last_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Log.recorded_at < last_recorded_at,
+                    and_(Log.recorded_at == last_recorded_at, Log.id < last_id),
+                )
+            )
+
+    stmt = stmt.order_by(Log.recorded_at.desc(), Log.id.desc())
+    stmt = stmt.limit(effective_limit + 1)
+
+    result = await session.execute(stmt)
+    logs = list(result.scalars().all())
+
+    has_next = len(logs) > effective_limit
+    logs = logs[:effective_limit]
+
+    next_cursor: str | None = None
+    if has_next and logs:
+        last_row = logs[-1]
+        next_cursor = encode_keyset_cursor(last_row.recorded_at.isoformat(), last_row.id)
+
+    points = [
+        PondTimeseriesPoint(
+            recorded_at=log.recorded_at,
+            temperature_c=log.temperature_c,
+            dissolved_oxygen_mgl=log.dissolved_oxygen_mgl,
+            ph=log.ph,
+            salinity_ppt=log.salinity_ppt,
+            ammonia_nh3_mgl=log.ammonia_nh3_mgl,
+            turbidity_ntu=log.turbidity_ntu,
+        )
+        for log in logs
+    ]
     return PondTimeseriesOut(
         pond_id=pond_id,
         parameter=parameter,
-        points=[
-            PondTimeseriesPoint(
-                recorded_at=now - timedelta(hours=i),
-                dissolved_oxygen_mgl=6.5 - i * 0.05,
-            )
-            for i in range(5)
-        ],
-        next_cursor=None,
+        points=points,
+        next_cursor=next_cursor,
     )
 
 
@@ -119,20 +222,90 @@ async def get_pond_timeseries(
 async def get_pond_events(
     pond_id: UUID,
     user: CurrentUser,
+    session: DbSession,
     cursor: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int | None = Query(default=None),
 ) -> CursorPage[PondEventOut]:
+    """Synthesizes events from real Log rows.
+
+    There is no dedicated events table. `Alert` (app/db/models/alert.py) is a
+    real table but nothing populates it yet — raising real alerts is P2.1's
+    job. The alert-sourced half of this endpoint's `event_type` space is
+    intentionally deferred, not forgotten; today every event is
+    `event_type="log"`.
+    """
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
-    now = utcnow()
-    stub = PondEventOut(
-        id=uuid4(),
-        event_type="alert",
-        title="Low dissolved oxygen detected",
-        occurred_at=now,
-        severity="high",
+
+    pond_exists = (
+        await session.execute(select(Pond.id).where(Pond.id == pond_id))
+    ).scalar_one_or_none()
+    if pond_exists is None:
+        raise HTTPException(status_code=404, detail="Pond not found")
+
+    effective_limit = clamp_limit(limit)
+    stmt = select(Log).where(Log.pond_id == pond_id)
+
+    decoded = decode_keyset_cursor(cursor)
+    if decoded is not None:
+        last_recorded_at_raw, last_id_raw = decoded
+        try:
+            last_recorded_at = datetime.fromisoformat(last_recorded_at_raw)
+            last_id = UUID(last_id_raw)
+        except ValueError:
+            last_recorded_at = None
+            last_id = None
+
+        if last_recorded_at is not None and last_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Log.recorded_at < last_recorded_at,
+                    and_(Log.recorded_at == last_recorded_at, Log.id < last_id),
+                )
+            )
+
+    stmt = stmt.order_by(Log.recorded_at.desc(), Log.id.desc())
+    stmt = stmt.limit(effective_limit + 1)
+
+    result = await session.execute(stmt)
+    logs = list(result.scalars().all())
+
+    has_next = len(logs) > effective_limit
+    logs = logs[:effective_limit]
+
+    next_cursor: str | None = None
+    if has_next and logs:
+        last_row = logs[-1]
+        next_cursor = encode_keyset_cursor(last_row.recorded_at.isoformat(), last_row.id)
+
+    parameter_fields = (
+        "temperature_c",
+        "dissolved_oxygen_mgl",
+        "ph",
+        "salinity_ppt",
+        "ammonia_nh3_mgl",
+        "turbidity_ntu",
+        "nitrite_mgl",
+        "nitrate_mgl",
+        "alkalinity_mgl",
+        "hardness_mgl",
     )
-    return CursorPage[PondEventOut](items=[stub], next_cursor=None)
+    items = [
+        PondEventOut(
+            id=log.id,
+            event_type="log",
+            title=f"Water quality log recorded ({log.source})",
+            occurred_at=log.recorded_at,
+            severity=None,
+            metadata={
+                field: value
+                for field in parameter_fields
+                if (value := getattr(log, field)) is not None
+            },
+        )
+        for log in logs
+    ]
+    return CursorPage[PondEventOut](items=items, next_cursor=next_cursor)
 
 
 # ---------------------------------------------------------------------------

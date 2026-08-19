@@ -154,6 +154,19 @@ class Settings(BaseSettings):
     default_srid: int = 4326
 
     # -----------------------------------------------------------------------
+    # Alerts
+    # -----------------------------------------------------------------------
+    # Blind-state suppression: a pond with no Log row newer than this is
+    # "blind" — any alert for it is suppressed (never silently dropped, see
+    # app/alerts/suppression.py) because we can't distinguish "recovered"
+    # from "sensor offline".
+    alert_stale_threshold_hours: int = 4
+    # Threshold-breach dedup window: don't raise a second alert of the same
+    # (pond_id, alert_type) while an unacked one from within this window
+    # already exists. See app/alerts/rules.py.
+    alert_dedup_window_hours: int = 6
+
+    # -----------------------------------------------------------------------
     # Digital Twin
     # -----------------------------------------------------------------------
     # External 3D visualizer URL shown as a button on GET /v1/twin/{id}/view.

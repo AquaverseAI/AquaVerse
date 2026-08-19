@@ -151,23 +151,21 @@ async def _get_scoped_alert(session: DbSession, user: CurrentUser, alert_id: UUI
 async def ack_alert(
     alert_id: UUID, body: AlertAckIn, user: CurrentUser, session: DbSession
 ) -> AlertAckOut:
-    # 1. Enforce RBAC
-    if user.role not in ("staff", "admin"):
-        # We need the alert's pond_id to verify scope. Since this is a stub,
-        # we bypass the DB check for now, but the RBAC call is placed here.
-        # rbac.require_pond_scope(user.pond_ids, alert.pond_id)
-        pass
+    alert = await _get_scoped_alert(session, user, alert_id)
+    
+    alert.acked = True
+    alert.acked_by = UUID(user.sub)
+    alert.acked_at = utcnow()
+    if body.note:
+        alert.ack_note = body.note
 
-    # 2. Reconstruct idempotency key
-    # (Phase 2: Use core.idempotency Redis cache instead of DB lookup per FIX_PRIORITY)
-    client_id = f"ack:{alert_id}:{user.sub}:{body.acknowledged_at.isoformat()}"
+    await session.commit()
 
     return AlertAckOut(
         alert_id=alert_id,
-        acknowledged_by=UUID(user.sub),
-        acknowledged_at=body.acknowledged_at,
-        status="active",
-        idempotency_key=client_id,
+        acked=True,
+        acked_at=alert.acked_at,
+        message="Alert acknowledged successfully",
     )
 
 
@@ -180,18 +178,18 @@ async def alert_feedback(
     alert_id: UUID, body: AlertFeedbackIn, user: CurrentUser, session: DbSession
 ) -> AlertFeedbackOut:
     alert = await _get_scoped_alert(session, user, alert_id)
-    # 1. Enforce RBAC
-    if user.role not in ("staff", "admin"):
-        # rbac.require_pond_scope(user.pond_ids, alert.pond_id)
-        pass
+    
+    alert.feedback_useful = body.useful
+    alert.feedback_comment = body.comment
+    alert.feedback_false_positive = body.false_positive
+    alert.feedback_at = utcnow()
 
-    client_id = f"feedback:{alert_id}:{user.sub}:{utcnow().isoformat()}"
+    await session.commit()
 
     return AlertFeedbackOut(
         alert_id=alert_id,
-        recorded_by=UUID(user.sub),
-        feedback_type=body.feedback_type,
-        idempotency_key=client_id,
+        feedback_recorded=True,
+        message="Feedback recorded successfully",
     )
 
 

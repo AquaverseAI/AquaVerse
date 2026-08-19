@@ -11,8 +11,15 @@ from fastapi.responses import HTMLResponse
 from app.config import get_settings
 from app.core import rbac
 from app.core.timezones import utcnow
-from app.deps import CurrentUser
+from app.db.models.pond import Pond
+from app.db.models.log import Log
+from app.deps import CurrentUser, DbSession
 from app.twin.schemas import StateVector, WhatIfOut, WhatIfScenario
+from app.twin.simulator_adapter import create_current_state, simulate_whatif
+from app.alerts.suppression import is_suppressed
+from app.ml_inference.router import _compute_pond_risk
+from app.ml_inference.numeric.m2_risk_engine import score_pond, RawLogPoint
+from sqlalchemy import select
 
 if TYPE_CHECKING:
     pass
@@ -31,23 +38,24 @@ router = APIRouter(prefix="/twin", tags=["Digital Twin"])
         "The source is never revealed in the response schema."
     ),
 )
-async def get_twin_state(pond_id: UUID, user: CurrentUser) -> StateVector:
+async def get_twin_state(pond_id: UUID, user: CurrentUser, session: DbSession) -> StateVector:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
-    now = utcnow()
-    return StateVector(
-        pond_id=pond_id,
-        as_of=now,
-        temperature_c=28.5,
-        dissolved_oxygen_mgl=6.2,
-        ph=7.8,
-        salinity_ppt=15.0,
-        ammonia_nh3_mgl=0.3,
-        turbidity_ntu=12.0,
-        biomass_kg_estimated=450.0,
-        fcr_estimated=1.4,
-        suppressed=False,
-    )
+        
+    pond = (await session.execute(select(Pond).where(Pond.id == pond_id))).scalar_one_or_none()
+    if not pond:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Pond not found")
+
+    recent_log = (
+        await session.execute(
+            select(Log).where(Log.pond_id == pond_id).order_by(Log.recorded_at.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    
+    suppressed, suppression_reason = is_suppressed(pond_id, recent_log)
+
+    return create_current_state(pond, recent_log, suppressed, suppression_reason)
 
 
 @router.get(
@@ -55,8 +63,8 @@ async def get_twin_state(pond_id: UUID, user: CurrentUser) -> StateVector:
     response_class=HTMLResponse,
     summary="Get a visual dashboard of the digital twin state",
 )
-async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
-    state = await get_twin_state(pond_id, user)
+async def get_twin_view(pond_id: UUID, user: CurrentUser, session: DbSession) -> str:
+    state = await get_twin_state(pond_id, user, session)
 
     visualizer_url = get_settings().twin_visualizer_url
     visualise_button = (
@@ -313,26 +321,80 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
         "Risk delta indicates how much the risk score would change."
     ),
 )
-async def whatif(pond_id: UUID, scenario: WhatIfScenario, user: CurrentUser) -> WhatIfOut:
+async def whatif(pond_id: UUID, scenario: WhatIfScenario, user: CurrentUser, session: DbSession) -> WhatIfOut:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
+        
+    pond = (await session.execute(select(Pond).where(Pond.id == pond_id))).scalar_one_or_none()
+    if not pond:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Pond not found")
+
     now = utcnow()
-    # Stub: apply simple delta arithmetic (Phase 4: call simulator_adapter)
-    simulated = StateVector(
-        pond_id=pond_id,
-        as_of=now,
-        temperature_c=28.5 + (scenario.delta_temperature_c or 0.0),
-        dissolved_oxygen_mgl=6.2 + (scenario.delta_dissolved_oxygen_mgl or 0.0),
-        ph=7.8,
-        salinity_ppt=15.0 + (scenario.delta_salinity_ppt or 0.0),
-        ammonia_nh3_mgl=0.3,
-        turbidity_ntu=12.0,
-        suppressed=False,
+    
+    # Get current state for simulation
+    current_state = await get_twin_state(pond_id, user, session)
+    
+    # Simulate what-if scenario
+    simulated = simulate_whatif(current_state, scenario)
+    
+    # Compute baseline risk
+    baseline_computation = await _compute_pond_risk(session, pond, now)
+    baseline_risk = baseline_computation.risk_out.risk_score
+    
+    # Fetch recent logs + active crop to calculate new risk
+    from app.ml_inference.router import _fetch_recent_logs, _fetch_active_crop
+    from datetime import timedelta
+    
+    since = now - timedelta(days=30)
+    logs = await _fetch_recent_logs(session, pond.id, since)
+    crop = await _fetch_active_crop(session, pond.id)
+    
+    if crop is not None:
+        doc_value: int | None = max((now.date() - crop.stocking_date).days, 0)
+        stocking_count: int | None = crop.post_larvae_count
+    else:
+        doc_value = None
+        stocking_count = None
+        
+    points = [
+        RawLogPoint(
+            recorded_at=log.recorded_at,
+            do_mg_l=log.dissolved_oxygen_mgl,
+            tan_mg_l=log.ammonia_nh3_mgl,
+            ph=log.ph,
+            water_temp_c=log.temperature_c,
+            alkalinity_mg_l=log.alkalinity_mgl,
+            no2_mg_l=log.nitrite_mgl,
+            no3_mg_l=log.nitrate_mgl,
+            salinity_ppt=log.salinity_ppt,
+        )
+        for log in logs
+    ]
+    
+    # Append the simulated future point
+    simulated_point = RawLogPoint(
+        recorded_at=now + timedelta(hours=scenario.horizon_hours),
+        do_mg_l=simulated.dissolved_oxygen_mgl,
+        tan_mg_l=simulated.ammonia_nh3_mgl,
+        ph=simulated.ph,
+        water_temp_c=simulated.temperature_c,
+        alkalinity_mg_l=None,
+        no2_mg_l=None,
+        no3_mg_l=None,
+        salinity_ppt=simulated.salinity_ppt,
     )
+    points.append(simulated_point)
+    
+    # Score with the new point
+    simulated_risk_out = score_pond(points, doc_value, stocking_count, now + timedelta(hours=scenario.horizon_hours))
+    simulated_risk = simulated_risk_out.risk_score
+    risk_delta = simulated_risk - baseline_risk
+
     return WhatIfOut(
         pond_id=pond_id,
         scenario=scenario,
         simulated_state=simulated,
-        risk_delta=0.05 if (scenario.delta_dissolved_oxygen_mgl or 0) < 0 else -0.02,
+        risk_delta=risk_delta,
         generated_at=now,
     )

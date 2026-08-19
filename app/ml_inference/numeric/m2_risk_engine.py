@@ -513,7 +513,7 @@ def compute_chemistry_index(
     every input is missing, returns a neutral 0.5 rather than a false 0/1.
     """
     _ensure_engine_dir_on_path()
-    from sim.species import get_species  # type: ignore[import-not-found]
+    from sim.species import get_species
 
     sp = get_species(species_key)
     parts: list[tuple[float, float]] = []  # (index, weight)

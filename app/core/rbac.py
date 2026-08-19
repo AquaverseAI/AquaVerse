@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
+from uuid import UUID
 
 from fastapi import HTTPException, status
 
@@ -69,7 +71,7 @@ def require_district(user_district: str | None, requested_district: str, role: s
         )
 
 
-def require_pond_scope(user_pond_ids: list[object], pond_id: object) -> None:
+def require_pond_scope(user_pond_ids: Sequence[UUID], pond_id: UUID) -> None:
     """Farmer tokens are pond-scoped — verify access to the specific pond."""
     if pond_id not in user_pond_ids:
         raise HTTPException(

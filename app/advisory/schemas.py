@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -151,7 +151,7 @@ class M3PondSnapshotRequest(BaseModel):
 
 class M3ReasonResponse(BaseModel):
     pond_id: str
-    payload: dict
+    payload: dict[str, Any]
     narration: str
     hallucination_check_passed: bool
     regeneration_attempts: int

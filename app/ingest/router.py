@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import hmac
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from sqlalchemy import and_, or_, select
 
+from app.alerts import fanout, rules, suppression
 from app.config import get_settings
 from app.core import rbac
 from app.core.pagination import CursorPage, clamp_limit, decode_keyset_cursor, encode_keyset_cursor
 from app.core.timezones import utcnow
+from app.db.models.alert import Alert
 from app.db.models.crop import Crop
 from app.db.models.log import Log
 from app.db.models.pond import Pond
@@ -37,6 +39,61 @@ router = APIRouter(tags=["Ingest"])
 _SENSOR_DEVICE_USER_ID = UUID("00000000-0000-0000-0000-0000000000fe")
 
 
+async def _raise_alerts_for_log(session: DbSession, log_entry: Log, pond: Pond) -> None:
+    """Evaluate threshold rules against `log_entry` and persist any breach.
+
+    Called from both `POST /v1/logs` and `POST /v1/ingest/sensor/{pond_id}`
+    right after the log row is committed — every write is evaluated
+    inline, not on a separate poll/cron (see `app/alerts/rules.py`).
+    Suppression (blind-state) and dedup (an unacked alert of the same type
+    already open) are both checked before a new `Alert` row is written.
+    """
+    candidates = rules.evaluate_thresholds(log_entry, pond.species)
+    if not candidates:
+        return
+
+    now = utcnow()
+    blind_state = await suppression.check_blind_state(session, pond.id, now)
+    settings = get_settings()
+    dedup_cutoff = now - timedelta(hours=settings.alert_dedup_window_hours)
+
+    for candidate in candidates:
+        dedup_stmt = (
+            select(Alert.id)
+            .where(
+                Alert.pond_id == pond.id,
+                Alert.alert_type == candidate.alert_type,
+                Alert.acked.is_(False),
+                Alert.created_at >= dedup_cutoff,
+            )
+            .limit(1)
+        )
+        already_open = (await session.execute(dedup_stmt)).scalar_one_or_none()
+        if already_open is not None:
+            continue
+
+        alert = Alert(
+            pond_id=pond.id,
+            alert_type=candidate.alert_type,
+            severity=candidate.severity,
+            title=candidate.title,
+            message=candidate.message,
+            parameter=candidate.parameter,
+            measured_value=candidate.measured_value,
+            threshold_value=candidate.threshold_value,
+            suppressed=blind_state.suppressed,
+            suppression_reason=blind_state.suppression_reason,
+        )
+        session.add(alert)
+        await session.flush()  # assign alert.id before dispatch/log
+
+        result = fanout.dispatch(alert)
+        alert.fcm_sent = result.fcm_sent
+        alert.sms_sent = result.sms_sent
+
+    await session.commit()
+
+
 # ---------------------------------------------------------------------------
 # Logs
 # ---------------------------------------------------------------------------
@@ -53,7 +110,11 @@ _SENSOR_DEVICE_USER_ID = UUID("00000000-0000-0000-0000-0000000000fe")
 async def create_log(
     body: LogIn, session: DbSession, user: CurrentUser, response: Response
 ) -> LogOut:
-    """Phase 2: persist to DB, trigger async risk re-score."""
+    """Persists the log, then evaluates it against threshold alert rules
+    (`app/alerts/rules.py`) inline — see `_raise_alerts_for_log`."""
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, body.pond_id)
+
     # Check idempotency
     if body.client_log_id:
         stmt = select(Log).where(Log.client_log_id == body.client_log_id).limit(1)
@@ -61,6 +122,10 @@ async def create_log(
         if existing:
             response.status_code = status.HTTP_200_OK
             return LogOut.model_validate(existing, from_attributes=True)
+
+    pond = (await session.execute(select(Pond).where(Pond.id == body.pond_id))).scalar_one_or_none()
+    if pond is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pond not found")
 
     # Find active crop for this pond
     crop_stmt = (
@@ -90,6 +155,8 @@ async def create_log(
     session.add(log_entry)
     await session.commit()
     await session.refresh(log_entry)
+
+    await _raise_alerts_for_log(session, log_entry, pond)
 
     return LogOut.model_validate(log_entry, from_attributes=True)
 
@@ -258,10 +325,8 @@ async def ingest_sensor_reading(
 ) -> SensorIngestOut:
     _check_device_key(x_device_key)
 
-    pond_exists = (
-        await session.execute(select(Pond.id).where(Pond.id == pond_id))
-    ).scalar_one_or_none()
-    if pond_exists is None:
+    pond = (await session.execute(select(Pond).where(Pond.id == pond_id))).scalar_one_or_none()
+    if pond is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pond not found")
 
     crop_stmt = select(Crop.id).where(Crop.pond_id == pond_id, Crop.status == "active").limit(1)
@@ -282,6 +347,8 @@ async def ingest_sensor_reading(
     session.add(log_entry)
     await session.commit()
     await session.refresh(log_entry)
+
+    await _raise_alerts_for_log(session, log_entry, pond)
 
     return SensorIngestOut(
         id=log_entry.id,

@@ -1,4 +1,4 @@
-"""Alert ORM model — stub for Phase 1.
+"""Alert ORM model.
 
 RULE: Blind-state suppression must always be visible on the payload — never silent.
 The `suppressed` flag and `suppression_reason` are ALWAYS returned to the client.
@@ -56,6 +56,14 @@ class Alert(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     acked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     acked_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     acked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ack_note: Mapped[str | None] = mapped_column(Text)
+
+    # Feedback (POST /v1/alerts/{id}/feedback) — added in
+    # e4f5a6b7c8d9_add_alert_feedback_columns.
+    feedback_useful: Mapped[bool | None] = mapped_column(Boolean)
+    feedback_comment: Mapped[str | None] = mapped_column(Text)
+    feedback_false_positive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Fan-out status
     fcm_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

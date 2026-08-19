@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from sqlalchemy import and_, or_, select
 
 from app.core import rbac
@@ -39,6 +39,8 @@ from app.ml_inference.schemas import (
     ShapContribution,
     WorklistItem,
 )
+from PIL import Image
+import io
 
 router = APIRouter(tags=["Ponds & ML"])
 
@@ -728,3 +730,66 @@ async def get_data_quality(
         stale_threshold_hours=4,
         evaluated_at=now,
     )
+
+# ---------------------------------------------------------------------------
+# Multimodal M2
+# ---------------------------------------------------------------------------
+@router.post(
+    "/ponds/{pond_id}/multimodal_risk",
+    summary="Compute multimodal risk score using PyTorch Fusion (M2)",
+    description="Fuses Tabular Sensor Data with Image Concept Bottleneck outputs.",
+)
+async def compute_multimodal_risk(
+    pond_id: UUID,
+    user: CurrentUser,
+    session: DbSession,
+    image: UploadFile | None = File(default=None),
+    image_age_hours: float = Query(default=0.0)
+):
+    if user.role not in ("staff", "admin"):
+        rbac.require_pond_scope(user.pond_ids, pond_id)
+    pond = await session.get(Pond, pond_id)
+    if pond is None:
+        raise HTTPException(status_code=404, detail="Pond not found")
+
+    now = utcnow()
+    since = now - timedelta(days=_RISK_LOOKBACK_DAYS)
+    logs = await _fetch_recent_logs(session, pond.id, since)
+    crop = await _fetch_active_crop(session, pond.id)
+
+    doc_value = max((now.date() - crop.stocking_date).days, 0) if crop else None
+    stocking_count = crop.post_larvae_count if crop else None
+
+    pil_image = None
+    if image is not None:
+        contents = await image.read()
+        pil_image = Image.open(io.BytesIO(contents))
+
+    points = [
+        m2_risk_engine.RawLogPoint(
+            recorded_at=log.recorded_at,
+            do_mg_l=log.dissolved_oxygen_mgl,
+            tan_mg_l=log.ammonia_nh3_mgl,
+            ph=log.ph,
+            water_temp_c=log.temperature_c,
+            alkalinity_mg_l=log.alkalinity_mgl,
+            no2_mg_l=log.nitrite_mgl,
+            no3_mg_l=log.nitrate_mgl,
+            salinity_ppt=log.salinity_ppt,
+        )
+        for log in logs
+    ]
+
+    from app.ml_inference.multimodal_m2_engine import score_multimodal
+    
+    result = score_multimodal(
+        points=points,
+        doc_value=doc_value,
+        stocking_count=stocking_count,
+        now=now,
+        image=pil_image,
+        image_age_hours=image_age_hours
+    )
+
+    return result
+

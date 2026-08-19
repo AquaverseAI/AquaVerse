@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     internal_api_token: str = Field(..., min_length=32)
     # Extra LAN/staging origins (e.g. a dev machine's LAN IP) belong in the
     # CORS_ORIGINS env var, not hardcoded here — see .env.example.
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: list[str] = []
 
     # -----------------------------------------------------------------------
     # Database

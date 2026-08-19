@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from fastapi.responses import JSONResponse
 
+from app.core import rbac
 from app.core.timezones import utcnow
 from app.deps import CurrentStaff
 
@@ -29,11 +30,17 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 async def export_report(
     user: CurrentStaff,
     pond_id: UUID | None = Query(default=None),
+    district: str | None = Query(default=None),
     format: str = Query(default="pdf", description="pdf | xlsx"),
     from_date: str | None = Query(default=None, description="YYYY-MM-DD"),
     to_date: str | None = Query(default=None, description="YYYY-MM-DD"),
 ) -> JSONResponse:
     """Phase 1: return fixture. Phase 5: enqueue ARQ job, return job_id."""
+    if district is not None:
+        rbac.require_district(user.district, district, user.role)
+    elif user.role == "staff" and user.district is not None:
+        district = user.district
+
     now = utcnow()
     return JSONResponse(
         content={

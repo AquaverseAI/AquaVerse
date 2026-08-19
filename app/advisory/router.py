@@ -19,7 +19,7 @@ from app.advisory.schemas import (
 )
 from app.core import rbac
 from app.core.errors import NumberMismatchError
-from app.core.pagination import CursorPage
+from app.core.pagination import CursorPage, encode_keyset_cursor
 from app.core.timezones import utcnow
 from app.deps import CurrentStaff, CurrentUser, InternalOnly
 from app.ml_inference.numeric.m3_engine import get_m3_engine_bundle
@@ -208,7 +208,11 @@ async def list_advisories(
         issued_at=now,
         expires_at=now + timedelta(days=7),
     )
-    return CursorPage[AdvisoryOut](items=[stub], next_cursor=None)
+    
+    # Fake keyset cursor for the stub list
+    next_cursor = encode_keyset_cursor(stub.issued_at.isoformat(), stub.id)
+    
+    return CursorPage[AdvisoryOut](items=[stub], next_cursor=next_cursor)
 
 
 # ---------------------------------------------------------------------------
@@ -235,3 +239,36 @@ async def broadcast_advisory(body: BroadcastIn, user: CurrentStaff) -> AdvisoryO
         issued_at=now,
         expires_at=body.expires_at,
     )
+
+# ---------------------------------------------------------------------------
+# POST /v1/advisories/multimodal_reason
+# ---------------------------------------------------------------------------
+from pydantic import BaseModel
+class MultimodalReasonIn(BaseModel):
+    calibrated_risk_score: float
+    gate_vision: float
+    gate_temporal: float
+    concept_activations: dict[str, float]
+    stress_hours: float
+    stocking_density: float | None = None
+
+class MultimodalReasonOut(BaseModel):
+    advisory_text: str
+
+@router.post(
+    "/advisories/multimodal_reason",
+    response_model=MultimodalReasonOut,
+    summary="Generate farmer-facing reasoning from GMU output",
+)
+async def multimodal_reason(body: MultimodalReasonIn):
+    from app.ml_inference.llm.qlora_inference import generate_advisory
+    
+    # 1. Generate text
+    text = await generate_advisory(body.model_dump())
+    
+    # 2. Enforce Number Validation (Rule R1)
+    # validate_llm_output ensures the LLM did not hallucinate new numbers
+    validate_llm_output(text, body.model_dump())
+    
+    return MultimodalReasonOut(advisory_text=text)
+

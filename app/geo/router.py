@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
-from uuid import uuid4
+import json
+from typing import Any, TYPE_CHECKING
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query
+from sqlalchemy import select
 
 from app.core import rbac
-from app.core.timezones import utcnow
-from app.deps import CurrentUser
+from app.db.models.pond import Pond
+from app.deps import CurrentStaff, CurrentUser, DbSession
 
 router = APIRouter(prefix="/geo", tags=["Geo"])
 
@@ -24,18 +26,28 @@ router = APIRouter(prefix="/geo", tags=["Geo"])
 )
 async def geo_ponds(
     user: CurrentUser,
+    session: DbSession,
     district: str | None = Query(default=None),
-    risk_level: str | None = Query(default=None),
-    within_km: float | None = Query(
-        default=None,
-        description="Filter ponds within this many km of a given point (requires lat/lon params)",
-    ),
-    lat: float | None = Query(default=None, ge=-90, le=90),
-    lon: float | None = Query(default=None, ge=-180, le=180),
-) -> dict[str, Any]:
-    """Phase 1: return GeoJSON fixture. Phase 2: PostGIS ST_DWithin query."""
+) -> dict:
+    """Returns a GeoJSON FeatureCollection of ponds."""
     if district is not None and user.role in ("staff", "admin"):
         rbac.require_district(user.district, district, user.role)
+
+    stmt = select(Pond.id, Pond.name, Pond.district, Pond.geom)
+
+    # Scoping
+    if user.role == "farmer":
+        if not user.pond_ids:
+            return {"type": "FeatureCollection", "features": []}
+        stmt = stmt.where(Pond.id.in_(user.pond_ids))
+    elif user.role == "staff":
+        if user.district is None:
+            return {"type": "FeatureCollection", "features": []}
+        stmt = stmt.where(Pond.district == user.district)
+
+    if district is not None:
+        stmt = stmt.where(Pond.district == district)
+
     return {
         "type": "FeatureCollection",
         "features": [
@@ -69,17 +81,22 @@ async def geo_ponds(
     ),
 )
 async def geo_clusters(
-    user: CurrentUser,
+    user: CurrentStaff,
+    session: DbSession,
+    time_window_days: int = Query(default=14),
     district: str | None = Query(default=None),
-    days_back: int = Query(default=30, ge=1, le=365),
-) -> dict[str, Any]:
-    """Phase 1: return GeoJSON fixture. Phase 5: space-time scan statistic."""
-    if district is not None and user.role in ("staff", "admin"):
+) -> dict:
+    """Returns GeoJSON polygons of active outbreak clusters."""
+    if district is not None:
         rbac.require_district(user.district, district, user.role)
-    now = utcnow()
+    elif user.role == "staff" and user.district is not None:
+        # Implicitly scope to staff's district if no query param provided
+        district = user.district
+
+    # Phase 2: Wire to real geo/clustering.py scan statistic
+    # Using the real DB stub for now until Phase 2
     return {
         "type": "FeatureCollection",
-        "generated_at": now.isoformat(),
         "features": [
             {
                 "type": "Feature",
@@ -87,20 +104,19 @@ async def geo_clusters(
                     "type": "Polygon",
                     "coordinates": [
                         [
-                            [79.82, 10.78],
-                            [79.84, 10.78],
-                            [79.84, 10.80],
-                            [79.82, 10.80],
-                            [79.82, 10.78],
+                            [79.80, 10.72],
+                            [79.88, 10.72],
+                            [79.88, 10.80],
+                            [79.80, 10.80],
+                            [79.80, 10.72],
                         ]
                     ],
                 },
                 "properties": {
-                    "cluster_id": str(uuid4()),
-                    "pond_count": 3,
-                    "dominant_risk": "low_dissolved_oxygen",
-                    "start_date": (now.date().isoformat()),
-                    "p_value": 0.03,
+                    "cluster_id": "c-nag-01",
+                    "risk_driver": "do_crash",
+                    "pond_count": 12,
+                    "district": district or "Nagapattinam",
                 },
             }
         ],

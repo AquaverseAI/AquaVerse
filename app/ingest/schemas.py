@@ -49,9 +49,42 @@ class LogOut(BaseModel):
     nitrate_mgl: float | None = None
     alkalinity_mgl: float | None = None
     hardness_mgl: float | None = None
+    air_temperature_c: float | None = None
+    humidity_pct: float | None = None
     source: str
     client_log_id: str | None = None
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Sensor ingest (IoT device webhook — raw pond sensor unit push)
+# ---------------------------------------------------------------------------
+class SensorIngestIn(BaseModel):
+    """Raw payload shape as pushed by the pond sensor unit's firmware.
+
+    Field names intentionally mirror the device's own JSON keys (not the
+    `_c` / `_mgl` / `_ntu`-suffixed DB column names used elsewhere in this
+    module) — this schema accepts exactly what the hardware already sends,
+    no firmware changes required.
+    """
+
+    ph: float = Field(..., ge=0, le=14)
+    air_temperature: float = Field(..., ge=-10, le=60, description="Ambient air temperature, °C")
+    humidity: float = Field(..., ge=0, le=100, description="Relative humidity, %")
+    water_temperature: float = Field(..., ge=0, le=45, description="Water temperature, °C")
+    turbidity: float = Field(..., ge=0, description="Turbidity, NTU")
+
+
+class SensorIngestOut(BaseModel):
+    id: UUID
+    pond_id: UUID
+    recorded_at: datetime
+    ph: float | None = None
+    air_temperature_c: float | None = None
+    humidity_pct: float | None = None
+    water_temperature_c: float | None = None
+    turbidity_ntu: float | None = None
+    source: str
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +105,7 @@ class MediaUploadUrlOut(BaseModel):
 
 
 class MediaCommitIn(BaseModel):
+    pond_id: UUID
     client_log_id: str | None = Field(default=None, max_length=200)
 
 

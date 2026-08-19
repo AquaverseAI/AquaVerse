@@ -47,11 +47,21 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """Dispose the engine pool. Called at app shutdown."""
-    global _engine
+    global _engine, AsyncSessionLocal
     if _engine is not None:
         await _engine.dispose()
         log.info("db.closed")
         _engine = None
+    # Reset the sessionmaker too, not just the engine — otherwise
+    # get_async_session() keeps handing out sessions bound to a disposed
+    # engine instead of raising "Database not initialised" after shutdown.
+    # This was silently relied on being *wrong* by tests/conftest.py's
+    # `client` fixture (lifespan never runs, so this path was never hit
+    # there) — but any process that runs a real startup/shutdown cycle
+    # more than once (e.g. multiple `db_client`-style test fixtures, or
+    # separate FastAPI app instances, in the same process) would leak a
+    # stale sessionmaker across them without this reset.
+    AsyncSessionLocal = None  # type: ignore[assignment]
 
 
 def get_engine() -> AsyncEngine:

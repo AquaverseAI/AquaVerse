@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="session")
 async def test_get_historical_features_point_in_time(db_session: AsyncSession) -> None:
     # 1. Create a pond
     pond_id = uuid4()

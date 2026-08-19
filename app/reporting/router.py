@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from app.core.timezones import utcnow
+from app.deps import CurrentStaff
 
 if TYPE_CHECKING:
     pass
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
     ),
 )
 async def export_report(
+    user: CurrentStaff,
     pond_id: UUID | None = Query(default=None),
     format: str = Query(default="pdf", description="pdf | xlsx"),
     from_date: str | None = Query(default=None, description="YYYY-MM-DD"),

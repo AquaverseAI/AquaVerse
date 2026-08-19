@@ -37,6 +37,10 @@ class PondTimeseriesPoint(BaseModel):
     salinity_ppt: float | None = None
     ammonia_nh3_mgl: float | None = None
     turbidity_ntu: float | None = None
+    # Ambient (not water-column) readings from pond-side IoT sensor units —
+    # see POST /v1/ingest/sensor/{pond_id}. Null for manually-logged rows.
+    air_temperature_c: float | None = None
+    humidity_pct: float | None = None
 
 
 class PondTimeseriesOut(BaseModel):

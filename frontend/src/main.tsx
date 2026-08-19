@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 
 // Non-blocking MSW worker initialization
 async function enableMocking() {
-  if (import.meta.env.DEV || true) {
+  if (import.meta.env.VITE_USE_MSW === 'true') {
     try {
       const { worker } = await import('./mocks/browser');
       await worker.start({

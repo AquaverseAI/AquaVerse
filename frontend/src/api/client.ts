@@ -6,11 +6,18 @@ import type { components, paths } from './generated-sdk';
  */
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('auth_token');
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options?.headers,
+  };
+
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(endpoint, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
     ...options,
   });
 

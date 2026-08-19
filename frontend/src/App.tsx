@@ -17,10 +17,17 @@ export interface UserSession {
 
 export function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [user, setUser] = useState<UserSession | null>({
-    username: 'Suchit (Lead)',
-    role: 'analyst',
-    token: 'mock-jwt-token-12345',
+  const [user, setUser] = useState<UserSession | null>(() => {
+    const savedToken = localStorage.getItem('auth_token');
+    const savedUser = localStorage.getItem('auth_user');
+    if (savedToken && savedUser) {
+      try {
+        return JSON.parse(savedUser);
+      } catch {
+        return null;
+      }
+    }
+    return null;
   });
   const [activeScreen, setActiveScreen] = useState<ScreenId>('map');
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Coimbatore');
@@ -55,7 +62,15 @@ export function App() {
 
   // If user is not logged in, display the Keycloak OAuth2 Login Screen
   if (!user) {
-    return <LoginPage onLoginSuccess={(u) => setUser(u)} theme={theme} onToggleTheme={handleToggleTheme} />;
+    return <LoginPage 
+      onLoginSuccess={(u) => {
+        localStorage.setItem('auth_token', u.token);
+        localStorage.setItem('auth_user', JSON.stringify(u));
+        setUser(u);
+      }} 
+      theme={theme} 
+      onToggleTheme={handleToggleTheme} 
+    />;
   }
 
   return (

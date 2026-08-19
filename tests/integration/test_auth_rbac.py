@@ -72,6 +72,7 @@ async def _seed_pond(db_session: AsyncSession, pond_id: str, district: str = DIS
     await db_session.commit()
     return pond
 
+
 # Previously-open, now-protected GET endpoints (per audit / commit message).
 PROTECTED_GET_ENDPOINTS = [
     "/v1/ponds",
@@ -149,9 +150,7 @@ async def test_smoke_test_stub_bearer_matches_401_not_500(client: AsyncClient, p
     actually gets (401) so a regression that turns this into e.g. a 500 is
     caught precisely instead of just "still under 500".
     """
-    response = await client.get(
-        path, headers={"Authorization": SMOKE_TEST_STUB_BEARER}
-    )
+    response = await client.get(path, headers={"Authorization": SMOKE_TEST_STUB_BEARER})
     assert response.status_code == 401, (
         f"GET {path} with the smoke-test's stub bearer returned "
         f"{response.status_code}, expected 401: {response.text}"
@@ -369,4 +368,3 @@ async def test_admin_bypasses_district_scoping(db_client: AsyncClient) -> None:
         "/v1/risk/worklist", params={"district": DISTRICT_B}, headers=_auth(token)
     )
     assert response.status_code == 200, response.text
-

@@ -23,7 +23,7 @@ from app.db.models.crop import Crop
 from app.db.models.log import Log
 from app.db.models.pond import Pond
 from app.deps import CurrentStaff, CurrentUser, DbSession
-from app.ml_inference.numeric import m2_risk_engine
+from app.ml_inference.numeric import do_forecast, m2_risk_engine
 from app.ml_inference.schemas import (
     DataQualityOut,
     DriftReport,
@@ -566,34 +566,61 @@ async def get_risk_worklist(
     response_model=ForecastOut,
     summary="Dissolved oxygen forecast with uncertainty bands",
     description=(
-        "Returns a 24-hour dissolved oxygen forecast with 10th/50th/90th percentile bands "
-        "from the temporal model (TCN/TFT/PatchTST). "
+        "Returns a dissolved oxygen forecast (default 24h, up to 168h) with 10th/50th/90th "
+        "percentile bands computed from this pond's own real historical DO readings, bucketed "
+        "by hour-of-day. This is an honest empirical seasonal-naive baseline, NOT a trained "
+        "temporal model — no TCN/TFT/PatchTST exists anywhere in this repo (see "
+        "app/ml_inference/numeric/do_forecast.py module docstring). "
         "RULE: Bare point estimates are forbidden — bands are always returned."
     ),
 )
 async def get_do_forecast(
     pond_id: UUID,
     user: CurrentUser,
+    session: DbSession,
     horizon_hours: int = Query(default=24, ge=1, le=168),
 ) -> ForecastOut:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
+    pond = await session.get(Pond, pond_id)
+    if pond is None:
+        raise HTTPException(status_code=404, detail="Pond not found")
+
     now = utcnow()
+    # Reuses the same lookback window and log-fetch helper as risk scoring
+    # (_fetch_recent_logs / _RISK_LOOKBACK_DAYS, defined above in the Risk
+    # section) rather than inventing a second constant: 30 days of this
+    # pond's (typically hourly-seeded) logs already gives ~30+ samples per
+    # hour-of-day bucket, comfortably clearing do_forecast.MIN_BUCKET_SAMPLES,
+    # and keeps one "how far back do we look at this pond's history" answer
+    # per codebase instead of two.
+    logs = await _fetch_recent_logs(session, pond_id, now - timedelta(days=_RISK_LOOKBACK_DAYS))
+    species_key = m2_risk_engine.resolve_species_key(pond.species)
+    forecast = do_forecast.build_do_forecast(
+        historical_readings=[
+            (log.recorded_at, log.dissolved_oxygen_mgl)
+            for log in logs
+            if log.dissolved_oxygen_mgl is not None
+        ],
+        target_timestamps=[now + timedelta(hours=i) for i in range(1, horizon_hours + 1)],
+        species_key=species_key,
+    )
     return ForecastOut(
         pond_id=pond_id,
         parameter="dissolved_oxygen_mgl",
         horizon_hours=horizon_hours,
         points=[
             ForecastPoint(
-                forecasted_at=now + timedelta(hours=i + 1),
-                p10=5.2 - i * 0.05,
-                p50=6.0 - i * 0.04,
-                p90=6.8 - i * 0.03,
+                forecasted_at=forecasted_at,
+                p10=band.p10,
+                p50=band.p50,
+                p90=band.p90,
             )
-            for i in range(min(horizon_hours, 24))
+            for forecasted_at, band in forecast.bands_by_timestamp
         ],
-        model_version="patchtst-v0.3.1",
+        model_version=forecast.model_version,
         generated_at=now,
+        uncertainty_note=forecast.uncertainty_note,
     )
 
 

@@ -80,7 +80,9 @@ async def ack_alert(alert_id: UUID, body: AlertAckIn, user: CurrentUser) -> Aler
     response_model=AlertFeedbackOut,
     summary="Submit feedback on an alert",
 )
-async def alert_feedback(alert_id: UUID, body: AlertFeedbackIn, user: CurrentUser) -> AlertFeedbackOut:
+async def alert_feedback(
+    alert_id: UUID, body: AlertFeedbackIn, user: CurrentUser
+) -> AlertFeedbackOut:
     return AlertFeedbackOut(
         alert_id=alert_id,
         feedback_recorded=True,

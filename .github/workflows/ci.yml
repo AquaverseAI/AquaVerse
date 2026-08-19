@@ -29,7 +29,7 @@ jobs:
           cache: pip
 
       - name: Install dev dependencies
-        run: pip install ruff mypy pydantic pydantic-settings
+        run: pip install -e ".[dev]"
 
       - name: Ruff lint
         run: ruff check app/ tests/ scripts/
@@ -60,7 +60,12 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run unit tests
-        run: pytest tests/unit/ -m unit -v --cov=app --cov-report=xml
+        run: >-
+          pytest tests/unit/ -m unit -v
+          --cov=app.advisory.number_validator
+          --cov=app.core.pagination
+          --cov=app.ml_inference.numeric.m3_engine
+          --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

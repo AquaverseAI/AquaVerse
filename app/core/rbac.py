@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
+from uuid import UUID
 
 from fastapi import HTTPException, status
 
@@ -40,9 +42,7 @@ def require_role(user_role: str, minimum_role: Role) -> None:
         )
 
 
-def require_district(
-    user_district: str | None, requested_district: str, role: str
-) -> None:
+def require_district(user_district: str | None, requested_district: str, role: str) -> None:
     """
     Verify the user has access to the requested district.
 
@@ -58,8 +58,7 @@ def require_district(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                "Your token has no district claim; "
-                f"cannot access district '{requested_district}'."
+                f"Your token has no district claim; cannot access district '{requested_district}'."
             ),
         )
     if user_district != requested_district:
@@ -72,7 +71,7 @@ def require_district(
         )
 
 
-def require_pond_scope(user_pond_ids: list[object], pond_id: object) -> None:
+def require_pond_scope(user_pond_ids: Sequence[UUID], pond_id: UUID) -> None:
     """Farmer tokens are pond-scoped — verify access to the specific pond."""
     if pond_id not in user_pond_ids:
         raise HTTPException(

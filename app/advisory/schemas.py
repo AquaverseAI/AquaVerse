@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -113,6 +113,7 @@ class BroadcastIn(BaseModel):
     )
     expires_at: datetime | None = None
 
+
 # ---------------------------------------------------------------------------
 # M3 Serving Integration Schemas
 # ---------------------------------------------------------------------------
@@ -147,9 +148,10 @@ class M3PondSnapshotRequest(BaseModel):
     feed_cost_per_kg_rs: float = 90.0
     market_price_per_kg_rs: float = 350.0
 
+
 class M3ReasonResponse(BaseModel):
     pond_id: str
-    payload: dict
+    payload: dict[str, Any]
     narration: str
     hallucination_check_passed: bool
     regeneration_attempts: int

@@ -20,9 +20,7 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "users"
 
     # Identity columns — at least one must be set
-    phone: Mapped[str | None] = mapped_column(
-        String(20), unique=True, nullable=True, index=True
-    )
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
     username: Mapped[str | None] = mapped_column(
         String(100), unique=True, nullable=True, index=True
     )

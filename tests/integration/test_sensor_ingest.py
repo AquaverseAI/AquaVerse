@@ -65,9 +65,7 @@ async def test_sensor_ingest_accepts_exact_device_payload_and_persists(
     assert body["source"] == "sensor"
 
     # Real DB row, not just an echoed response.
-    row = (
-        await db_session.execute(select(Log).where(Log.id == body["id"]))
-    ).scalar_one()
+    row = (await db_session.execute(select(Log).where(Log.id == body["id"]))).scalar_one()
     assert row.pond_id == pond.id
     assert row.ph == 14.0
     assert row.air_temperature_c == 0.0
@@ -109,16 +107,12 @@ async def test_sensor_ingest_reading_visible_via_logs_and_timeseries(
     token = create_access_token(sub=str(uuid4()), role="admin")
     headers = {"Authorization": f"Bearer {token}"}
 
-    logs_resp = await db_client.get(
-        f"/v1/logs?pond_id={pond.id}", headers=headers
-    )
+    logs_resp = await db_client.get(f"/v1/logs?pond_id={pond.id}", headers=headers)
     assert logs_resp.status_code == 200
     log_ids = [item["id"] for item in logs_resp.json()["items"]]
     assert reading_id in log_ids
 
-    ts_resp = await db_client.get(
-        f"/v1/ponds/{pond.id}/timeseries?parameter=ph", headers=headers
-    )
+    ts_resp = await db_client.get(f"/v1/ponds/{pond.id}/timeseries?parameter=ph", headers=headers)
     assert ts_resp.status_code == 200
     points = ts_resp.json()["points"]
     assert any(

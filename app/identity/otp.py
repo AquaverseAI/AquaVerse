@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 # Redis key patterns
-_OTP_KEY = "otp:{request_id}"   # value = "phone:hmac_hash"
+_OTP_KEY = "otp:{request_id}"  # value = "phone:hmac_hash"
 _RATE_KEY = "otp_rate:{phone}"  # value = request count
 
 

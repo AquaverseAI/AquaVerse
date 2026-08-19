@@ -50,7 +50,9 @@ _SENSOR_DEVICE_USER_ID = UUID("00000000-0000-0000-0000-0000000000fe")
         "Accepts a `client_log_id` for idempotency — replays return `200` with the original record."
     ),
 )
-async def create_log(body: LogIn, session: DbSession, user: CurrentUser, response: Response) -> LogOut:
+async def create_log(
+    body: LogIn, session: DbSession, user: CurrentUser, response: Response
+) -> LogOut:
     """Phase 2: persist to DB, trigger async risk re-score."""
     # Check idempotency
     if body.client_log_id:
@@ -61,10 +63,9 @@ async def create_log(body: LogIn, session: DbSession, user: CurrentUser, respons
             return LogOut.model_validate(existing, from_attributes=True)
 
     # Find active crop for this pond
-    crop_stmt = select(Crop.id).where(
-        Crop.pond_id == body.pond_id,
-        Crop.status == "active"
-    ).limit(1)
+    crop_stmt = (
+        select(Crop.id).where(Crop.pond_id == body.pond_id, Crop.status == "active").limit(1)
+    )
     active_crop_id = (await session.execute(crop_stmt)).scalar_one_or_none()
 
     log_entry = Log(
@@ -83,7 +84,7 @@ async def create_log(body: LogIn, session: DbSession, user: CurrentUser, respons
         alkalinity_mgl=body.alkalinity_mgl,
         hardness_mgl=body.hardness_mgl,
         notes=body.notes,
-        source="manual", # TODO: Phase 2 IoT should set to 'sensor' based on token?
+        source="manual",  # TODO: Phase 2 IoT should set to 'sensor' based on token?
         client_log_id=body.client_log_id,
     )
     session.add(log_entry)
@@ -243,7 +244,7 @@ def _check_device_key(x_device_key: str | None) -> None:
     description=(
         "Webhook for pond-side sensor hardware — accepts the device's raw JSON shape "
         "(`ph`, `air_temperature`, `humidity`, `water_temperature`, `turbidity`) directly, "
-        "no farmer/staff login required. Persisted as a `Log` row with `source=\"sensor\"`, "
+        'no farmer/staff login required. Persisted as a `Log` row with `source="sensor"`, '
         "timestamped at server receipt time, and immediately visible via "
         "GET /v1/logs and GET /v1/ponds/{pond_id}/timeseries. "
         "Optionally gated by a shared `X-Device-Key` header — see app/config.py."
@@ -257,7 +258,9 @@ async def ingest_sensor_reading(
 ) -> SensorIngestOut:
     _check_device_key(x_device_key)
 
-    pond_exists = (await session.execute(select(Pond.id).where(Pond.id == pond_id))).scalar_one_or_none()
+    pond_exists = (
+        await session.execute(select(Pond.id).where(Pond.id == pond_id))
+    ).scalar_one_or_none()
     if pond_exists is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pond not found")
 

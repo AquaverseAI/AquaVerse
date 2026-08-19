@@ -135,9 +135,7 @@ async def test_staff_list_ponds_defaults_to_own_district(
 @pytest.mark.asyncio(loop_scope="session")
 async def test_staff_list_ponds_district_param_mismatch_403(db_client: AsyncClient) -> None:
     headers = {"Authorization": f"Bearer {_staff_token(district='Nagapattinam')}"}
-    response = await db_client.get(
-        "/v1/ponds", params={"district": "Thanjavur"}, headers=headers
-    )
+    response = await db_client.get("/v1/ponds", params={"district": "Thanjavur"}, headers=headers)
     assert response.status_code == 403, response.text
 
 
@@ -175,9 +173,7 @@ async def test_admin_list_ponds_unrestricted_across_districts(
     assert str(other.id) in ids
 
     # Admin can also explicitly filter by district without a require_district check.
-    response = await db_client.get(
-        "/v1/ponds", params={"district": "Thanjavur"}, headers=headers
-    )
+    response = await db_client.get("/v1/ponds", params={"district": "Thanjavur"}, headers=headers)
     assert response.status_code == 200, response.text
     ids = {item["id"] for item in response.json()["items"]}
     assert str(other.id) in ids
@@ -277,9 +273,7 @@ async def test_pond_timeseries_returns_real_values_and_paginates(
 async def test_pond_timeseries_404_for_nonexistent_pond(db_client: AsyncClient) -> None:
     token = _staff_token()
     headers = {"Authorization": f"Bearer {token}"}
-    response = await db_client.get(
-        f"/v1/ponds/{uuid4()}/timeseries", headers=headers
-    )
+    response = await db_client.get(f"/v1/ponds/{uuid4()}/timeseries", headers=headers)
     assert response.status_code == 404, response.text
 
 

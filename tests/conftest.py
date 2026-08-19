@@ -166,10 +166,13 @@ async def db_client(postgres_container: Any, db_engine: Any) -> AsyncGenerator[A
     app = create_app()
 
     try:
-        async with app.router.lifespan_context(app), AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test",
-        ) as ac:
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as ac,
+        ):
             yield ac
     finally:
         if prev_database_url is None:

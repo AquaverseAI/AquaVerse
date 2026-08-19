@@ -81,14 +81,20 @@ from app.ml_inference.numeric.m3_engine import _ensure_engine_dir_on_path
 # wherever an equivalent field already exists there, rather than inventing
 # new numbers.
 # ---------------------------------------------------------------------------
-WIND_SPEED_MS_PLACEHOLDER = 3.2  # PLACEHOLDER — no weather ingestion exists; matches /ask stub wind_mean_24h
+WIND_SPEED_MS_PLACEHOLDER = (
+    3.2  # PLACEHOLDER — no weather ingestion exists; matches /ask stub wind_mean_24h
+)
 SOLAR_RAD_WM2_PLACEHOLDER = 450.0  # PLACEHOLDER — ditto, matches /ask stub solar_rad_24h
 RAIN_MM_PLACEHOLDER = 0.0  # PLACEHOLDER — ditto, matches /ask stub rain_48h_mm
 FEED_KG_PLACEHOLDER = 0.0  # PLACEHOLDER — no feed-log ingestion exists
-BIOMASS_KG_PLACEHOLDER = 12.3  # PLACEHOLDER — no biomass-estimation pipeline; matches /ask stub biomass_est_kg
+BIOMASS_KG_PLACEHOLDER = (
+    12.3  # PLACEHOLDER — no biomass-estimation pipeline; matches /ask stub biomass_est_kg
+)
 STOCKING_COUNT_PLACEHOLDER = 180  # PLACEHOLDER — matches /ask stub alive_count; used only if no active Crop has a real post_larvae_count
 SECCHI_CM_PLACEHOLDER = 30.0  # PLACEHOLDER — Log.turbidity_ntu is a different instrument/unit; NOT converted (would be fabricating a formula). No real Secchi-disk reading exists anywhere in this repo.
-MANAGEMENT_QUALITY_PLACEHOLDER = 0.7  # matches ml/serving/m3/m3_decision_engine.py's PondSnapshot.management_quality default
+MANAGEMENT_QUALITY_PLACEHOLDER = (
+    0.7  # matches ml/serving/m3/m3_decision_engine.py's PondSnapshot.management_quality default
+)
 DEFAULT_DOC = 52  # matches advisory/router.py's /ask stub `doc=52`; used only when the pond has no active Crop row
 
 # Matches DataQualityOut's stale_threshold_hours value, hardcoded in
@@ -174,12 +180,12 @@ def get_m2_engine_bundle() -> M2EngineBundle:
     with open(results_path) as f:
         results = json.load(f)
     operating_threshold = float(results["operating_point"]["threshold"])
-    test_metrics = {k: float(v) for k, v in results.get("test", {}).items() if isinstance(v, int | float)}
+    test_metrics = {
+        k: float(v) for k, v in results.get("test", {}).items() if isinstance(v, int | float)
+    }
 
     model_version = (
-        f"m2-mortality-risk-baseline-lgbm"
-        f"-trees{booster.num_trees()}"
-        f"-thr{operating_threshold:.4f}"
+        f"m2-mortality-risk-baseline-lgbm-trees{booster.num_trees()}-thr{operating_threshold:.4f}"
     )
 
     return M2EngineBundle(
@@ -205,6 +211,7 @@ def _build_raw_frame(points: list[RawLogPoint], doc_value: int) -> pd.DataFrame:
     actually serve — matters. Recomputing a real per-row DOC would add
     complexity for no observable difference in the served prediction.
     """
+
     def _n(v: float | None) -> float:
         # A single-row (or all-None-column) DataFrame keeps Python `None`
         # as an object-dtype value rather than coercing it to `np.nan` —
@@ -243,7 +250,16 @@ def _data_health_score(points: list[RawLogPoint]) -> float:
     don't hide)."""
     if not points:
         return 0.0
-    fields = ("do_mg_l", "tan_mg_l", "ph", "water_temp_c", "alkalinity_mg_l", "no2_mg_l", "no3_mg_l", "salinity_ppt")
+    fields = (
+        "do_mg_l",
+        "tan_mg_l",
+        "ph",
+        "water_temp_c",
+        "alkalinity_mg_l",
+        "no2_mg_l",
+        "no3_mg_l",
+        "salinity_ppt",
+    )
     total = len(points) * len(fields)
     present = sum(1 for p in points for f in fields if getattr(p, f) is not None)
     return round(present / total, 4) if total else 0.0
@@ -321,7 +337,9 @@ def score_pond(
     sp = get_species(species_key)
     effective_doc = doc_value if doc_value is not None else DEFAULT_DOC
     effective_stocking_count = (
-        stocking_count if stocking_count is not None and stocking_count > 0 else STOCKING_COUNT_PLACEHOLDER
+        stocking_count
+        if stocking_count is not None and stocking_count > 0
+        else STOCKING_COUNT_PLACEHOLDER
     )
 
     sorted_points = sorted(points, key=lambda p: p.recorded_at)
@@ -351,7 +369,9 @@ def score_pond(
 
     from sim.features import compute_features  # type: ignore[import-not-found]
 
-    feat_df = compute_features(raw_df, stocking_weight_g=sp.stocking_weight_g, stocking_count=effective_stocking_count)
+    feat_df = compute_features(
+        raw_df, stocking_weight_g=sp.stocking_weight_g, stocking_count=effective_stocking_count
+    )
     last = feat_df.iloc[-1]
     latest_point = sorted_points[-1] if sorted_points else None
 

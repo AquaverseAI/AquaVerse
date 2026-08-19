@@ -201,9 +201,7 @@ async def token(body: TokenIn) -> TokenOut:
     from app.db.session import get_async_session
 
     async with get_async_session() as db:
-        result = await db.execute(
-            select(User).where(User.username == body.username)
-        )
+        result = await db.execute(select(User).where(User.username == body.username))
         user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
@@ -221,7 +219,9 @@ async def token(body: TokenIn) -> TokenOut:
     # Verify password with bcrypt
     import bcrypt
 
-    if not user.password_hash or not bcrypt.checkpw(body.password.encode("utf-8"), user.password_hash.encode("utf-8")):
+    if not user.password_hash or not bcrypt.checkpw(
+        body.password.encode("utf-8"), user.password_hash.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials.",

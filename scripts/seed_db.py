@@ -30,6 +30,7 @@ os.environ.setdefault("INTERNAL_API_TOKEN", "dev_internal_token_minimum_32_chars
 
 def _hash_password(password: str) -> str:
     import bcrypt
+
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
@@ -56,10 +57,10 @@ async def seed() -> None:
     now = datetime.now(UTC)
 
     # Fixed UUIDs so re-running the script is idempotent
-    farmer_id  = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    farmer_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
     officer_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
-    admin_id   = uuid.UUID("00000000-0000-0000-0000-000000000003")
-    pond_id    = uuid.UUID("00000000-0000-0000-0001-000000000001")
+    admin_id = uuid.UUID("00000000-0000-0000-0000-000000000003")
+    pond_id = uuid.UUID("00000000-0000-0000-0001-000000000001")
 
     async with engine.begin() as conn:
         tables_result = await conn.execute(
@@ -167,6 +168,7 @@ async def seed() -> None:
             if "logs" in tables:
                 print("\n🌱 Seeding 720 hourly log entries (30 days)...")
                 import random
+
                 for hours_ago in range(720, 0, -1):
                     recorded_at = now - timedelta(hours=hours_ago)
                     await conn.execute(
@@ -186,10 +188,10 @@ async def seed() -> None:
                             "recorded_by": farmer_id,
                             "recorded_at": recorded_at,
                             "source": "sensor",
-                            "temp":    round(27 + random.uniform(-2, 3), 2),
-                            "do":      round(6 + random.uniform(-2, 1), 2),
-                            "ph":      round(7.5 + random.uniform(-0.5, 0.5), 2),
-                            "sal":     round(15 + random.uniform(-2, 2), 2),
+                            "temp": round(27 + random.uniform(-2, 3), 2),
+                            "do": round(6 + random.uniform(-2, 1), 2),
+                            "ph": round(7.5 + random.uniform(-0.5, 0.5), 2),
+                            "sal": round(15 + random.uniform(-2, 2), 2),
                             "ammonia": round(max(0, random.uniform(0, 0.5)), 3),
                             "created_at": now,
                             "updated_at": now,

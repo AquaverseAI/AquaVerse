@@ -113,6 +113,7 @@ class BroadcastIn(BaseModel):
     )
     expires_at: datetime | None = None
 
+
 # ---------------------------------------------------------------------------
 # M3 Serving Integration Schemas
 # ---------------------------------------------------------------------------
@@ -146,6 +147,7 @@ class M3PondSnapshotRequest(BaseModel):
     cum_feed_kg: float = 0.0
     feed_cost_per_kg_rs: float = 90.0
     market_price_per_kg_rs: float = 350.0
+
 
 class M3ReasonResponse(BaseModel):
     pond_id: str

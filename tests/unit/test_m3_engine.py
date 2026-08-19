@@ -116,7 +116,9 @@ def test_decide_responds_to_input_changes() -> None:
     forecast — proves this isn't a canned/constant response."""
     bundle = get_m3_engine_bundle()
     healthy = _sample_snapshot(bundle)
-    stressed = bundle.PondSnapshot(**{**asdict(healthy), "do_mg_l": 0.8, "night_do_min_3d_trend": -1.5})
+    stressed = bundle.PondSnapshot(
+        **{**asdict(healthy), "do_mg_l": 0.8, "night_do_min_3d_trend": -1.5}
+    )
 
     payload_healthy = bundle.engine.decide(healthy)
     payload_stressed = bundle.engine.decide(stressed)

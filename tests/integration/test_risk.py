@@ -280,7 +280,10 @@ async def test_shap_contributions_reference_real_features(
     # do_mg_l (the real driver of this stressed scenario) should show up
     # among the explained features at all, given how extreme the DO
     # trajectory is.
-    assert any(c["feature"] in ("do_mg_l", "night_do_min", "stress_hours_lt3_24h", "stress_hours_lt3_7d") for c in contributions)
+    assert any(
+        c["feature"] in ("do_mg_l", "night_do_min", "stress_hours_lt3_24h", "stress_hours_lt3_7d")
+        for c in contributions
+    )
 
 
 # ---------------------------------------------------------------------------

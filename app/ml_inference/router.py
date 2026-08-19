@@ -212,6 +212,8 @@ async def get_pond_timeseries(
             salinity_ppt=log.salinity_ppt,
             ammonia_nh3_mgl=log.ammonia_nh3_mgl,
             turbidity_ntu=log.turbidity_ntu,
+            air_temperature_c=log.air_temperature_c,
+            humidity_pct=log.humidity_pct,
         )
         for log in logs
     ]

@@ -81,6 +81,16 @@ class Settings(BaseSettings):
     rate_limit_ask_per_minute: int = 30
 
     # -----------------------------------------------------------------------
+    # IoT sensor ingest
+    # -----------------------------------------------------------------------
+    # Shared secret pond sensor units send back as `X-Device-Key`. Empty
+    # (the default) leaves POST /v1/ingest/sensor/{pond_id} unauthenticated —
+    # deliberately, so field devices that don't send any header aren't
+    # blocked. Set this once devices are updated to send the header, before
+    # exposing the ingest endpoint beyond a trusted LAN.
+    iot_device_key: str = ""
+
+    # -----------------------------------------------------------------------
     # Object storage
     # -----------------------------------------------------------------------
     s3_endpoint_url: str = "http://localhost:9000"

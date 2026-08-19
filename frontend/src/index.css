@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #F4FBFC;
+    --foreground: #0F3F5C;
+    --card: #FFFFFF;
+    --card-foreground: #0F3F5C;
+    --border: #DCE8EC;
+    --primary: #1F8AA6;
+    --primary-foreground: #FFFFFF;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: #081722;
+    --foreground: #EAF6F8;
+    --card: #0E2231;
+    --card-foreground: #EAF6F8;
+    --border: rgba(255, 255, 255, 0.08);
+    --primary: #2E9CB8;
+    --primary-foreground: #081722;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #BDE7F1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #85D0E2;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Instrument Cards & Elevated Light Surfaces */
+.instrument-card {
+  background: #FFFFFF;
+  border: 1px solid #DCE8EC;
+  box-shadow: 0 1px 3px rgba(15, 63, 92, 0.06), 0 1px 2px rgba(15, 63, 92, 0.04);
+}
+
+.dark .instrument-card {
+  background: #0E2231;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.instrument-card-hover {
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.instrument-card-hover:hover {
+  border-color: #85D0E2;
+  box-shadow: 0 4px 14px rgba(15, 63, 92, 0.09), 0 2px 4px rgba(15, 63, 92, 0.04);
+  transform: translateY(-1px);
+}
+.dark .instrument-card-hover:hover {
+  border-color: #2E9CB8;
+  background: #122B3E;
+}
+
+/* Glass & HUD overlays */
+.hud-card {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid #DCE8EC;
+  box-shadow: 0 8px 24px rgba(15, 63, 92, 0.08);
+}
+
+.dark .hud-card {
+  background: rgba(14, 34, 49, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

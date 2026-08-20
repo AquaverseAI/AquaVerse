@@ -49,6 +49,7 @@ os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
 os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
 
 from app.core.security import create_access_token
+from app.db.models.media import Media
 from app.db.models.pond import Pond
 
 # ---------------------------------------------------------------------------
@@ -234,11 +235,50 @@ async def test_farmer_cannot_access_other_pond_risk(db_client: AsyncClient) -> N
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_farmer_can_commit_media_for_own_pond(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_farmer_can_commit_media_for_own_pond(
+    db_session: AsyncSession,
+    media_client: AsyncClient,
+    minio_container: dict[str, str],
+) -> None:
+    """Uses `media_client`, not `client`: POST /v1/media/{id}/commit went
+    real (DB row lookup + a genuine S3 HEAD check) under P2.5 — same
+    precedent as test_farmer_can_access_own_pond_risk above. A real Media
+    row pointing at a real uploaded S3 object is required for a 200:
+    an arbitrary media_id (the old assumption, back when this endpoint
+    was a stub) now correctly 404s instead.
+    """
+    await _seed_pond(db_session, FARMER_POND_ID)
     token = _farmer_token(pond_ids=[FARMER_POND_ID])
-    media_id = str(uuid4())
-    response = await client.post(
+
+    media_id = uuid4()
+    s3_key = f"ponds/{FARMER_POND_ID}/{media_id}/test.jpg"
+    media = Media(
+        id=media_id,
+        pond_id=UUID(FARMER_POND_ID),
+        uploaded_by=uuid4(),
+        filename="test.jpg",
+        mime_type="image/jpeg",
+        s3_key=s3_key,
+        status="pending",
+    )
+    db_session.add(media)
+    await db_session.commit()
+
+    import boto3
+
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=minio_container["endpoint_url"],
+        aws_access_key_id=minio_container["access_key_id"],
+        aws_secret_access_key=minio_container["secret_access_key"],
+        region_name="us-east-1",
+    )
+    s3_client.put_object(
+        Bucket=minio_container["bucket_name"], Key=s3_key, Body=b"fake-image-bytes"
+    )
+
+    response = await media_client.post(
         f"/v1/media/{media_id}/commit",
         json={"pond_id": FARMER_POND_ID},
         headers=_auth(token),
@@ -248,11 +288,18 @@ async def test_farmer_can_commit_media_for_own_pond(client: AsyncClient) -> None
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_farmer_cannot_commit_media_for_other_pond(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_farmer_cannot_commit_media_for_other_pond(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: same session-dependency-resolution-
+    order reasoning as test_farmer_cannot_access_other_pond_risk above —
+    `session: DbSession` is resolved before the body's
+    `rbac.require_pond_scope` 403 check runs, even though that check
+    itself never queries anything. No Pond/Media row needs seeding for
+    the same reason.
+    """
     token = _farmer_token(pond_ids=[FARMER_POND_ID])
     media_id = str(uuid4())
-    response = await client.post(
+    response = await db_client.post(
         f"/v1/media/{media_id}/commit",
         json={"pond_id": OTHER_POND_ID},
         headers=_auth(token),

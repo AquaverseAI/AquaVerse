@@ -21,8 +21,11 @@ from app.core.pagination import (
 from app.core.timezones import utcnow
 from app.db.models.crop import Crop
 from app.db.models.log import Log
+from app.db.models.model_registry import ModelRegistry
 from app.db.models.pond import Pond
 from app.deps import CurrentStaff, CurrentUser, DbSession
+from app.ml_inference.drift import compute_drift_report
+from app.ml_inference.model_registry_sync import ensure_active_model_registered
 from app.ml_inference.numeric import do_forecast, m2_risk_engine
 from app.ml_inference.schemas import (
     DataQualityOut,
@@ -41,8 +44,6 @@ from app.ml_inference.schemas import (
 )
 
 router = APIRouter(tags=["Ponds & ML"])
-
-_STUB_MODEL_ID = UUID("00000000-0000-0000-0000-000000000002")
 
 
 # ---------------------------------------------------------------------------
@@ -635,22 +636,54 @@ async def get_do_forecast(
 )
 async def list_models(
     user: CurrentStaff,
+    session: DbSession,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[ModelOut]:
-    now = utcnow()
-    stub = ModelOut(
-        id=_STUB_MODEL_ID,
-        name="risk_lightgbm",
-        model_type="lightgbm",
-        version="1.2.0",
-        is_active=True,
-        dataset_hash="a" * 64,
-        metrics={"auc": 0.92, "f1": 0.87},
-        promoted_at=now,
-        created_at=now,
-    )
-    return CursorPage[ModelOut](items=[stub], next_cursor=None)
+    """Real keyset pagination over `model_registry`, same shape as
+    `list_ponds`. `ensure_active_model_registered` keeps that table
+    synced to whatever M2 bundle is actually loaded before every read —
+    see app/ml_inference/model_registry_sync.py for why this can't just
+    be a one-time seed."""
+    await ensure_active_model_registered(session)
+
+    effective_limit = clamp_limit(limit)
+    stmt = select(ModelRegistry)
+
+    decoded = decode_keyset_cursor(cursor)
+    if decoded is not None:
+        last_created_at_raw, last_id_raw = decoded
+        try:
+            last_created_at = datetime.fromisoformat(last_created_at_raw)
+            last_id = UUID(last_id_raw)
+        except ValueError:
+            last_created_at = None
+            last_id = None
+
+        if last_created_at is not None and last_id is not None:
+            stmt = stmt.where(
+                or_(
+                    ModelRegistry.created_at < last_created_at,
+                    and_(ModelRegistry.created_at == last_created_at, ModelRegistry.id < last_id),
+                )
+            )
+
+    stmt = stmt.order_by(ModelRegistry.created_at.desc(), ModelRegistry.id.desc())
+    stmt = stmt.limit(effective_limit + 1)
+
+    result = await session.execute(stmt)
+    rows = list(result.scalars().all())
+
+    has_next = len(rows) > effective_limit
+    rows = rows[:effective_limit]
+
+    next_cursor: str | None = None
+    if has_next and rows:
+        last_row = rows[-1]
+        next_cursor = encode_keyset_cursor(last_row.created_at.isoformat(), last_row.id)
+
+    items = [ModelOut.model_validate(row, from_attributes=True) for row in rows]
+    return CursorPage[ModelOut](items=items, next_cursor=next_cursor)
 
 
 @router.get(
@@ -666,14 +699,20 @@ async def list_models(
 )
 async def get_model_metrics(user: CurrentStaff) -> ModelMetricsOut:
     from app.advisory.metrics import get_rejected_attempts
+    from app.core.metrics import snapshot
 
     now = utcnow()
+    live = snapshot()
     return ModelMetricsOut(
         rejected_attempts=get_rejected_attempts(),
-        total_requests=0,
-        avg_latency_ms=0.0,
-        p95_latency_ms=0.0,
-        p99_latency_ms=0.0,
+        total_requests=int(live["total_requests"]),
+        avg_latency_ms=round(live["avg_latency_ms"], 2),
+        p95_latency_ms=round(live["p95_latency_ms"], 2),
+        p99_latency_ms=round(live["p99_latency_ms"], 2),
+        # No response cache exists anywhere in the model-serving layer
+        # (the Redis cache app/i18n/cache.py has is for translations, a
+        # different domain) — honestly 0.0 rather than a placeholder
+        # standing in for a cache that isn't there.
         cache_hit_rate=0.0,
         as_of=now,
     )
@@ -687,19 +726,20 @@ async def get_model_metrics(user: CurrentStaff) -> ModelMetricsOut:
 )
 async def get_model_drift(
     user: CurrentStaff,
+    session: DbSession,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> CursorPage[DriftReport]:
-    now = utcnow()
-    stub = DriftReport(
-        model_name="risk_lightgbm",
-        model_version="1.2.0",
-        feature_drift={"dissolved_oxygen_mgl": 0.02, "ammonia_nh3_mgl": 0.05},
-        alert_threshold=0.2,
-        drift_detected=False,
-        evaluated_at=now,
+    """Real PSI-based drift signal for the one actively-served model — see
+    app/ml_inference/drift.py for what this does and doesn't measure.
+    `cursor`/`limit` are accepted for response-shape compatibility; there
+    is exactly one active model to report on, so this never actually
+    paginates."""
+    active_model = await ensure_active_model_registered(session)
+    report = await compute_drift_report(
+        session, model_name=active_model.name, model_version=active_model.version
     )
-    return CursorPage[DriftReport](items=[stub], next_cursor=None)
+    return CursorPage[DriftReport](items=[report], next_cursor=None)
 
 
 # ---------------------------------------------------------------------------

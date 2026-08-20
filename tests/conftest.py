@@ -253,7 +253,11 @@ async def i18n_client(redis_container: Any) -> AsyncGenerator[AsyncClient, None]
 
     from app.config import get_settings
 
-    redis_url = redis_container.get_connection_url()
+    # RedisContainer (unlike PostgresContainer) exposes no
+    # get_connection_url() — build the DSN from its host/port ourselves.
+    host = redis_container.get_container_host_ip()
+    port = redis_container.get_exposed_port(redis_container.port)
+    redis_url = f"redis://{host}:{port}/0"
     prev_redis_url = os.environ.get("REDIS_URL")
     os.environ["REDIS_URL"] = redis_url
     os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")

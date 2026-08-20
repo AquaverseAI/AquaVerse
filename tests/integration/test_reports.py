@@ -107,11 +107,12 @@ async def test_full_pipeline_produces_downloadable_pdf(
     status -> GET the real presigned URL and confirm real PDF bytes."""
     district = f"ReportsTest-{uuid4()}"
     pond = await _seed_pond_with_logs(db_session, district)
+    headers = _staff_headers(district)
 
     create_resp = await reports_client.get(
         "/v1/reports/export",
         params={"pond_id": str(pond.id), "format": "pdf"},
-        headers=_staff_headers(district),
+        headers=headers,
     )
     assert create_resp.status_code == 200, create_resp.text
     job_id = create_resp.json()["job_id"]
@@ -120,9 +121,7 @@ async def test_full_pipeline_produces_downloadable_pdf(
     # body directly, exactly as the worker would.
     await generate_report_job({}, job_id)
 
-    status_resp = await reports_client.get(
-        f"/v1/reports/export/{job_id}", headers=_staff_headers(district)
-    )
+    status_resp = await reports_client.get(f"/v1/reports/export/{job_id}", headers=headers)
     assert status_resp.status_code == 200, status_resp.text
     status_body = status_resp.json()
     assert status_body["status"] == "completed"
@@ -141,19 +140,18 @@ async def test_full_pipeline_xlsx_format(
 ) -> None:
     district = f"ReportsTest-{uuid4()}"
     pond = await _seed_pond_with_logs(db_session, district)
+    headers = _staff_headers(district)
 
     create_resp = await reports_client.get(
         "/v1/reports/export",
         params={"pond_id": str(pond.id), "format": "xlsx"},
-        headers=_staff_headers(district),
+        headers=headers,
     )
     job_id = create_resp.json()["job_id"]
 
     await generate_report_job({}, job_id)
 
-    status_resp = await reports_client.get(
-        f"/v1/reports/export/{job_id}", headers=_staff_headers(district)
-    )
+    status_resp = await reports_client.get(f"/v1/reports/export/{job_id}", headers=headers)
     status_body = status_resp.json()
     assert status_body["status"] == "completed"
 

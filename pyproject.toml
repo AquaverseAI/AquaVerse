@@ -146,6 +146,7 @@ module = [
     "mlflow.*",
     "langdetect.*",
     "reportlab.*",
+    "openpyxl.*",
     "shapely.*",
     "pyproj.*",
     "testcontainers.*",

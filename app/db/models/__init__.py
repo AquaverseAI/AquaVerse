@@ -7,6 +7,17 @@ from app.db.models.log import Log
 from app.db.models.media import Media
 from app.db.models.model_registry import ModelRegistry
 from app.db.models.pond import Pond
+from app.db.models.report_job import ReportJob
 from app.db.models.user import User
 
-__all__ = ["Advisory", "Alert", "Crop", "Log", "Media", "ModelRegistry", "Pond", "User"]
+__all__ = [
+    "Advisory",
+    "Alert",
+    "Crop",
+    "Log",
+    "Media",
+    "ModelRegistry",
+    "Pond",
+    "ReportJob",
+    "User",
+]

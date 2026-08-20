@@ -1,24 +1,100 @@
-"""Digital Twin — router for /v1/twin."""
+"""Digital Twin — router for /v1/twin (P2.2)."""
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import HTMLResponse
 
+from app.alerts import suppression
 from app.config import get_settings
 from app.core import rbac
 from app.core.timezones import utcnow
-from app.deps import CurrentUser
+from app.db.models.pond import Pond
+from app.deps import CurrentUser, DbSession
+from app.ml_inference.numeric import m2_risk_engine
+from app.ml_inference.router import _RISK_LOOKBACK_DAYS, _fetch_active_crop, _fetch_recent_logs
+from app.twin import simulator_adapter
 from app.twin.schemas import StateVector, WhatIfOut, WhatIfScenario
 
 if TYPE_CHECKING:
-    pass
-
+    from app.db.models.log import Log
 
 router = APIRouter(prefix="/twin", tags=["Digital Twin"])
+
+
+async def _get_pond_or_404(session: DbSession, pond_id: UUID) -> Pond:
+    pond = await session.get(Pond, pond_id)
+    if pond is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pond not found")
+    return pond
+
+
+async def _build_state_vector(
+    session: DbSession, pond: Pond, logs: list[Log] | None = None
+) -> StateVector:
+    """Build the twin's state vector — real sensor data when the pond has
+    a recent reading, a species-parameterized simulated baseline
+    (`simulator_adapter.py`) otherwise. Per the schema's own rule, the
+    caller can never tell which branch produced the response other than
+    via the always-visible `suppressed`/`suppression_reason` fields.
+
+    Biomass/FCR are always simulator-estimated (see
+    `simulator_adapter.py`'s honesty notes) — there is no real biomass
+    telemetry or feed-log pipeline anywhere in this repo, real sensor data
+    or not.
+    """
+    now = utcnow()
+    blind = await suppression.check_blind_state(session, pond.id, now)
+    species_key = m2_risk_engine.resolve_species_key(pond.species)
+
+    crop = await _fetch_active_crop(session, pond.id)
+    if crop is not None:
+        doc = max((now.date() - crop.stocking_date).days, 0)
+        stocking_count = crop.post_larvae_count or m2_risk_engine.STOCKING_COUNT_PLACEHOLDER
+    else:
+        doc = m2_risk_engine.DEFAULT_DOC
+        stocking_count = m2_risk_engine.STOCKING_COUNT_PLACEHOLDER
+
+    sim = simulator_adapter.simulate_state(pond.id, species_key, doc, stocking_count)
+
+    if not blind.suppressed:
+        if logs is None:
+            since = now - timedelta(days=_RISK_LOOKBACK_DAYS)
+            logs = await _fetch_recent_logs(session, pond.id, since)
+        latest = logs[-1] if logs else None
+        if latest is not None:
+            return StateVector(
+                pond_id=pond.id,
+                as_of=now,
+                temperature_c=latest.temperature_c,
+                dissolved_oxygen_mgl=latest.dissolved_oxygen_mgl,
+                ph=latest.ph,
+                salinity_ppt=latest.salinity_ppt,
+                ammonia_nh3_mgl=latest.ammonia_nh3_mgl,
+                turbidity_ntu=latest.turbidity_ntu,
+                biomass_kg_estimated=sim.biomass_kg_estimated,
+                fcr_estimated=sim.fcr_estimated,
+                suppressed=False,
+            )
+
+    return StateVector(
+        pond_id=pond.id,
+        as_of=now,
+        temperature_c=sim.temperature_c,
+        dissolved_oxygen_mgl=sim.dissolved_oxygen_mgl,
+        ph=sim.ph,
+        salinity_ppt=sim.salinity_ppt,
+        ammonia_nh3_mgl=sim.ammonia_nh3_mgl,
+        turbidity_ntu=sim.turbidity_ntu,
+        biomass_kg_estimated=sim.biomass_kg_estimated,
+        fcr_estimated=sim.fcr_estimated,
+        suppressed=True,
+        suppression_reason=blind.suppression_reason,
+    )
 
 
 @router.get(
@@ -28,26 +104,15 @@ router = APIRouter(prefix="/twin", tags=["Digital Twin"])
     description=(
         "Returns the current state vector. "
         "RULE: The response is identical whether backed by real sensors or the simulator. "
-        "The source is never revealed in the response schema."
+        "The source is never revealed in the response schema — only suppressed/suppression_reason "
+        "hint at data quality, and are always populated when the pond is blind-state."
     ),
 )
-async def get_twin_state(pond_id: UUID, user: CurrentUser) -> StateVector:
+async def get_twin_state(pond_id: UUID, user: CurrentUser, session: DbSession) -> StateVector:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
-    now = utcnow()
-    return StateVector(
-        pond_id=pond_id,
-        as_of=now,
-        temperature_c=28.5,
-        dissolved_oxygen_mgl=6.2,
-        ph=7.8,
-        salinity_ppt=15.0,
-        ammonia_nh3_mgl=0.3,
-        turbidity_ntu=12.0,
-        biomass_kg_estimated=450.0,
-        fcr_estimated=1.4,
-        suppressed=False,
-    )
+    pond = await _get_pond_or_404(session, pond_id)
+    return await _build_state_vector(session, pond)
 
 
 @router.get(
@@ -55,8 +120,8 @@ async def get_twin_state(pond_id: UUID, user: CurrentUser) -> StateVector:
     response_class=HTMLResponse,
     summary="Get a visual dashboard of the digital twin state",
 )
-async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
-    state = await get_twin_state(pond_id, user)
+async def get_twin_view(pond_id: UUID, user: CurrentUser, session: DbSession) -> str:
+    state = await get_twin_state(pond_id, user, session)
 
     visualizer_url = get_settings().twin_visualizer_url
     visualise_button = (
@@ -64,6 +129,8 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
         if visualizer_url
         else ""
     )
+    badge_class = "badge-suppressed" if state.suppressed else "badge-live"
+    badge_text = f"Blind state: {state.suppression_reason}" if state.suppressed else "Live data"
 
     html_content = f"""
     <!DOCTYPE html>
@@ -117,6 +184,18 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
                 color: var(--text-muted);
                 font-size: 1.1rem;
             }}
+
+            .badge {{
+                display: inline-block;
+                margin-top: 0.5rem;
+                padding: 0.3rem 0.9rem;
+                border-radius: 9999px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                letter-spacing: 0.03em;
+            }}
+            .badge-live {{ background: rgba(16, 185, 129, 0.15); color: #10b981; }}
+            .badge-suppressed {{ background: rgba(245, 158, 11, 0.15); color: #f59e0b; }}
 
             .dashboard {{
                 display: grid;
@@ -244,6 +323,9 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
         <div class="header">
             <h1>Digital Twin Active</h1>
             <p>Pond ID: {state.pond_id}</p>
+            <span class="badge {badge_class}">
+                {badge_text}
+            </span>
             {visualise_button}
         </div>
 
@@ -255,7 +337,6 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
             </div>
 
             <div class="metric-card" style="animation: fadeInUp 0.5s ease-out 0.2s both;">
-                <!-- Slightly lower DO could be warning, let's assume >4 is healthy but let's just make it look cool -->
                 <div class="status-indicator"></div>
                 <div class="metric-label">Dissolved Oxygen</div>
                 <div class="metric-value">{state.dissolved_oxygen_mgl}<span class="metric-unit">mg/L</span></div>
@@ -309,30 +390,127 @@ async def get_twin_view(pond_id: UUID, user: CurrentUser) -> str:
     status_code=status.HTTP_200_OK,
     summary="Run a what-if simulation",
     description=(
-        "Applies the given scenario deltas to the current twin state and returns the simulated outcome. "
-        "Risk delta indicates how much the risk score would change."
+        "Applies the given scenario deltas to the current twin state and returns the simulated "
+        "outcome. risk_delta is computed by re-running the real M2 risk-scoring model "
+        "(app/ml_inference/numeric/m2_risk_engine.py) against the pond's actual recent chemistry "
+        "with the scenario's deltas applied — not a hardcoded estimate. "
+        "delta_feed_rate_pct currently has no effect: no feed-log ingestion pipeline exists to "
+        "translate a feed-rate change into a chemistry or risk effect."
     ),
 )
-async def whatif(pond_id: UUID, scenario: WhatIfScenario, user: CurrentUser) -> WhatIfOut:
+async def whatif(
+    pond_id: UUID, scenario: WhatIfScenario, user: CurrentUser, session: DbSession
+) -> WhatIfOut:
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, pond_id)
+    pond = await _get_pond_or_404(session, pond_id)
     now = utcnow()
-    # Stub: apply simple delta arithmetic (Phase 4: call simulator_adapter)
+
+    since = now - timedelta(days=_RISK_LOOKBACK_DAYS)
+    logs = await _fetch_recent_logs(session, pond.id, since)
+    crop = await _fetch_active_crop(session, pond.id)
+    doc = max((now.date() - crop.stocking_date).days, 0) if crop else None
+    stocking_count = crop.post_larvae_count if crop else None
+
+    current_state = await _build_state_vector(session, pond, logs=logs)
+
+    sim_current = simulator_adapter.SimulatedState(
+        temperature_c=current_state.temperature_c or 0.0,
+        dissolved_oxygen_mgl=current_state.dissolved_oxygen_mgl or 0.0,
+        ph=current_state.ph or 0.0,
+        salinity_ppt=current_state.salinity_ppt or 0.0,
+        ammonia_nh3_mgl=current_state.ammonia_nh3_mgl or 0.0,
+        turbidity_ntu=current_state.turbidity_ntu or 0.0,
+        biomass_kg_estimated=current_state.biomass_kg_estimated or 0.0,
+        fcr_estimated=current_state.fcr_estimated or 0.0,
+    )
+    sim_scenario = simulator_adapter.apply_scenario_deltas(
+        sim_current,
+        delta_temperature_c=scenario.delta_temperature_c,
+        delta_dissolved_oxygen_mgl=scenario.delta_dissolved_oxygen_mgl,
+        delta_salinity_ppt=scenario.delta_salinity_ppt,
+    )
     simulated = StateVector(
         pond_id=pond_id,
         as_of=now,
-        temperature_c=28.5 + (scenario.delta_temperature_c or 0.0),
-        dissolved_oxygen_mgl=6.2 + (scenario.delta_dissolved_oxygen_mgl or 0.0),
-        ph=7.8,
-        salinity_ppt=15.0 + (scenario.delta_salinity_ppt or 0.0),
-        ammonia_nh3_mgl=0.3,
-        turbidity_ntu=12.0,
-        suppressed=False,
+        temperature_c=sim_scenario.temperature_c,
+        dissolved_oxygen_mgl=sim_scenario.dissolved_oxygen_mgl,
+        ph=sim_scenario.ph,
+        salinity_ppt=sim_scenario.salinity_ppt,
+        ammonia_nh3_mgl=sim_scenario.ammonia_nh3_mgl,
+        turbidity_ntu=sim_scenario.turbidity_ntu,
+        biomass_kg_estimated=current_state.biomass_kg_estimated,
+        fcr_estimated=current_state.fcr_estimated,
+        suppressed=current_state.suppressed,
+        suppression_reason=current_state.suppression_reason,
     )
+
+    baseline_points = _points_from_logs(logs) or [
+        m2_risk_engine.RawLogPoint(
+            recorded_at=now,
+            do_mg_l=sim_current.dissolved_oxygen_mgl,
+            tan_mg_l=sim_current.ammonia_nh3_mgl,
+            ph=sim_current.ph,
+            water_temp_c=sim_current.temperature_c,
+            alkalinity_mg_l=None,
+            no2_mg_l=None,
+            no3_mg_l=None,
+            salinity_ppt=sim_current.salinity_ppt,
+        )
+    ]
+    last_baseline_point = baseline_points[-1]
+    scenario_points = [
+        *baseline_points[:-1],
+        m2_risk_engine.RawLogPoint(
+            recorded_at=last_baseline_point.recorded_at,
+            do_mg_l=sim_scenario.dissolved_oxygen_mgl,
+            tan_mg_l=last_baseline_point.tan_mg_l,
+            ph=sim_scenario.ph,
+            water_temp_c=sim_scenario.temperature_c,
+            alkalinity_mg_l=last_baseline_point.alkalinity_mg_l,
+            no2_mg_l=last_baseline_point.no2_mg_l,
+            no3_mg_l=last_baseline_point.no3_mg_l,
+            salinity_ppt=sim_scenario.salinity_ppt,
+        ),
+    ]
+
+    baseline_result = m2_risk_engine.score_pond(
+        points=baseline_points,
+        species_text=pond.species,
+        doc_value=doc,
+        stocking_count=stocking_count,
+        now=now,
+    )
+    scenario_result = m2_risk_engine.score_pond(
+        points=scenario_points,
+        species_text=pond.species,
+        doc_value=doc,
+        stocking_count=stocking_count,
+        now=now,
+    )
+    risk_delta = round(scenario_result.risk_score - baseline_result.risk_score, 4)
+
     return WhatIfOut(
         pond_id=pond_id,
         scenario=scenario,
         simulated_state=simulated,
-        risk_delta=0.05 if (scenario.delta_dissolved_oxygen_mgl or 0) < 0 else -0.02,
+        risk_delta=risk_delta,
         generated_at=now,
     )
+
+
+def _points_from_logs(logs: list[Log]) -> list[m2_risk_engine.RawLogPoint]:
+    return [
+        m2_risk_engine.RawLogPoint(
+            recorded_at=log.recorded_at,
+            do_mg_l=log.dissolved_oxygen_mgl,
+            tan_mg_l=log.ammonia_nh3_mgl,
+            ph=log.ph,
+            water_temp_c=log.temperature_c,
+            alkalinity_mg_l=log.alkalinity_mgl,
+            no2_mg_l=log.nitrite_mgl,
+            no3_mg_l=log.nitrate_mgl,
+            salinity_ppt=log.salinity_ppt,
+        )
+        for log in logs
+    ]

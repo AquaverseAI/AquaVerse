@@ -16,9 +16,11 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
 from app.core.security import create_access_token
 from app.db.models.log import Log
+from app.db.models.model_registry import ModelRegistry
 from app.db.models.pond import Pond
 
 if TYPE_CHECKING:
@@ -59,6 +61,49 @@ async def test_list_models_is_idempotent(db_client: AsyncClient) -> None:
     first_ids = {item["id"] for item in first.json()["items"]}
     second_ids = {item["id"] for item in second.json()["items"]}
     assert first_ids == second_ids
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio(loop_scope="session")
+async def test_list_models_deactivates_stale_active_row_on_new_version(
+    db_session: AsyncSession, db_client: AsyncClient
+) -> None:
+    """A row left over from a previous artifact version, still flagged
+    is_active=True, must be flipped to False once the real (different)
+    currently-loaded version is registered — GET /v1/models must never
+    report more than one active risk_lightgbm row at a time."""
+    stale = ModelRegistry(
+        name="risk_lightgbm",
+        model_type="lightgbm",
+        version="stale-fake-version-does-not-match-loaded-bundle",
+        artifact_path="/nonexistent/stale.txt",
+        dataset_hash="0" * 64,
+        metrics={"auc_roc": 0.5},
+        is_active=True,
+    )
+    db_session.add(stale)
+    await db_session.commit()
+
+    resp = await db_client.get("/v1/models", headers=_staff_headers())
+    assert resp.status_code == 200, resp.text
+
+    # db_client made its changes on a *different* session/connection —
+    # db_session's identity map would otherwise keep serving the
+    # pre-update `stale` row's cached is_active=True instead of a real
+    # re-read.
+    db_session.expire_all()
+    rows = (
+        (
+            await db_session.execute(
+                select(ModelRegistry).where(ModelRegistry.name == "risk_lightgbm")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    active_rows = [row for row in rows if row.is_active]
+    assert len(active_rows) == 1
+    assert active_rows[0].version != "stale-fake-version-does-not-match-loaded-bundle"
 
 
 @pytest.mark.integration

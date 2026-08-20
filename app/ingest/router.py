@@ -11,12 +11,13 @@ from sqlalchemy import and_, or_, select
 
 from app.alerts import fanout, rules, suppression
 from app.config import get_settings
-from app.core import rbac
+from app.core import rbac, s3
 from app.core.pagination import CursorPage, clamp_limit, decode_keyset_cursor, encode_keyset_cursor
 from app.core.timezones import utcnow
 from app.db.models.alert import Alert
 from app.db.models.crop import Crop
 from app.db.models.log import Log
+from app.db.models.media import Media
 from app.db.models.pond import Pond
 from app.deps import CurrentUser, DbSession
 from app.ingest.schemas import (
@@ -244,17 +245,45 @@ async def list_logs(
         "then calls POST /v1/media/{media_id}/commit to finalise."
     ),
 )
-async def media_upload_url(body: MediaUploadUrlIn, user: CurrentUser) -> MediaUploadUrlOut:
-    """Phase 1: return fixture URL. Phase 3: generate real presigned S3 URL."""
+async def media_upload_url(
+    body: MediaUploadUrlIn, user: CurrentUser, session: DbSession
+) -> MediaUploadUrlOut:
+    """Persists a real `pending` Media row and returns a real presigned S3
+    PUT URL (`app/core/s3.py` — pure local signing, no network call, so
+    this works even against an unreachable/misconfigured object store;
+    the round-trip is verified for real at commit time instead).
+    """
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, body.pond_id)
+
     media_id = uuid4()
-    expires_at = utcnow().replace(minute=utcnow().minute + 15)
-    return MediaUploadUrlOut(
-        media_id=media_id,
-        upload_url=f"https://storage.aquaverse.example.com/media/{media_id}?X-Amz-Signature=stub",
-        expires_at=expires_at,
+    s3_key = f"ponds/{body.pond_id}/{media_id}/{body.filename}"
+    upload_url = s3.generate_presigned_put_url(s3_key, body.mime_type)
+
+    try:
+        uploaded_by = UUID(user.sub)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Token 'sub' claim is not a valid UUID."
+        ) from exc
+
+    media = Media(
+        id=media_id,
+        pond_id=body.pond_id,
+        uploaded_by=uploaded_by,
+        filename=body.filename,
+        mime_type=body.mime_type,
+        size_bytes=body.size_bytes,
+        s3_key=s3_key,
+        status="pending",
+        client_log_id=body.client_log_id,
     )
+    session.add(media)
+    await session.commit()
+
+    settings = get_settings()
+    expires_at = utcnow() + timedelta(seconds=settings.s3_presign_expiry_seconds)
+    return MediaUploadUrlOut(media_id=media_id, upload_url=upload_url, expires_at=expires_at)
 
 
 @router.post(
@@ -262,24 +291,54 @@ async def media_upload_url(body: MediaUploadUrlIn, user: CurrentUser) -> MediaUp
     response_model=MediaOut,
     status_code=status.HTTP_200_OK,
     summary="Commit an uploaded media file",
-    description="Mark an upload as committed after the client has PUT the file to the presigned URL.",
+    description=(
+        "Mark an upload as committed after the client has PUT the file to the presigned URL. "
+        "HEADs the real object in S3/MinIO first — never marks `committed` without confirming "
+        "the object actually exists. Returns 409 if it can't be found or the store is unreachable."
+    ),
 )
 async def media_commit(
     media_id: UUID,
     body: MediaCommitIn,
     user: CurrentUser,
+    session: DbSession,
 ) -> MediaOut:
-    """Phase 1: return fixture. Phase 3: verify S3 object exists, update DB status."""
     if user.role not in ("staff", "admin"):
         rbac.require_pond_scope(user.pond_ids, body.pond_id)
-    now = utcnow()
+
+    media = await session.get(Media, media_id)
+    if media is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+    if media.pond_id != body.pond_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="pond_id does not match the upload's original pond_id.",
+        )
+
+    head = s3.head_object(media.s3_key)
+    if head is None:
+        media.status = "failed"
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Could not verify the uploaded object in object storage — either it was "
+                "never uploaded, or the store is unreachable. Not marking committed."
+            ),
+        )
+
+    media.status = "committed"
+    media.size_bytes = head.size_bytes  # real, verified size — not the client's estimate
+    await session.commit()
+
     return MediaOut(
-        media_id=media_id,
-        pond_id=body.pond_id,
-        filename="sample.jpg",
-        mime_type="image/jpeg",
-        status="committed",
-        created_at=now,
+        media_id=media.id,
+        pond_id=body.pond_id,  # same as media.pond_id — verified equal above
+        filename=media.filename,
+        mime_type=media.mime_type,
+        size_bytes=media.size_bytes,
+        status=media.status,
+        created_at=media.created_at,
     )
 
 

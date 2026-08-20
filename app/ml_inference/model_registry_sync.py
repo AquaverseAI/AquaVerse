@@ -26,7 +26,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -46,7 +47,24 @@ def _artifact_sha256(path: Path) -> str:
 
 async def ensure_active_model_registered(session: AsyncSession) -> ModelRegistry:
     """Idempotent get-or-create: one row per distinct `model_version` of
-    the real M2 bundle. Returns the (possibly newly-inserted) active row.
+    the real M2 bundle, with at most one `is_active=True` row for
+    `_MODEL_NAME` at a time. Returns the (possibly newly-inserted) active
+    row.
+
+    Two real races this guards against, both only possible across
+    process restarts picking up a different artifact (a single process
+    only ever sees one `model_version`, cached by
+    `get_m2_engine_bundle`'s `lru_cache`):
+      * A new `model_version` shows up (the artifact was redeployed) —
+        the previous row(s) for this name must flip to `is_active=False`
+        first, or `GET /v1/models` would report more than one "active"
+        model.
+      * Two requests race to insert the first row for a brand-new
+        version — the DB's unique `(name, version)` constraint (see the
+        matching migration) turns the loser's INSERT into an
+        IntegrityError instead of a silent duplicate row; caught below
+        and treated as "someone else just created it", re-reading rather
+        than erroring the request.
     """
     bundle = get_m2_engine_bundle()
 
@@ -63,6 +81,12 @@ async def ensure_active_model_registered(session: AsyncSession) -> ModelRegistry
     settings = get_settings()
     artifact_path = (
         Path(settings.m3_engine_dir).resolve() / "models" / "m2_mortality_risk_baseline.txt"
+    )
+
+    await session.execute(
+        update(ModelRegistry)
+        .where(ModelRegistry.name == _MODEL_NAME, ModelRegistry.is_active.is_(True))
+        .values(is_active=False)
     )
 
     entry = ModelRegistry(
@@ -83,6 +107,22 @@ async def ensure_active_model_registered(session: AsyncSession) -> ModelRegistry
         ),
     )
     session.add(entry)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Another concurrent request already registered this exact
+        # (name, version) — real DB-enforced dedup, not a made-up
+        # "shouldn't happen" assumption. Re-read what it inserted.
+        await session.rollback()
+        registered = (
+            await session.execute(
+                select(ModelRegistry).where(
+                    ModelRegistry.name == _MODEL_NAME,
+                    ModelRegistry.version == bundle.model_version,
+                )
+            )
+        ).scalar_one()
+        return registered
+
     await session.refresh(entry)
     return entry

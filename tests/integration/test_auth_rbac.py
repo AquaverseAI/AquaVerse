@@ -62,12 +62,20 @@ DISTRICT_B = "Thanjavur"
 
 
 async def _seed_pond(db_session: AsyncSession, pond_id: str, district: str = DISTRICT_A) -> Pond:
-    """Seed a minimal real Pond row for a risk-endpoint success-path test.
+    """Seed a minimal real Pond row for a risk/media-endpoint success-path
+    test. Idempotent: FARMER_POND_ID is a fixed UUID shared across several
+    tests in this file (test_farmer_can_access_own_pond_risk,
+    test_farmer_can_commit_media_for_own_pond, ...) — whichever runs first
+    creates the row for real; later callers just reuse it rather than
+    hitting ponds_pkey's unique constraint.
 
     Owner is an unrelated random UUID — GET /v1/ponds/{id}/risk's
     farmer-scoping check (rbac.require_pond_scope) works off the token's
     `pond_ids` claim, not `Pond.owner_user_id`, so it doesn't need to match.
     """
+    existing = await db_session.get(Pond, UUID(pond_id))
+    if existing is not None:
+        return existing
     pond = Pond(id=UUID(pond_id), owner_user_id=uuid4(), name="RBAC Test Pond", district=district)
     db_session.add(pond)
     await db_session.commit()

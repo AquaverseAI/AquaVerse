@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from app.core import rbac
 from app.core.pagination import (
@@ -745,6 +745,41 @@ async def get_model_drift(
 # ---------------------------------------------------------------------------
 # Data quality
 # ---------------------------------------------------------------------------
+# Core water-quality parameters tracked for completeness — the same
+# fields Alerts' threshold evaluation (app/alerts/rules.py) and the M2
+# risk engine actually consume, not an arbitrary pick.
+_CORE_PARAMETERS = (
+    "temperature_c",
+    "dissolved_oxygen_mgl",
+    "ph",
+    "salinity_ppt",
+    "ammonia_nh3_mgl",
+)
+
+
+async def _scoped_pond_ids_for_data_quality(
+    user: CurrentUser, session: DbSession, pond_id: UUID | None
+) -> list[UUID] | None:
+    """Returns the real pond ids in scope, or None to mean "no ponds in
+    scope" (fail closed for a staff token with no district claim), never
+    an unscoped global query a caller didn't ask for."""
+    if pond_id is not None:
+        exists = (
+            await session.execute(select(Pond.id).where(Pond.id == pond_id))
+        ).scalar_one_or_none()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Pond not found")
+        return [pond_id]
+
+    stmt = select(Pond.id)
+    if user.role == "staff":
+        if user.district is None:
+            return None
+        stmt = stmt.where(Pond.district == user.district)
+    # admin: unrestricted
+    return list((await session.execute(stmt)).scalars().all())
+
+
 @router.get(
     "/data-quality",
     response_model=DataQualityOut,
@@ -753,18 +788,71 @@ async def get_model_drift(
 )
 async def get_data_quality(
     user: CurrentStaff,
+    session: DbSession,
     pond_id: UUID | None = Query(default=None),
 ) -> DataQualityOut:
+    """Real signals over real `Log` rows from the last 7 days, scoped the
+    same way GET /v1/ponds is: a specific `pond_id` if given, else a
+    staff caller's own district (fail closed if their token has none),
+    else — for admin — every pond.
+
+    `sensor_offline_ponds` reuses `_STALE_LOG_THRESHOLD_HOURS`, the exact
+    threshold Alerts' blind-state suppression already uses (see that
+    constant's docstring) — one "how old is too old" answer per
+    codebase, not a second invented number.
+    """
     now = utcnow()
+    scoped_pond_ids = await _scoped_pond_ids_for_data_quality(user, session, pond_id)
+
+    if not scoped_pond_ids:
+        return DataQualityOut(
+            pond_id=pond_id,
+            total_logs_last_7d=0,
+            missing_parameter_rates=dict.fromkeys(_CORE_PARAMETERS, 0.0),
+            sensor_offline_ponds=0,
+            stale_threshold_hours=_STALE_LOG_THRESHOLD_HOURS,
+            evaluated_at=now,
+        )
+
+    window_start = now - timedelta(days=7)
+    missing_sums = [
+        func.sum(case((getattr(Log, param).is_(None), 1), else_=0)).label(f"missing_{param}")
+        for param in _CORE_PARAMETERS
+    ]
+    agg_row = (
+        await session.execute(
+            select(func.count().label("total"), *missing_sums).where(
+                Log.pond_id.in_(scoped_pond_ids), Log.recorded_at >= window_start
+            )
+        )
+    ).one()
+
+    total_logs = agg_row.total or 0
+    missing_rates = {
+        param: round((getattr(agg_row, f"missing_{param}") or 0) / total_logs, 4)
+        if total_logs
+        else 0.0
+        for param in _CORE_PARAMETERS
+    }
+
+    latest_rows = await session.execute(
+        select(Log.pond_id, func.max(Log.recorded_at))
+        .where(Log.pond_id.in_(scoped_pond_ids))
+        .group_by(Log.pond_id)
+    )
+    latest_by_pond: dict[UUID, datetime | None] = {row[0]: row[1] for row in latest_rows}
+    stale_cutoff = now - timedelta(hours=_STALE_LOG_THRESHOLD_HOURS)
+    sensor_offline_ponds = 0
+    for pid in scoped_pond_ids:
+        last_at = latest_by_pond.get(pid)
+        if last_at is None or last_at < stale_cutoff:
+            sensor_offline_ponds += 1
+
     return DataQualityOut(
         pond_id=pond_id,
-        total_logs_last_7d=142,
-        missing_parameter_rates={
-            "dissolved_oxygen_mgl": 0.03,
-            "ph": 0.01,
-            "ammonia_nh3_mgl": 0.12,
-        },
-        sensor_offline_ponds=0,
-        stale_threshold_hours=4,
+        total_logs_last_7d=total_logs,
+        missing_parameter_rates=missing_rates,
+        sensor_offline_ponds=sensor_offline_ponds,
+        stale_threshold_hours=_STALE_LOG_THRESHOLD_HOURS,
         evaluated_at=now,
     )

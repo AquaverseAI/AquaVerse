@@ -235,6 +235,55 @@ async def db_client(postgres_container: Any, db_engine: Any) -> AsyncGenerator[A
         get_settings.cache_clear()
 
 
+@pytest_asyncio.fixture
+async def i18n_client(redis_container: Any) -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTPX client wired up to a real Redis container — for the
+    i18n domain (P3.1), where `POST /v1/translate` genuinely reads/writes
+    a Redis translation cache. No DB/lifespan needed: the route never
+    touches Postgres.
+
+    Deliberately function-scoped (unlike `db_client`/`media_client`): the
+    module-level lazy Redis client in `app.i18n.router` is reset to None
+    on every use so each test's client is opened against *that test's*
+    event loop, avoiding the same "Future attached to a different loop"
+    failure `db_session` documents for a session-scoped engine reused
+    across function-scoped loops.
+    """
+    import os
+
+    from app.config import get_settings
+
+    redis_url = redis_container.get_connection_url()
+    prev_redis_url = os.environ.get("REDIS_URL")
+    os.environ["REDIS_URL"] = redis_url
+    os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
+    os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
+    get_settings.cache_clear()
+
+    import app.i18n.router as i18n_router_module
+
+    i18n_router_module._redis_client = None
+
+    from app.main import create_app
+
+    app = create_app()
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            yield ac
+    finally:
+        i18n_router_module._redis_client = None
+        if prev_redis_url is None:
+            os.environ.pop("REDIS_URL", None)
+        else:
+            os.environ["REDIS_URL"] = prev_redis_url
+        get_settings.cache_clear()
+
+
 @pytest_asyncio.fixture(loop_scope="session")
 async def media_client(
     postgres_container: Any, db_engine: Any, minio_container: dict[str, str]

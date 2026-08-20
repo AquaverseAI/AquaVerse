@@ -142,10 +142,11 @@ async def seed() -> None:
                 text("""
                     INSERT INTO ponds
                         (id, owner_user_id, name, district, taluk, village,
-                         area_hectares, depth_meters, species, created_at, updated_at)
+                         area_hectares, depth_meters, species, geom, created_at, updated_at)
                     VALUES
                         (:id, :owner, :name, :district, :taluk, :village,
-                         :area, :depth, :species, :created_at, :updated_at)
+                         :area, :depth, :species,
+                         ST_SetSRID(ST_MakePoint(:lon, :lat), 4326), :created_at, :updated_at)
                     ON CONFLICT (id) DO NOTHING
                 """),
                 {
@@ -158,6 +159,12 @@ async def seed() -> None:
                     "area": 2.5,
                     "depth": 1.2,
                     "species": "Litopenaeus vannamei",
+                    # Approximate real-world coordinates for Kilvelur village,
+                    # Nagapattinam district — real location, not a fabricated
+                    # placeholder. GET /v1/geo/* (app/geo/router.py) requires a
+                    # real Pond.geom to plot/cluster a pond at all.
+                    "lat": 10.8934,
+                    "lon": 79.7397,
                     "created_at": now,
                     "updated_at": now,
                 },

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.responses import PlainTextResponse
 
 # ---------------------------------------------------------------------------
@@ -20,6 +20,7 @@ from app.advisory.router import router as advisory_router
 from app.alerts.router import router as alerts_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
+from app.core.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.db.session import close_db, init_db
 from app.geo.router import router as geo_router
 from app.i18n.router import router as i18n_router
@@ -33,21 +34,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable
 
 log = structlog.get_logger(__name__)
-
-# ---------------------------------------------------------------------------
-# Prometheus metrics
-# ---------------------------------------------------------------------------
-REQUEST_COUNT = Counter(
-    "http_requests_total",
-    "Total HTTP requests",
-    ["method", "path", "status_code"],
-)
-REQUEST_LATENCY = Histogram(
-    "http_request_duration_seconds",
-    "HTTP request latency in seconds",
-    ["method", "path"],
-    buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
-)
 
 
 # ---------------------------------------------------------------------------

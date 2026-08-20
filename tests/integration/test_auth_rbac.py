@@ -343,9 +343,12 @@ async def test_farmer_cannot_list_models(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_can_list_models(client: AsyncClient) -> None:
-    response = await client.get("/v1/models", headers=_auth(_staff_token()))
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_can_list_models(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: GET /v1/models is now DB-backed
+    (P2.7, app/ml_inference/model_registry_sync.py) rather than a static
+    fixture — same precedent as the risk endpoints above."""
+    response = await db_client.get("/v1/models", headers=_auth(_staff_token()))
     assert response.status_code == 200, response.text
 
 

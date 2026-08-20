@@ -116,13 +116,18 @@ async def test_model_drift_response_shape(db_client: AsyncClient) -> None:
 async def test_model_drift_detects_real_distribution_shift(
     db_session: AsyncSession, db_client: AsyncClient
 ) -> None:
-    """Seed 25 previous-window logs with a real (jittered, not
-    perfectly constant — see app/ml_inference/drift.py's docstring on
-    degenerate/zero-variance baselines) DO distribution, and 25
-    current-window logs at a sharply different level -> real PSI must
-    flag it, even diluted by whatever other tests' "now"-ish Log rows
-    already sit in the current window (the previous window, 8-14 days
-    back, is not a range any other test's fixtures use)."""
+    """Seed a real (jittered, not perfectly constant — see
+    app/ml_inference/drift.py's docstring on degenerate/zero-variance
+    baselines) previous-window DO distribution, and a current-window
+    batch at a sharply, unrealistically different level (real pond DO
+    never sits at ~0.05 mg/L) -> real PSI must flag it.
+
+    Both windows use large sample counts specifically so the shift stays
+    dominant even diluted by whatever other test files' "now"-ish Log
+    rows already sit in the current window — this suite shares one real,
+    non-rolled-back Postgres across many test files (the previous
+    window, 8-14 days back, is not a range any other test's fixtures
+    use, so it isn't diluted the same way)."""
     pond = Pond(id=uuid4(), owner_user_id=uuid4(), name="Drift Test Pond", district="Nagapattinam")
     db_session.add(pond)
     await db_session.flush()
@@ -131,22 +136,22 @@ async def test_model_drift_detects_real_distribution_shift(
     previous_window_at = now - timedelta(days=10)
     current_window_at = now - timedelta(days=1)
 
-    for i in range(25):
+    for i in range(60):
         db_session.add(
             Log(
                 pond_id=pond.id,
-                recorded_at=previous_window_at + timedelta(minutes=i),
+                recorded_at=previous_window_at + timedelta(seconds=i),
                 recorded_by=uuid4(),
-                dissolved_oxygen_mgl=5.0 + (i % 5) * 0.05,
+                dissolved_oxygen_mgl=5.0 + (i % 10) * 0.05,
             )
         )
-    for i in range(25):
+    for i in range(500):
         db_session.add(
             Log(
                 pond_id=pond.id,
-                recorded_at=current_window_at + timedelta(minutes=i),
+                recorded_at=current_window_at + timedelta(seconds=i),
                 recorded_by=uuid4(),
-                dissolved_oxygen_mgl=1.0 + (i % 5) * 0.05,
+                dissolved_oxygen_mgl=0.05 + (i % 10) * 0.001,
             )
         )
     await db_session.commit()

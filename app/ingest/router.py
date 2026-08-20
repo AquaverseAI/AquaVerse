@@ -87,7 +87,7 @@ async def _raise_alerts_for_log(session: DbSession, log_entry: Log, pond: Pond) 
         session.add(alert)
         await session.flush()  # assign alert.id before dispatch/log
 
-        result = fanout.dispatch(alert)
+        result = fanout.dispatch(alert.id, suppressed=alert.suppressed)
         alert.fcm_sent = result.fcm_sent
         alert.sms_sent = result.sms_sent
 

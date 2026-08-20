@@ -140,15 +140,26 @@ async def test_geo_ponds_within_km_without_latlon_rejected(db_client: AsyncClien
 async def test_geo_clusters_groups_nearby_alerting_ponds(
     db_session: AsyncSession, db_client: AsyncClient
 ) -> None:
-    pond_a = await _seed_pond(db_session, lat=POND_A_LATLON[0], lon=POND_A_LATLON[1])
-    pond_b = await _seed_pond(db_session, lat=POND_B_LATLON[0], lon=POND_B_LATLON[1])
-    pond_far = await _seed_pond(db_session, lat=POND_FAR_LATLON[0], lon=POND_FAR_LATLON[1])
+    # Integration tests share one real Postgres for the whole run and app
+    # writes commit for real (no per-test rollback) — a unique district
+    # scopes this test's admin query to only its own ponds, regardless of
+    # what other tests left behind at the same/nearby coordinates.
+    district = f"GeoClusterTest-{uuid4()}"
+    pond_a = await _seed_pond(
+        db_session, lat=POND_A_LATLON[0], lon=POND_A_LATLON[1], district=district
+    )
+    pond_b = await _seed_pond(
+        db_session, lat=POND_B_LATLON[0], lon=POND_B_LATLON[1], district=district
+    )
+    pond_far = await _seed_pond(
+        db_session, lat=POND_FAR_LATLON[0], lon=POND_FAR_LATLON[1], district=district
+    )
 
     await _seed_alert(db_session, pond_a)
     await _seed_alert(db_session, pond_b)
     await _seed_alert(db_session, pond_far)
 
-    resp = await db_client.get("/v1/geo/clusters", headers=_admin_headers())
+    resp = await db_client.get(f"/v1/geo/clusters?district={district}", headers=_admin_headers())
     assert resp.status_code == 200, resp.text
     features = resp.json()["features"]
     assert len(features) == 1
@@ -165,10 +176,13 @@ async def test_geo_clusters_groups_nearby_alerting_ponds(
 async def test_geo_clusters_single_pond_alert_is_not_a_cluster(
     db_session: AsyncSession, db_client: AsyncClient
 ) -> None:
-    pond = await _seed_pond(db_session, lat=POND_A_LATLON[0], lon=POND_A_LATLON[1])
+    district = f"GeoClusterTest-{uuid4()}"
+    pond = await _seed_pond(
+        db_session, lat=POND_A_LATLON[0], lon=POND_A_LATLON[1], district=district
+    )
     await _seed_alert(db_session, pond)
 
-    resp = await db_client.get("/v1/geo/clusters", headers=_admin_headers())
+    resp = await db_client.get(f"/v1/geo/clusters?district={district}", headers=_admin_headers())
     assert resp.status_code == 200, resp.text
     assert resp.json()["features"] == []
 
@@ -178,8 +192,13 @@ async def test_geo_clusters_single_pond_alert_is_not_a_cluster(
 async def test_geo_clusters_respects_days_back_window(
     db_session: AsyncSession, db_client: AsyncClient
 ) -> None:
-    pond_a = await _seed_pond(db_session, lat=POND_A_LATLON[0], lon=POND_A_LATLON[1])
-    pond_b = await _seed_pond(db_session, lat=POND_B_LATLON[0], lon=POND_B_LATLON[1])
+    district = f"GeoClusterTest-{uuid4()}"
+    pond_a = await _seed_pond(
+        db_session, lat=POND_A_LATLON[0], lon=POND_A_LATLON[1], district=district
+    )
+    pond_b = await _seed_pond(
+        db_session, lat=POND_B_LATLON[0], lon=POND_B_LATLON[1], district=district
+    )
 
     old_alert = Alert(
         pond_id=pond_a.id,
@@ -205,7 +224,9 @@ async def test_geo_clusters_respects_days_back_window(
 
     await _seed_alert(db_session, pond_b)
 
-    resp = await db_client.get("/v1/geo/clusters?days_back=30", headers=_admin_headers())
+    resp = await db_client.get(
+        f"/v1/geo/clusters?days_back=30&district={district}", headers=_admin_headers()
+    )
     assert resp.status_code == 200, resp.text
     # Only pond_b's alert is within the window -> below MIN_POND_COUNT, no cluster.
     assert resp.json()["features"] == []

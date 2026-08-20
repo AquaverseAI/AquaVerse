@@ -45,7 +45,9 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["issued_by"], ["users.id"], ondelete="SET NULL"),
+        # No FK to users.id — same convention as logs.recorded_by; JWT
+        # identity in this system doesn't guarantee a matching seeded
+        # `users` row (see app/db/models/advisory.py).
     )
     op.create_index("ix_advisories_target_district", "advisories", ["target_district"])
     op.create_index("ix_advisories_created_at", "advisories", ["created_at"])

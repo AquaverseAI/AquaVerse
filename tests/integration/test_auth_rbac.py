@@ -305,10 +305,16 @@ async def test_farmer_cannot_broadcast_advisory(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_can_broadcast_advisory(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_can_broadcast_advisory(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: POST /v1/advisories/broadcast went
+    DB-backed under P2.4 (real Advisory row persisted) — same precedent
+    as GET /v1/ponds/{id}/risk and GET /v1/risk/worklist noted in this
+    file's module docstring. The 403 rejection case above stays on
+    `client` since CurrentStaff raises before any query reaches the DB.
+    """
     body = {"title": "Test advisory", "body": "Body text"}
-    response = await client.post(
+    response = await db_client.post(
         "/v1/advisories/broadcast", json=body, headers=_auth(_staff_token())
     )
     assert response.status_code == 201, response.text

@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,11 +38,12 @@ class Advisory(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     severity: Mapped[str | None] = mapped_column(String(20))  # info | warning | critical
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    issued_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    # No FK constraint to users.id — same convention as Log.recorded_by
+    # (app/db/models/log.py): JWT identity in this system is not
+    # guaranteed to correspond to a seeded `users` row (self-signed
+    # tokens carry an arbitrary `sub` claim), so a strict FK would reject
+    # real, legitimately-authenticated writes.
+    issued_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     # Fan-out status — same honest convention as Alert.fcm_sent/sms_sent
     # (app/alerts/fanout.py): real attempt outcome, never a fabricated

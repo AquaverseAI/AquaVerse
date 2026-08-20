@@ -61,6 +61,31 @@ def generate_presigned_put_url(s3_key: str, mime_type: str) -> str:
     return url
 
 
+def generate_presigned_get_url(s3_key: str) -> str:
+    """Real presigned GET URL — local signing only, no network call. Used
+    to hand a finished report (app/reporting/jobs.py) to the client
+    without making the bucket itself public."""
+    settings = get_settings()
+    client = get_s3_client()
+    url: str = client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.s3_bucket_name, "Key": s3_key},
+        ExpiresIn=settings.s3_presign_expiry_seconds,
+    )
+    return url
+
+
+def put_object(s3_key: str, body: bytes, content_type: str) -> None:
+    """Upload bytes directly — for server-generated artifacts (report
+    exports) rather than client uploads, which go through a presigned PUT
+    instead."""
+    settings = get_settings()
+    client = get_s3_client()
+    client.put_object(
+        Bucket=settings.s3_bucket_name, Key=s3_key, Body=body, ContentType=content_type
+    )
+
+
 @dataclass(frozen=True)
 class HeadObjectResult:
     size_bytes: int

@@ -342,3 +342,73 @@ async def media_client(
             else:
                 os.environ[k] = v
         get_settings.cache_clear()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def reports_client(
+    postgres_container: Any,
+    db_engine: Any,
+    minio_container: dict[str, str],
+    redis_container: Any,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Like `media_client`, additionally pointed at a real Redis container
+    — for the Reporting domain (P3.2), where `GET /v1/reports/export`
+    genuinely enqueues an ARQ job (app/reporting/router.py's lazy
+    `_arq_pool`) and the resulting file is genuinely uploaded to S3.
+
+    `loop_scope="session"` (matching `db_client`/`media_client`) means
+    every test using this fixture runs on the same event loop, so the
+    module-level lazy `_arq_pool` singleton — opened once, on that loop —
+    stays valid across tests without needing a per-test reset, the same
+    reasoning that already applies to `media_client`'s S3 client.
+    """
+    import os
+
+    from app.config import get_settings
+
+    host = redis_container.get_container_host_ip()
+    port = redis_container.get_exposed_port(redis_container.port)
+    redis_url = f"redis://{host}:{port}/0"
+
+    db_url = postgres_container.get_connection_url().replace("psycopg2", "asyncpg")
+    prev_env = {
+        k: os.environ.get(k)
+        for k in (
+            "DATABASE_URL",
+            "REDIS_URL",
+            "S3_ENDPOINT_URL",
+            "S3_ACCESS_KEY_ID",
+            "S3_SECRET_ACCESS_KEY",
+            "S3_BUCKET_NAME",
+        )
+    }
+    os.environ["DATABASE_URL"] = db_url
+    os.environ["REDIS_URL"] = redis_url
+    os.environ["S3_ENDPOINT_URL"] = minio_container["endpoint_url"]
+    os.environ["S3_ACCESS_KEY_ID"] = minio_container["access_key_id"]
+    os.environ["S3_SECRET_ACCESS_KEY"] = minio_container["secret_access_key"]
+    os.environ["S3_BUCKET_NAME"] = minio_container["bucket_name"]
+    os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
+    os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
+    get_settings.cache_clear()
+
+    from app.main import create_app
+
+    app = create_app()
+
+    try:
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as ac,
+        ):
+            yield ac
+    finally:
+        for k, v in prev_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        get_settings.cache_clear()

@@ -46,6 +46,59 @@ def postgres_container() -> Generator[Any, None, None]:
 
 
 @pytest.fixture(scope="session")
+def minio_container() -> Generator[dict[str, str], None, None]:
+    """Spin up a real MinIO container for the test session, expose its
+    connection config, and pre-create the test bucket.
+
+    Uses `testcontainers.core.container.DockerContainer` directly (not
+    `testcontainers.minio.MinioContainer`) — that module hard-imports the
+    `minio` Python client package, which isn't a project dependency; this
+    repo already depends on `boto3` (the same client `app/core/s3.py`
+    uses), so we drive the container with that instead.
+    """
+    pytest.importorskip("testcontainers", reason="testcontainers not installed")
+
+    try:
+        import docker
+
+        client = docker.from_env()
+        client.ping()
+    except Exception as e:
+        pytest.skip(f"Docker is not available: {e}")
+
+    import boto3
+    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.waiting_utils import wait_for_logs
+
+    container = (
+        DockerContainer("minio/minio:latest")
+        .with_env("MINIO_ROOT_USER", "minioadmin")
+        .with_env("MINIO_ROOT_PASSWORD", "minioadmin123")
+        .with_exposed_ports(9000)
+        .with_command("server /data")
+    )
+    with container:
+        wait_for_logs(container, "API:")
+        host = container.get_container_host_ip()
+        port = container.get_exposed_port(9000)
+        config = {
+            "endpoint_url": f"http://{host}:{port}",
+            "access_key_id": "minioadmin",
+            "secret_access_key": "minioadmin123",
+            "bucket_name": "aquaverse-media-test",
+        }
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=config["endpoint_url"],
+            aws_access_key_id=config["access_key_id"],
+            aws_secret_access_key=config["secret_access_key"],
+            region_name="us-east-1",
+        )
+        s3_client.create_bucket(Bucket=config["bucket_name"])
+        yield config
+
+
+@pytest.fixture(scope="session")
 def redis_container() -> Generator[Any, None, None]:
     """Spin up a Redis container for the test session."""
     pytest.importorskip("testcontainers", reason="testcontainers not installed")
@@ -179,4 +232,183 @@ async def db_client(postgres_container: Any, db_engine: Any) -> AsyncGenerator[A
             os.environ.pop("DATABASE_URL", None)
         else:
             os.environ["DATABASE_URL"] = prev_database_url
+        get_settings.cache_clear()
+
+
+@pytest_asyncio.fixture
+async def i18n_client(redis_container: Any) -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTPX client wired up to a real Redis container — for the
+    i18n domain (P3.1), where `POST /v1/translate` genuinely reads/writes
+    a Redis translation cache. No DB/lifespan needed: the route never
+    touches Postgres.
+
+    Deliberately function-scoped (unlike `db_client`/`media_client`): the
+    module-level lazy Redis client in `app.i18n.router` is reset to None
+    on every use so each test's client is opened against *that test's*
+    event loop, avoiding the same "Future attached to a different loop"
+    failure `db_session` documents for a session-scoped engine reused
+    across function-scoped loops.
+    """
+    import os
+
+    from app.config import get_settings
+
+    # RedisContainer (unlike PostgresContainer) exposes no
+    # get_connection_url() — build the DSN from its host/port ourselves.
+    host = redis_container.get_container_host_ip()
+    port = redis_container.get_exposed_port(redis_container.port)
+    redis_url = f"redis://{host}:{port}/0"
+    prev_redis_url = os.environ.get("REDIS_URL")
+    os.environ["REDIS_URL"] = redis_url
+    os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://x:x@localhost/x")
+    os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
+    os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
+    get_settings.cache_clear()
+
+    import app.i18n.router as i18n_router_module
+
+    i18n_router_module._redis_client = None
+
+    from app.main import create_app
+
+    app = create_app()
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            yield ac
+    finally:
+        i18n_router_module._redis_client = None
+        if prev_redis_url is None:
+            os.environ.pop("REDIS_URL", None)
+        else:
+            os.environ["REDIS_URL"] = prev_redis_url
+        get_settings.cache_clear()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def media_client(
+    postgres_container: Any, db_engine: Any, minio_container: dict[str, str]
+) -> AsyncGenerator[AsyncClient, None]:
+    """Like `db_client`, additionally pointed at a real MinIO container —
+    for the Media domain (P2.5), where `POST /v1/media/{id}/commit`
+    genuinely HEADs the object store rather than being a no-op DB read.
+    Separate from `db_client` so every other suite doesn't pay the extra
+    container-startup cost for a dependency it never touches.
+    """
+    import os
+
+    from app.config import get_settings
+
+    db_url = postgres_container.get_connection_url().replace("psycopg2", "asyncpg")
+    prev_env = {
+        k: os.environ.get(k)
+        for k in (
+            "DATABASE_URL",
+            "S3_ENDPOINT_URL",
+            "S3_ACCESS_KEY_ID",
+            "S3_SECRET_ACCESS_KEY",
+            "S3_BUCKET_NAME",
+        )
+    }
+    os.environ["DATABASE_URL"] = db_url
+    os.environ["S3_ENDPOINT_URL"] = minio_container["endpoint_url"]
+    os.environ["S3_ACCESS_KEY_ID"] = minio_container["access_key_id"]
+    os.environ["S3_SECRET_ACCESS_KEY"] = minio_container["secret_access_key"]
+    os.environ["S3_BUCKET_NAME"] = minio_container["bucket_name"]
+    os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
+    os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
+    get_settings.cache_clear()
+
+    from app.main import create_app
+
+    app = create_app()
+
+    try:
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as ac,
+        ):
+            yield ac
+    finally:
+        for k, v in prev_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        get_settings.cache_clear()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def reports_client(
+    postgres_container: Any,
+    db_engine: Any,
+    minio_container: dict[str, str],
+    redis_container: Any,
+) -> AsyncGenerator[AsyncClient, None]:
+    """Like `media_client`, additionally pointed at a real Redis container
+    — for the Reporting domain (P3.2), where `GET /v1/reports/export`
+    genuinely enqueues an ARQ job (app/reporting/router.py's lazy
+    `_arq_pool`) and the resulting file is genuinely uploaded to S3.
+
+    `loop_scope="session"` (matching `db_client`/`media_client`) means
+    every test using this fixture runs on the same event loop, so the
+    module-level lazy `_arq_pool` singleton — opened once, on that loop —
+    stays valid across tests without needing a per-test reset, the same
+    reasoning that already applies to `media_client`'s S3 client.
+    """
+    import os
+
+    from app.config import get_settings
+
+    host = redis_container.get_container_host_ip()
+    port = redis_container.get_exposed_port(redis_container.port)
+    redis_url = f"redis://{host}:{port}/0"
+
+    db_url = postgres_container.get_connection_url().replace("psycopg2", "asyncpg")
+    prev_env = {
+        k: os.environ.get(k)
+        for k in (
+            "DATABASE_URL",
+            "REDIS_URL",
+            "S3_ENDPOINT_URL",
+            "S3_ACCESS_KEY_ID",
+            "S3_SECRET_ACCESS_KEY",
+            "S3_BUCKET_NAME",
+        )
+    }
+    os.environ["DATABASE_URL"] = db_url
+    os.environ["REDIS_URL"] = redis_url
+    os.environ["S3_ENDPOINT_URL"] = minio_container["endpoint_url"]
+    os.environ["S3_ACCESS_KEY_ID"] = minio_container["access_key_id"]
+    os.environ["S3_SECRET_ACCESS_KEY"] = minio_container["secret_access_key"]
+    os.environ["S3_BUCKET_NAME"] = minio_container["bucket_name"]
+    os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
+    os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
+    get_settings.cache_clear()
+
+    from app.main import create_app
+
+    app = create_app()
+
+    try:
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+            ) as ac,
+        ):
+            yield ac
+    finally:
+        for k, v in prev_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
         get_settings.cache_clear()

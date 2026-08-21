@@ -19,6 +19,9 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
   const [notes, setNotes] = useState('Routine morning water sample titration');
   const [isLoading, setIsLoading] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
+  
+  // Generate a unique idempotency key when the modal is opened
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   if (!isOpen) return null;
 
@@ -30,6 +33,7 @@ export const LogIngestionModal: React.FC<LogIngestionModalProps> = ({ pondId, is
     try {
       const res = await logsApi.ingestLog({
         pond_id: pondId,
+        client_log_id: idempotencyKey,
         timestamp: new Date().toISOString(),
         do_mg_l: parseFloat(doVal),
         ph: parseFloat(phVal),

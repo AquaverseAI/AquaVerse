@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.core.security import create_access_token
 from app.db.models.pond import Pond
 from app.db.models.user import User
-from app.deps import CurrentUser
+from app.deps import CurrentUser, RedisClient
 from app.identity.otp import (
     OtpExpiredOrNotFound,
     OtpInvalid,
@@ -39,23 +39,6 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 # ---------------------------------------------------------------------------
-# Redis helper — lazy singleton
-# ---------------------------------------------------------------------------
-_redis_client: object = None
-
-
-async def _get_redis() -> object:
-    """Return a shared Redis async client."""
-    global _redis_client
-    if _redis_client is None:
-        import redis.asyncio as aioredis
-
-        settings = get_settings()
-        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
-    return _redis_client
-
-
-# ---------------------------------------------------------------------------
 # POST /v1/auth/otp/request
 # ---------------------------------------------------------------------------
 @router.post(
@@ -69,9 +52,8 @@ async def _get_redis() -> object:
         "Rate-limited to 5 requests/minute per phone number."
     ),
 )
-async def otp_request(body: OtpRequestIn) -> OtpRequestOut:
+async def otp_request(body: OtpRequestIn, redis: RedisClient) -> OtpRequestOut:
     settings = get_settings()
-    redis = await _get_redis()
 
     # Check user exists
     from app.db.session import get_async_session
@@ -119,8 +101,7 @@ async def otp_request(body: OtpRequestIn) -> OtpRequestOut:
     status_code=status.HTTP_200_OK,
     summary="Verify OTP and receive a JWT",
 )
-async def otp_verify(body: OtpVerifyIn) -> OtpVerifyOut:
-    redis = await _get_redis()
+async def otp_verify(body: OtpVerifyIn, redis: RedisClient) -> OtpVerifyOut:
 
     try:
         await verify_otp(body.request_id, body.phone, body.otp, redis)  # type: ignore[arg-type]

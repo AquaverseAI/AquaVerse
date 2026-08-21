@@ -49,6 +49,7 @@ os.environ.setdefault("APP_SECRET_KEY", "test_secret_key_minimum_32_chars_here")
 os.environ.setdefault("INTERNAL_API_TOKEN", "test_internal_token_minimum_32_chars")
 
 from app.core.security import create_access_token
+from app.db.models.media import Media
 from app.db.models.pond import Pond
 
 # ---------------------------------------------------------------------------
@@ -61,12 +62,20 @@ DISTRICT_B = "Thanjavur"
 
 
 async def _seed_pond(db_session: AsyncSession, pond_id: str, district: str = DISTRICT_A) -> Pond:
-    """Seed a minimal real Pond row for a risk-endpoint success-path test.
+    """Seed a minimal real Pond row for a risk/media-endpoint success-path
+    test. Idempotent: FARMER_POND_ID is a fixed UUID shared across several
+    tests in this file (test_farmer_can_access_own_pond_risk,
+    test_farmer_can_commit_media_for_own_pond, ...) — whichever runs first
+    creates the row for real; later callers just reuse it rather than
+    hitting ponds_pkey's unique constraint.
 
     Owner is an unrelated random UUID — GET /v1/ponds/{id}/risk's
     farmer-scoping check (rbac.require_pond_scope) works off the token's
     `pond_ids` claim, not `Pond.owner_user_id`, so it doesn't need to match.
     """
+    existing = await db_session.get(Pond, UUID(pond_id))
+    if existing is not None:
+        return existing
     pond = Pond(id=UUID(pond_id), owner_user_id=uuid4(), name="RBAC Test Pond", district=district)
     db_session.add(pond)
     await db_session.commit()
@@ -234,11 +243,50 @@ async def test_farmer_cannot_access_other_pond_risk(db_client: AsyncClient) -> N
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_farmer_can_commit_media_for_own_pond(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_farmer_can_commit_media_for_own_pond(
+    db_session: AsyncSession,
+    media_client: AsyncClient,
+    minio_container: dict[str, str],
+) -> None:
+    """Uses `media_client`, not `client`: POST /v1/media/{id}/commit went
+    real (DB row lookup + a genuine S3 HEAD check) under P2.5 — same
+    precedent as test_farmer_can_access_own_pond_risk above. A real Media
+    row pointing at a real uploaded S3 object is required for a 200:
+    an arbitrary media_id (the old assumption, back when this endpoint
+    was a stub) now correctly 404s instead.
+    """
+    await _seed_pond(db_session, FARMER_POND_ID)
     token = _farmer_token(pond_ids=[FARMER_POND_ID])
-    media_id = str(uuid4())
-    response = await client.post(
+
+    media_id = uuid4()
+    s3_key = f"ponds/{FARMER_POND_ID}/{media_id}/test.jpg"
+    media = Media(
+        id=media_id,
+        pond_id=UUID(FARMER_POND_ID),
+        uploaded_by=uuid4(),
+        filename="test.jpg",
+        mime_type="image/jpeg",
+        s3_key=s3_key,
+        status="pending",
+    )
+    db_session.add(media)
+    await db_session.commit()
+
+    import boto3
+
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=minio_container["endpoint_url"],
+        aws_access_key_id=minio_container["access_key_id"],
+        aws_secret_access_key=minio_container["secret_access_key"],
+        region_name="us-east-1",
+    )
+    s3_client.put_object(
+        Bucket=minio_container["bucket_name"], Key=s3_key, Body=b"fake-image-bytes"
+    )
+
+    response = await media_client.post(
         f"/v1/media/{media_id}/commit",
         json={"pond_id": FARMER_POND_ID},
         headers=_auth(token),
@@ -248,11 +296,18 @@ async def test_farmer_can_commit_media_for_own_pond(client: AsyncClient) -> None
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_farmer_cannot_commit_media_for_other_pond(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_farmer_cannot_commit_media_for_other_pond(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: same session-dependency-resolution-
+    order reasoning as test_farmer_cannot_access_other_pond_risk above —
+    `session: DbSession` is resolved before the body's
+    `rbac.require_pond_scope` 403 check runs, even though that check
+    itself never queries anything. No Pond/Media row needs seeding for
+    the same reason.
+    """
     token = _farmer_token(pond_ids=[FARMER_POND_ID])
     media_id = str(uuid4())
-    response = await client.post(
+    response = await db_client.post(
         f"/v1/media/{media_id}/commit",
         json={"pond_id": OTHER_POND_ID},
         headers=_auth(token),
@@ -288,9 +343,12 @@ async def test_farmer_cannot_list_models(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_can_list_models(client: AsyncClient) -> None:
-    response = await client.get("/v1/models", headers=_auth(_staff_token()))
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_can_list_models(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: GET /v1/models is now DB-backed
+    (P2.7, app/ml_inference/model_registry_sync.py) rather than a static
+    fixture — same precedent as the risk endpoints above."""
+    response = await db_client.get("/v1/models", headers=_auth(_staff_token()))
     assert response.status_code == 200, response.text
 
 
@@ -305,10 +363,16 @@ async def test_farmer_cannot_broadcast_advisory(client: AsyncClient) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_staff_can_broadcast_advisory(client: AsyncClient) -> None:
+@pytest.mark.asyncio(loop_scope="session")
+async def test_staff_can_broadcast_advisory(db_client: AsyncClient) -> None:
+    """Uses `db_client`, not `client`: POST /v1/advisories/broadcast went
+    DB-backed under P2.4 (real Advisory row persisted) — same precedent
+    as GET /v1/ponds/{id}/risk and GET /v1/risk/worklist noted in this
+    file's module docstring. The 403 rejection case above stays on
+    `client` since CurrentStaff raises before any query reaches the DB.
+    """
     body = {"title": "Test advisory", "body": "Body text"}
-    response = await client.post(
+    response = await db_client.post(
         "/v1/advisories/broadcast", json=body, headers=_auth(_staff_token())
     )
     assert response.status_code == 201, response.text

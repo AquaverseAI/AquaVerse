@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Query, status
+from sqlalchemy import and_, or_, select
 
 from app.advisory.number_validator import validate_llm_output
 from app.advisory.schemas import (
@@ -17,11 +19,14 @@ from app.advisory.schemas import (
     ReasonIn,
     ReasonOut,
 )
+from app.alerts import fanout
 from app.core import rbac
 from app.core.errors import NumberMismatchError
-from app.core.pagination import CursorPage, encode_keyset_cursor
+from app.core.idempotency import check_idempotency, store_idempotency
+from app.core.pagination import CursorPage, clamp_limit, decode_keyset_cursor, encode_keyset_cursor
 from app.core.timezones import utcnow
-from app.deps import CurrentStaff, CurrentUser, InternalOnly
+from app.db.models.advisory import Advisory
+from app.deps import CurrentStaff, CurrentUser, DbSession, InternalOnly, RedisClient
 from app.ml_inference.numeric.m3_engine import get_m3_engine_bundle
 
 if TYPE_CHECKING:
@@ -184,35 +189,60 @@ async def ask(body: AskIn, user: CurrentUser) -> AskOut:
     "/advisories",
     response_model=CursorPage[AdvisoryOut],
     summary="List published advisories",
+    description=(
+        "Advisories that have not expired. target_district=None ('all-district') advisories are "
+        "always included alongside any district filter — a state-wide advisory is still relevant "
+        "to a farmer viewing their own district."
+    ),
 )
 async def list_advisories(
     user: CurrentUser,
+    session: DbSession,
     district: str | None = Query(default=None),
     cursor: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int | None = Query(default=None),
 ) -> CursorPage[AdvisoryOut]:
-    from datetime import timedelta
-
     if district is not None and user.role in ("staff", "admin"):
         rbac.require_district(user.district, district, user.role)
 
     now = utcnow()
-    stub = AdvisoryOut(
-        id=uuid4(),
-        title="Weekly Water Quality Advisory — Nagapattinam District",
-        body="Monitor dissolved oxygen levels closely this week due to algal bloom conditions.",
-        language="ta",
-        target_district="Nagapattinam",
-        target_species="Litopenaeus vannamei",
-        severity="warning",
-        issued_at=now,
-        expires_at=now + timedelta(days=7),
-    )
-    
-    # Fake keyset cursor for the stub list
-    next_cursor = encode_keyset_cursor(stub.issued_at.isoformat(), stub.id)
-    
-    return CursorPage[AdvisoryOut](items=[stub], next_cursor=next_cursor)
+    stmt = select(Advisory).where(or_(Advisory.expires_at.is_(None), Advisory.expires_at > now))
+    if district is not None:
+        stmt = stmt.where(
+            or_(Advisory.target_district == district, Advisory.target_district.is_(None))
+        )
+
+    effective_limit = clamp_limit(limit)
+    decoded = decode_keyset_cursor(cursor)
+    if decoded is not None:
+        last_created_at_raw, last_id_raw = decoded
+        try:
+            last_created_at: datetime | None = datetime.fromisoformat(last_created_at_raw)
+            last_id: UUID | None = UUID(last_id_raw)
+        except ValueError:
+            last_created_at = None
+            last_id = None
+        if last_created_at is not None and last_id is not None:
+            stmt = stmt.where(
+                or_(
+                    Advisory.created_at < last_created_at,
+                    and_(Advisory.created_at == last_created_at, Advisory.id < last_id),
+                )
+            )
+
+    stmt = stmt.order_by(Advisory.created_at.desc(), Advisory.id.desc()).limit(effective_limit + 1)
+    rows = list((await session.execute(stmt)).scalars().all())
+
+    has_next = len(rows) > effective_limit
+    rows = rows[:effective_limit]
+
+    next_cursor: str | None = None
+    if has_next and rows:
+        last_row = rows[-1]
+        next_cursor = encode_keyset_cursor(last_row.created_at.isoformat(), last_row.id)
+
+    items = [_advisory_out(a) for a in rows]
+    return CursorPage[AdvisoryOut](items=items, next_cursor=next_cursor)
 
 
 # ---------------------------------------------------------------------------
@@ -224,20 +254,57 @@ async def list_advisories(
     status_code=status.HTTP_201_CREATED,
     summary="Broadcast an advisory to farmers (staff only)",
 )
-async def broadcast_advisory(body: BroadcastIn, user: CurrentStaff) -> AdvisoryOut:
+async def broadcast_advisory(
+    body: BroadcastIn, user: CurrentStaff, session: DbSession, redis: RedisClient
+) -> AdvisoryOut:
+    if body.client_log_id:
+        cached = await check_idempotency(redis, body.client_log_id)
+        if cached:
+            return AdvisoryOut.model_validate(cached)
+
     if body.target_district is not None:
         rbac.require_district(user.district, body.target_district, user.role)
-    now = utcnow()
-    return AdvisoryOut(
-        id=uuid4(),
+
+    try:
+        issued_by: UUID | None = UUID(user.sub)
+    except ValueError:
+        issued_by = None
+
+    advisory = Advisory(
         title=body.title,
         body=body.body,
         language=body.language,
         target_district=body.target_district,
         target_species=body.target_species,
         severity=body.severity,
-        issued_at=now,
         expires_at=body.expires_at,
+        issued_by=issued_by,
+    )
+    session.add(advisory)
+    await session.flush()  # assign advisory.id/created_at before dispatch
+
+    result = fanout.dispatch(advisory.id)
+    advisory.fcm_sent = result.fcm_sent
+    advisory.sms_sent = result.sms_sent
+    await session.commit()
+
+    out = _advisory_out(advisory)
+    if body.client_log_id:
+        await store_idempotency(redis, body.client_log_id, out.model_dump(mode="json"))
+    return out
+
+
+def _advisory_out(advisory: Advisory) -> AdvisoryOut:
+    return AdvisoryOut(
+        id=advisory.id,
+        title=advisory.title,
+        body=advisory.body,
+        language=advisory.language,
+        target_district=advisory.target_district,
+        target_species=advisory.target_species,
+        severity=advisory.severity,
+        issued_at=advisory.created_at,
+        expires_at=advisory.expires_at,
     )
 
 # ---------------------------------------------------------------------------

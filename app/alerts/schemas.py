@@ -45,6 +45,7 @@ class AlertOut(BaseModel):
 
 class AlertAckIn(BaseModel):
     note: str | None = Field(default=None, max_length=500)
+    client_log_id: str | None = Field(default=None, max_length=200)
 
 
 class AlertAckOut(BaseModel):

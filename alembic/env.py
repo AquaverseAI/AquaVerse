@@ -12,7 +12,16 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import all models so Alembic autogenerate can detect changes
 from app.db.base import Base
-from app.db.models import alert, crop, log, media, model_registry, pond  # noqa: F401
+from app.db.models import (  # noqa: F401
+    advisory,
+    alert,
+    crop,
+    log,
+    media,
+    model_registry,
+    pond,
+    report_job,
+)
 
 # Alembic Config object
 config = context.config

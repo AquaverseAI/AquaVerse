@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from app.core import rbac
 from app.core.pagination import (
@@ -21,9 +21,12 @@ from app.core.pagination import (
 from app.core.timezones import utcnow
 from app.db.models.crop import Crop
 from app.db.models.log import Log
+from app.db.models.model_registry import ModelRegistry
 from app.db.models.pond import Pond
 from app.db.models.model_registry import ModelRegistry
 from app.deps import CurrentStaff, CurrentUser, DbSession
+from app.ml_inference.drift import compute_drift_report
+from app.ml_inference.model_registry_sync import ensure_active_model_registered
 from app.ml_inference.numeric import do_forecast, m2_risk_engine
 from app.ml_inference.schemas import (
     DataQualityOut,
@@ -44,8 +47,6 @@ from PIL import Image
 import io
 
 router = APIRouter(tags=["Ponds & ML"])
-
-_STUB_MODEL_ID = UUID("00000000-0000-0000-0000-000000000002")
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +643,12 @@ async def list_models(
     cursor: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> CursorPage[ModelOut]:
+    """Real keyset pagination over `model_registry`, same shape as
+    `list_ponds`. `ensure_active_model_registered` keeps that table
+    synced to whatever M2 bundle is actually loaded before every read —
+    see app/ml_inference/model_registry_sync.py for why this can't just
+    be a one-time seed."""
+    await ensure_active_model_registered(session)
     effective_limit = clamp_limit(limit)
     stmt = select(ModelRegistry)
 
@@ -666,29 +673,17 @@ async def list_models(
     stmt = stmt.order_by(ModelRegistry.created_at.desc(), ModelRegistry.id.desc())
     stmt = stmt.limit(effective_limit + 1)
 
-    rows = (await session.execute(stmt)).scalars().all()
+    result = await session.execute(stmt)
+    rows = list(result.scalars().all())
     has_next = len(rows) > effective_limit
     rows = rows[:effective_limit]
 
     next_cursor: str | None = None
     if has_next and rows:
-        last_model = rows[-1]
-        next_cursor = encode_keyset_cursor(last_model.created_at.isoformat(), last_model.id)
+        last_row = rows[-1]
+        next_cursor = encode_keyset_cursor(last_row.created_at.isoformat(), last_row.id)
 
-    items = [
-        ModelOut(
-            id=m.id,
-            name=m.name,
-            model_type=m.model_type,
-            version=m.version,
-            is_active=m.is_active,
-            dataset_hash=m.dataset_hash,
-            metrics=m.metrics,
-            promoted_at=m.promoted_at,
-            created_at=m.created_at,
-        )
-        for m in rows
-    ]
+    items = [ModelOut.model_validate(row, from_attributes=True) for row in rows]
     return CursorPage[ModelOut](items=items, next_cursor=next_cursor)
 
 
@@ -705,36 +700,21 @@ async def list_models(
 )
 async def get_model_metrics(user: CurrentStaff) -> ModelMetricsOut:
     from app.advisory.metrics import get_rejected_attempts
-    from prometheus_client import REGISTRY
-
-    total_requests = 0
-    duration_sum = 0.0
-    duration_count = 0
-
-    for metric in REGISTRY.collect():
-        if metric.name == "http_requests_total":
-            for sample in metric.samples:
-                if sample.name in ("http_requests_total_total", "http_requests_total"):
-                    total_requests += int(sample.value)
-        elif metric.name == "http_request_duration_seconds":
-            for sample in metric.samples:
-                if sample.name == "http_request_duration_seconds_sum":
-                    duration_sum += sample.value
-                elif sample.name == "http_request_duration_seconds_count":
-                    duration_count += int(sample.value)
-
-    avg_latency_ms = 0.0
-    if duration_count > 0:
-        avg_latency_ms = (duration_sum / duration_count) * 1000.0
+    from app.core.metrics import snapshot
 
     now = utcnow()
+    live = snapshot()
     return ModelMetricsOut(
         rejected_attempts=get_rejected_attempts(),
-        total_requests=total_requests,
-        avg_latency_ms=avg_latency_ms,
-        p95_latency_ms=avg_latency_ms * 1.5,
-        p99_latency_ms=avg_latency_ms * 2.0,
-        cache_hit_rate=0.85,
+        total_requests=int(live["total_requests"]),
+        avg_latency_ms=round(live["avg_latency_ms"], 2),
+        p95_latency_ms=round(live["p95_latency_ms"], 2),
+        p99_latency_ms=round(live["p99_latency_ms"], 2),
+        # No response cache exists anywhere in the model-serving layer
+        # (the Redis cache app/i18n/cache.py has is for translations, a
+        # different domain) — honestly 0.0 rather than a placeholder
+        # standing in for a cache that isn't there.
+        cache_hit_rate=0.0,
         as_of=now,
     )
 
@@ -747,24 +727,60 @@ async def get_model_metrics(user: CurrentStaff) -> ModelMetricsOut:
 )
 async def get_model_drift(
     user: CurrentStaff,
+    session: DbSession,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> CursorPage[DriftReport]:
-    now = utcnow()
-    stub = DriftReport(
-        model_name="risk_lightgbm",
-        model_version="1.2.0",
-        feature_drift={"dissolved_oxygen_mgl": 0.02, "ammonia_nh3_mgl": 0.05},
-        alert_threshold=0.2,
-        drift_detected=False,
-        evaluated_at=now,
+    """Real PSI-based drift signal for the one actively-served model — see
+    app/ml_inference/drift.py for what this does and doesn't measure.
+    `cursor`/`limit` are accepted for response-shape compatibility; there
+    is exactly one active model to report on, so this never actually
+    paginates."""
+    active_model = await ensure_active_model_registered(session)
+    report = await compute_drift_report(
+        session, model_name=active_model.name, model_version=active_model.version
     )
-    return CursorPage[DriftReport](items=[stub], next_cursor=None)
+    return CursorPage[DriftReport](items=[report], next_cursor=None)
 
 
 # ---------------------------------------------------------------------------
 # Data quality
 # ---------------------------------------------------------------------------
+# Core water-quality parameters tracked for completeness — the same
+# fields Alerts' threshold evaluation (app/alerts/rules.py) and the M2
+# risk engine actually consume, not an arbitrary pick.
+_CORE_PARAMETERS = (
+    "temperature_c",
+    "dissolved_oxygen_mgl",
+    "ph",
+    "salinity_ppt",
+    "ammonia_nh3_mgl",
+)
+
+
+async def _scoped_pond_ids_for_data_quality(
+    user: CurrentUser, session: DbSession, pond_id: UUID | None
+) -> list[UUID] | None:
+    """Returns the real pond ids in scope, or None to mean "no ponds in
+    scope" (fail closed for a staff token with no district claim), never
+    an unscoped global query a caller didn't ask for."""
+    if pond_id is not None:
+        exists = (
+            await session.execute(select(Pond.id).where(Pond.id == pond_id))
+        ).scalar_one_or_none()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Pond not found")
+        return [pond_id]
+
+    stmt = select(Pond.id)
+    if user.role == "staff":
+        if user.district is None:
+            return None
+        stmt = stmt.where(Pond.district == user.district)
+    # admin: unrestricted
+    return list((await session.execute(stmt)).scalars().all())
+
+
 @router.get(
     "/data-quality",
     response_model=DataQualityOut,
@@ -773,19 +789,72 @@ async def get_model_drift(
 )
 async def get_data_quality(
     user: CurrentStaff,
+    session: DbSession,
     pond_id: UUID | None = Query(default=None),
 ) -> DataQualityOut:
+    """Real signals over real `Log` rows from the last 7 days, scoped the
+    same way GET /v1/ponds is: a specific `pond_id` if given, else a
+    staff caller's own district (fail closed if their token has none),
+    else — for admin — every pond.
+
+    `sensor_offline_ponds` reuses `_STALE_LOG_THRESHOLD_HOURS`, the exact
+    threshold Alerts' blind-state suppression already uses (see that
+    constant's docstring) — one "how old is too old" answer per
+    codebase, not a second invented number.
+    """
     now = utcnow()
+    scoped_pond_ids = await _scoped_pond_ids_for_data_quality(user, session, pond_id)
+
+    if not scoped_pond_ids:
+        return DataQualityOut(
+            pond_id=pond_id,
+            total_logs_last_7d=0,
+            missing_parameter_rates=dict.fromkeys(_CORE_PARAMETERS, 0.0),
+            sensor_offline_ponds=0,
+            stale_threshold_hours=_STALE_LOG_THRESHOLD_HOURS,
+            evaluated_at=now,
+        )
+
+    window_start = now - timedelta(days=7)
+    missing_sums = [
+        func.sum(case((getattr(Log, param).is_(None), 1), else_=0)).label(f"missing_{param}")
+        for param in _CORE_PARAMETERS
+    ]
+    agg_row = (
+        await session.execute(
+            select(func.count().label("total"), *missing_sums).where(
+                Log.pond_id.in_(scoped_pond_ids), Log.recorded_at >= window_start
+            )
+        )
+    ).one()
+
+    total_logs = agg_row.total or 0
+    missing_rates = {
+        param: round((getattr(agg_row, f"missing_{param}") or 0) / total_logs, 4)
+        if total_logs
+        else 0.0
+        for param in _CORE_PARAMETERS
+    }
+
+    latest_rows = await session.execute(
+        select(Log.pond_id, func.max(Log.recorded_at))
+        .where(Log.pond_id.in_(scoped_pond_ids))
+        .group_by(Log.pond_id)
+    )
+    latest_by_pond: dict[UUID, datetime | None] = {row[0]: row[1] for row in latest_rows}
+    stale_cutoff = now - timedelta(hours=_STALE_LOG_THRESHOLD_HOURS)
+    sensor_offline_ponds = 0
+    for pid in scoped_pond_ids:
+        last_at = latest_by_pond.get(pid)
+        if last_at is None or last_at < stale_cutoff:
+            sensor_offline_ponds += 1
+
     return DataQualityOut(
         pond_id=pond_id,
-        total_logs_last_7d=142,
-        missing_parameter_rates={
-            "dissolved_oxygen_mgl": 0.03,
-            "ph": 0.01,
-            "ammonia_nh3_mgl": 0.12,
-        },
-        sensor_offline_ponds=0,
-        stale_threshold_hours=4,
+        total_logs_last_7d=total_logs,
+        missing_parameter_rates=missing_rates,
+        sensor_offline_ponds=sensor_offline_ponds,
+        stale_threshold_hours=_STALE_LOG_THRESHOLD_HOURS,
         evaluated_at=now,
     )
 

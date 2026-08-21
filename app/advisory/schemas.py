@@ -112,6 +112,7 @@ class BroadcastIn(BaseModel):
         description="info | warning | critical",
     )
     expires_at: datetime | None = None
+    client_log_id: str | None = Field(default=None, max_length=200)
 
 
 # ---------------------------------------------------------------------------

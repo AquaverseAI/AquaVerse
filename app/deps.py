@@ -12,6 +12,10 @@ from app.config import Settings, get_settings
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from uuid import UUID
+    
+    # Optional typing if we want to type hint Redis
+    # but we will just use object or Any to avoid strict deps if it's dynamic
+    from redis.asyncio import Redis
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +36,26 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 AppSettings = Annotated[Settings, Depends(get_settings)]
+
+
+# ---------------------------------------------------------------------------
+# Redis client
+# ---------------------------------------------------------------------------
+_redis_client: Redis | None = None
+
+
+async def get_redis() -> Redis:
+    """Return a shared Redis async client."""
+    global _redis_client
+    if _redis_client is None:
+        import redis.asyncio as aioredis
+
+        settings = get_settings()
+        _redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    return _redis_client
+
+
+RedisClient = Annotated["Redis", Depends(get_redis)]
 
 
 # ---------------------------------------------------------------------------

@@ -650,6 +650,7 @@ export interface components {
         };
         WaterQualityLog: {
             pond_id: string;
+            client_log_id?: string;
             timestamp?: string;
             do_mg_l: number;
             ph: number;

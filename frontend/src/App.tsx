@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { Sidebar, ScreenId } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
-import { DistrictMap } from './pages/DistrictMap';
-import { TriageWorklist } from './pages/TriageWorklist';
-import { PondDeepDive } from './pages/PondDeepDive';
-import { ModelOperations } from './pages/ModelOperations';
-import { AdvisoryBroadcaster } from './pages/AdvisoryBroadcaster';
-import { DataQuality } from './pages/DataQuality';
-import { AnalyticsReports } from './pages/AnalyticsReports';
 
 export interface UserSession {
   username: string;
@@ -29,10 +23,22 @@ export function App() {
     }
     return null;
   });
-  const [activeScreen, setActiveScreen] = useState<ScreenId>('map');
+  
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   const [selectedDistrict, setSelectedDistrict] = useState<string>('Coimbatore');
-  const [selectedPondId, setSelectedPondId] = useState<string>('CBE-003');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Derive activeScreen from current path
+  const path = location.pathname;
+  let activeScreen: ScreenId = 'map';
+  if (path.startsWith('/worklist')) activeScreen = 'worklist';
+  if (path.startsWith('/ponds/')) activeScreen = 'deepdive';
+  if (path.startsWith('/modelops')) activeScreen = 'modelops';
+  if (path.startsWith('/broadcaster')) activeScreen = 'broadcaster';
+  if (path.startsWith('/dataquality')) activeScreen = 'dataquality';
+  if (path.startsWith('/analytics')) activeScreen = 'analytics';
 
   // Toggle dark/light class on html element
   useEffect(() => {
@@ -50,14 +56,16 @@ export function App() {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const handleSelectPondForDeepDive = (pondId: string) => {
-    setSelectedPondId(pondId);
-    setActiveScreen('deepdive');
-  };
-
-  const handleOpenBroadcaster = (pondId: string) => {
-    setSelectedPondId(pondId);
-    setActiveScreen('broadcaster');
+  const handleSelectScreen = (screen: ScreenId) => {
+    switch (screen) {
+      case 'map': navigate({ to: '/' }); break;
+      case 'worklist': navigate({ to: '/worklist' }); break;
+      case 'deepdive': navigate({ to: '/ponds/$pondId', params: { pondId: 'CBE-003' } }); break;
+      case 'modelops': navigate({ to: '/modelops' }); break;
+      case 'broadcaster': navigate({ to: '/broadcaster' }); break;
+      case 'dataquality': navigate({ to: '/dataquality' }); break;
+      case 'analytics': navigate({ to: '/analytics' }); break;
+    }
   };
 
   // If user is not logged in, display the Keycloak OAuth2 Login Screen
@@ -78,7 +86,7 @@ export function App() {
       {/* Left Sidebar Navigation */}
 <Sidebar
         activeScreen={activeScreen}
-        onSelectScreen={setActiveScreen}
+        onSelectScreen={handleSelectScreen}
         selectedDistrict={selectedDistrict}
         onDistrictChange={setSelectedDistrict}
         user={user}
@@ -92,35 +100,7 @@ export function App() {
       {/* Main Content Area (offset by left sidebar on desktop) */}
       <div className="flex-1 flex flex-col lg:pl-64 min-w-0 transition-all duration-200">
         <main className="flex-1 w-full max-w-[1700px] mx-auto p-3 sm:p-4 md:p-5">
-          {activeScreen === 'map' && (
-            <DistrictMap
-              selectedDistrict={selectedDistrict}
-              onSelectPondForDeepDive={handleSelectPondForDeepDive}
-              theme={theme}
-            />
-          )}
-
-          {activeScreen === 'worklist' && (
-            <TriageWorklist
-              onSelectPondForDeepDive={handleSelectPondForDeepDive}
-              onOpenBroadcaster={handleOpenBroadcaster}
-              theme={theme}
-            />
-          )}
-
-          {activeScreen === 'deepdive' && (
-            <PondDeepDive pondId={selectedPondId} theme={theme} />
-          )}
-
-          {activeScreen === 'modelops' && <ModelOperations theme={theme} />}
-
-          {activeScreen === 'broadcaster' && (
-            <AdvisoryBroadcaster initialPondId={selectedPondId} theme={theme} />
-          )}
-
-          {activeScreen === 'dataquality' && <DataQuality theme={theme} />}
-
-          {activeScreen === 'analytics' && <AnalyticsReports theme={theme} />}
+          <Outlet />
         </main>
 
         {/* Footer */}

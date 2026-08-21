@@ -300,13 +300,14 @@ export const handlers = [
         coordinates: [p.lng, p.lat],
       },
       properties: {
-        pond_id: p.pond_id,
-        farmer: p.farmer_name,
+        pond_name: p.farmer_name,
         district: p.district,
-        risk: p.current_risk,
-        risk_band: p.risk_band,
+        species: p.species,
+        risk_score: p.current_risk,
+        risk_level: p.risk_band,
+        suppressed: p.blind_state,
+        suppression_reason: p.suppression_reason,
         biomass_kg: p.biomass_kg,
-        blind_state: p.blind_state,
       },
     }));
 

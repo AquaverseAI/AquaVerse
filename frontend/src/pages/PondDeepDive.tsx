@@ -52,6 +52,15 @@ export const PondDeepDive: React.FC<PondDeepDiveProps> = ({ pondId, theme = 'lig
     },
   });
 
+  // Query for Events
+  const { data: eventsData } = useQuery({
+    queryKey: ['pond-events', pondId],
+    queryFn: async () => {
+      const res = await fetch(`/v1/ponds/${pondId}/events`);
+      return res.json();
+    },
+  });
+
   // Query for What-If Simulator Endpoint
   const { data: twinState } = useQuery({
     queryKey: ['twin-state', pondId, aerationHours, waterExchangePct, feedReductionPct],
@@ -172,6 +181,37 @@ export const PondDeepDive: React.FC<PondDeepDiveProps> = ({ pondId, theme = 'lig
       },
     ],
   };
+
+  // Inject Event Annotations if available
+  const events = eventsData?.items || [];
+  if (events.length > 0 && multiParamChartOption.series[0]) {
+    const markLines: any[] = [];
+    events.forEach((ev: any) => {
+      let color = '#64748b'; // default
+      if (ev.event_type === 'crop_event' && ev.title.toLowerCase().includes('feed')) color = '#e8a33d';
+      if (ev.event_type === 'crop_event' && ev.title.toLowerCase().includes('rain')) color = '#1f8aa6';
+      if (ev.event_type === 'crop_event' && ev.title.toLowerCase().includes('treatment')) color = '#8b5cf6';
+      
+      // We push a vertical line at the recorded timestamp
+      markLines.push({
+        xAxis: ev.occurred_at,
+        name: ev.title,
+        label: { formatter: ev.title, position: 'insideStartTop', color, fontSize: 10, fontFamily: 'monospace' },
+        lineStyle: { color, type: 'dashed' },
+      });
+    });
+
+    if (markLines.length > 0) {
+      // @ts-ignore - TS infers markLine from initial definition, but ECharts accepts both xAxis and yAxis lines
+      multiParamChartOption.series[0].markLine = {
+        ...multiParamChartOption.series[0].markLine,
+        data: [
+          ...(multiParamChartOption.series[0].markLine?.data || []),
+          ...markLines,
+        ],
+      };
+    }
+  }
 
   const forecastTimes = forecastData?.timestamps || [];
   const p50 = forecastData?.forecast_p50 || [];

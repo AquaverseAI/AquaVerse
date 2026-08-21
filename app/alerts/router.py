@@ -16,6 +16,7 @@ from app.alerts.schemas import (
     AlertOut,
 )
 from app.core import rbac
+from app.core.idempotency import check_idempotency, store_idempotency
 from app.core.pagination import (
     CursorPage,
     clamp_limit,
@@ -25,7 +26,7 @@ from app.core.pagination import (
 from app.core.timezones import utcnow
 from app.db.models.alert import Alert
 from app.db.models.pond import Pond
-from app.deps import CurrentUser, DbSession
+from app.deps import CurrentUser, DbSession, RedisClient
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
@@ -149,8 +150,13 @@ async def _get_scoped_alert(session: DbSession, user: CurrentUser, alert_id: UUI
     summary="Acknowledge an alert",
 )
 async def ack_alert(
-    alert_id: UUID, body: AlertAckIn, user: CurrentUser, session: DbSession
+    alert_id: UUID, body: AlertAckIn, user: CurrentUser, session: DbSession, redis: RedisClient
 ) -> AlertAckOut:
+    if body.client_log_id:
+        cached = await check_idempotency(redis, body.client_log_id)
+        if cached:
+            return AlertAckOut.model_validate(cached)
+
     alert = await _get_scoped_alert(session, user, alert_id)
     
     alert.acked = True
@@ -161,12 +167,15 @@ async def ack_alert(
 
     await session.commit()
 
-    return AlertAckOut(
+    out = AlertAckOut(
         alert_id=alert_id,
         acked=True,
         acked_at=alert.acked_at,
         message="Alert acknowledged successfully",
     )
+    if body.client_log_id:
+        await store_idempotency(redis, body.client_log_id, out.model_dump(mode="json"))
+    return out
 
 
 @router.post(

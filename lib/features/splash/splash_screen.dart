@@ -10,37 +10,37 @@ import 'splash_controller.dart';
 // =============================================================================
 // TIMING CONSTANTS
 //
-// Adapted from Slack-style reference video (Splash screen reference.mp4):
+// Reference motion choreography (Slack-inspired rhythm adapted for AquaVerse):
 //
-// STATE 01 — Solid ocean background:               t=0ms     → t=400ms
-// STATE 02 — Seed dot appears at center:           t=400ms   → t=700ms
-// STATE 03 — 4 orbs burst outward to positions:   t=700ms   → t=1600ms
-// STATE 04 — Orbs animate content inside:         t=1600ms  → t=2800ms
-// STATE 05 — Orbs converge back to center:        t=2800ms  → t=3600ms
-// STATE 06 — Logo mark assembles from orbs:       t=3500ms  → t=4000ms
-// STATE 07 — Wordmark letters fly in right→left:  t=3900ms  → t=4700ms
-// STATE 08 — Tagline fades in:                    t=4600ms  → t=5000ms
-// STATE 09 — Static hold then navigate:           t=5000ms  → t=5600ms
+// STATE 01 (0ms - 400ms):    Deep tranquil ocean canvas
+// STATE 02 (400ms - 800ms):  Luminous aquatic seed emerges at center
+// STATE 03 (700ms - 1700ms): 4 pure liquid droplets burst outward in cardinal cross
+//                            Water ripples radiate outward across the canvas
+// STATE 04 (1600ms - 2600ms):Droplets hover in buoyant equilibrium (breathing micro-motion)
+// STATE 05 (2500ms - 3300ms):Droplets accelerate inward, converging to center
+// STATE 06 (3200ms - 4100ms):HERO LOGO emerges from fusion with majestic scale & glow
+// STATE 07 (3700ms - 4600ms):"AquaVerse" wordmark slides up with crisp typography
+// STATE 08 (4300ms - 5000ms):Tagline resolves ("Better decisions, better harvest")
+// STATE 09 (5200ms):         Seamless navigation handoff
 //
-// Total controller duration: 5600ms
+// Total timeline: 5400ms (can also tap anywhere to advance immediately)
 // =============================================================================
 
-const int _kTotalMs = 5600;
+const int _kTotalMs = 5400;
 
-// Phase fractions (out of _kTotalMs)
-const double _kSeedStart        = 400  / _kTotalMs;
-const double _kSeedEnd          = 700  / _kTotalMs;
-const double _kOrbsOutStart     = 700  / _kTotalMs;
-const double _kOrbsOutEnd       = 1600 / _kTotalMs;
-const double _kOrbsInStart      = 2800 / _kTotalMs;
-const double _kOrbsInEnd        = 3600 / _kTotalMs;
-const double _kMarkStart        = 3500 / _kTotalMs;
-const double _kMarkEnd          = 4000 / _kTotalMs;
-const double _kWordStart        = 3900 / _kTotalMs;
-const double _kWordEnd          = 4700 / _kTotalMs;
-const double _kTaglineStart     = 4600 / _kTotalMs;
-const double _kTaglineEnd       = 5000 / _kTotalMs;
-const double _kNavigateAt       = 5400 / _kTotalMs;
+const double _kSeedStart     = 400  / _kTotalMs;
+const double _kSeedEnd       = 800  / _kTotalMs;
+const double _kBurstStart    = 700  / _kTotalMs;
+const double _kBurstEnd      = 1700 / _kTotalMs;
+const double _kConvergeStart = 2500 / _kTotalMs;
+const double _kConvergeEnd   = 3300 / _kTotalMs;
+const double _kLogoStart     = 3100 / _kTotalMs;
+const double _kLogoEnd       = 4100 / _kTotalMs;
+const double _kWordmarkStart = 3700 / _kTotalMs;
+const double _kWordmarkEnd   = 4600 / _kTotalMs;
+const double _kTaglineStart  = 4300 / _kTotalMs;
+const double _kTaglineEnd    = 5000 / _kTotalMs;
+const double _kNavTrigger    = 5200 / _kTotalMs;
 
 // =============================================================================
 // SPLASH SCREEN
@@ -55,31 +55,29 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
-  // Main timeline controller
-  late final AnimationController _ctrl;
+  late final AnimationController _timelineCtrl;
+  late final AnimationController _floatCtrl;
 
-  // Seed dot
+  // State 02: Seed droplet
   late final Animation<double> _seedScale;
   late final Animation<double> _seedOpacity;
 
-  // Orb burst outward (0 = center, 1 = final orbit position)
-  late final Animation<double> _orbsOut;
+  // State 03-05: Droplet burst & convergence
+  late final Animation<double> _dropletSpread;
+  late final Animation<double> _dropletConverge;
+  late final Animation<double> _dropletsOpacity;
 
-  // Orbs hold — individual rotation per orb for content animation
-  late final AnimationController _orbSpinCtrl;
+  // State 06: Hero Logo reveal
+  late final Animation<double> _logoScale;
+  late final Animation<double> _logoOpacity;
+  late final Animation<double> _logoGlow;
 
-  // Orbs converge back (0 = orbit, 1 = center merged)
-  late final Animation<double> _orbsIn;
+  // State 07: Wordmark reveal
+  late final Animation<double> _wordmarkSlide;
+  late final Animation<double> _wordmarkOpacity;
 
-  // Logo mark: as orbs converge, the mark appears
-  late final Animation<double> _markOpacity;
-  late final Animation<double> _markScale;
-
-  // Wordmark letter-by-letter slide in
-  late final Animation<double> _wordOpacity;
-  late final Animation<double> _wordSlide;
-
-  // Tagline
+  // State 08: Tagline reveal
+  late final Animation<double> _taglineSlide;
   late final Animation<double> _taglineOpacity;
 
   bool _hasNavigated = false;
@@ -88,780 +86,618 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void initState() {
     super.initState();
 
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Color(0xFF061A2B),
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
 
-    _ctrl = AnimationController(
+    _timelineCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: _kTotalMs),
     );
 
-    // Orb spin: continuous 360° during hold phase
-    _orbSpinCtrl = AnimationController(
+    // Continuous subtle floating / breathing motion
+    _floatCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
 
-    // ── Seed dot ──────────────────────────────────────────────────────────
+    // ── Seed Droplet ─────────────────────────────────────────────────────────
     _seedScale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kSeedStart, _kSeedEnd, curve: Curves.easeOut),
+        parent: _timelineCtrl,
+        curve: const Interval(_kSeedStart, _kSeedEnd, curve: Curves.easeOutBack),
       ),
     );
     _seedOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kSeedStart, _kSeedEnd, curve: Curves.easeIn),
+        parent: _timelineCtrl,
+        curve: const Interval(_kSeedStart, _kSeedEnd, curve: Curves.easeIn),
       ),
     );
 
-    // ── Orbs burst outward ─────────────────────────────────────────────────
-    _orbsOut = CurvedAnimation(
-      parent: _ctrl,
-      curve: Interval(_kOrbsOutStart, _kOrbsOutEnd, curve: Curves.easeOutBack),
+    // ── 4 Liquid Droplets: Burst outward ─────────────────────────────────────
+    _dropletSpread = CurvedAnimation(
+      parent: _timelineCtrl,
+      curve: const Interval(_kBurstStart, _kBurstEnd, curve: Curves.easeOutBack),
     );
 
-    // ── Orbs converge back ─────────────────────────────────────────────────
-    _orbsIn = CurvedAnimation(
-      parent: _ctrl,
-      curve: Interval(_kOrbsInStart, _kOrbsInEnd, curve: Curves.easeInBack),
+    // ── 4 Liquid Droplets: Converge inward ───────────────────────────────────
+    _dropletConverge = CurvedAnimation(
+      parent: _timelineCtrl,
+      curve: const Interval(_kConvergeStart, _kConvergeEnd, curve: Curves.easeInOutCubic),
     );
 
-    // ── Logo mark ──────────────────────────────────────────────────────────
-    _markOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+    // Droplets vanish as logo takes over
+    _dropletsOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
       CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kMarkStart, _kMarkEnd, curve: Curves.easeOut),
-      ),
-    );
-    _markScale = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kMarkStart, _kMarkEnd, curve: Curves.easeOutBack),
+        parent: _timelineCtrl,
+        curve: const Interval(_kConvergeEnd - 0.03, _kLogoStart + 0.08, curve: Curves.easeOut),
       ),
     );
 
-    // ── Wordmark ────────────────────────────────────────────────────────────
-    _wordOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+    // ── Hero Logo (Majestic scale, prominent presence) ───────────────────────
+    _logoScale = Tween<double>(begin: 0.65, end: 1.0).animate(
       CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kWordStart, _kWordEnd, curve: Curves.easeOut),
+        parent: _timelineCtrl,
+        curve: const Interval(_kLogoStart, _kLogoEnd, curve: Curves.easeOutBack),
       ),
     );
-    _wordSlide = Tween<double>(begin: 1.0, end: 0.0).animate(
+    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kWordStart, _kWordEnd, curve: Curves.easeOut),
+        parent: _timelineCtrl,
+        curve: const Interval(_kLogoStart, _kLogoStart + 0.10, curve: Curves.easeIn),
+      ),
+    );
+    _logoGlow = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _timelineCtrl,
+        curve: const Interval(_kLogoStart, _kLogoEnd + 0.08, curve: Curves.easeOut),
+      ),
+    );
+
+    // ── Wordmark "AquaVerse" ────────────────────────────────────────────────
+    _wordmarkSlide = Tween<double>(begin: 24.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _timelineCtrl,
+        curve: const Interval(_kWordmarkStart, _kWordmarkEnd, curve: Curves.easeOutCubic),
+      ),
+    );
+    _wordmarkOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _timelineCtrl,
+        curve: const Interval(_kWordmarkStart, _kWordmarkEnd, curve: Curves.easeIn),
       ),
     );
 
     // ── Tagline ─────────────────────────────────────────────────────────────
+    _taglineSlide = Tween<double>(begin: 16.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _timelineCtrl,
+        curve: const Interval(_kTaglineStart, _kTaglineEnd, curve: Curves.easeOutCubic),
+      ),
+    );
     _taglineOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kTaglineStart, _kTaglineEnd, curve: Curves.easeOut),
+        parent: _timelineCtrl,
+        curve: const Interval(_kTaglineStart, _kTaglineEnd, curve: Curves.easeIn),
       ),
     );
 
-    _ctrl.forward();
-
-    // Navigate when animation reaches the trigger point
-    _ctrl.addListener(_checkNavigate);
+    _timelineCtrl.addListener(_onTimelineTick);
+    _timelineCtrl.forward();
   }
 
-  void _checkNavigate() {
-    if (!_hasNavigated && _ctrl.value >= _kNavigateAt) {
+  void _onTimelineTick() {
+    if (!_hasNavigated && _timelineCtrl.value >= _kNavTrigger) {
       _hasNavigated = true;
-      _navigateAway();
+      _proceedToNext();
     }
   }
 
-  Future<void> _navigateAway() async {
+  Future<void> _proceedToNext() async {
+    if (!mounted) return;
     final splashController = ref.read(splashControllerProvider);
     final targetRoute = await splashController.determineNextRoute();
-    if (mounted) context.go(targetRoute);
+    if (mounted) {
+      context.go(targetRoute);
+    }
   }
 
   @override
   void dispose() {
-    _ctrl.removeListener(_checkNavigate);
-    _ctrl.dispose();
-    _orbSpinCtrl.dispose();
+    _timelineCtrl.removeListener(_onTimelineTick);
+    _timelineCtrl.dispose();
+    _floatCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final reducedMotion =
-        MediaQuery.of(context).disableAnimations;
+    final disableAnimations = MediaQuery.of(context).disableAnimations;
     final l10n = AppLocalizations.of(context);
     final tagline =
-        l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest.';
+        l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest';
+
+    // If accessibility reduced motion is active, jump directly to completed state
+    if (disableAnimations && !_timelineCtrl.isCompleted) {
+      _timelineCtrl.value = 1.0;
+    }
 
     return Scaffold(
-      backgroundColor: AppColors.mountain900,
-      body: AnimatedBuilder(
-        animation: Listenable.merge([_ctrl, _orbSpinCtrl]),
-        builder: (context, _) {
-          return _SplashCanvas(
-            size: size,
-            reducedMotion: reducedMotion,
-            seedScale: _seedScale.value,
-            seedOpacity: _seedOpacity.value,
-            orbsOut: _orbsOut.value,
-            orbsIn: _orbsIn.value,
-            orbSpinAngle: _orbSpinCtrl.value * math.pi * 2,
-            markOpacity: _markOpacity.value,
-            markScale: _markScale.value,
-            wordOpacity: _wordOpacity.value,
-            wordSlide: _wordSlide.value,
-            taglineOpacity: _taglineOpacity.value,
-            tagline: tagline,
-          );
+      backgroundColor: const Color(0xFF061A2B),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (!_hasNavigated) {
+            _hasNavigated = true;
+            _proceedToNext();
+          }
         },
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_timelineCtrl, _floatCtrl]),
+          builder: (context, _) {
+            final spread = _dropletSpread.value;
+            final converge = _dropletConverge.value;
+            final floatOffset = math.sin(_floatCtrl.value * math.pi) * 3.5;
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // ── 1. Deep Ocean Ambience & Radial Glow ────────────────────
+                const Positioned.fill(
+                  child: _OceanBackdrop(),
+                ),
+
+                // ── 2. Subtle Water Ripple Dynamics ────────────────────────
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _WaterRipplesPainter(
+                      progress: _timelineCtrl.value,
+                      spread: spread,
+                    ),
+                  ),
+                ),
+
+                // ── 3. Central Seed Droplet (Initial Pulse) ─────────────────
+                if (_seedOpacity.value > 0.01 && spread < 0.15)
+                  Center(
+                    child: Opacity(
+                      opacity: _seedOpacity.value.clamp(0.0, 1.0),
+                      child: Transform.scale(
+                        scale: _seedScale.value,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const RadialGradient(
+                              colors: [Colors.white, AppColors.primary500],
+                              stops: [0.3, 1.0],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary500.withValues(alpha: 0.6),
+                                blurRadius: 16,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // ── 4. Four Liquid Droplets (Cardinal Cross Formation) ─────
+                // Pure minimalist liquid beads with brand gradient & glass depth.
+                // NO cartoon clip art, NO ai slop illustrations.
+                if (_dropletsOpacity.value > 0.01 && spread > 0.05)
+                  Positioned.fill(
+                    child: Opacity(
+                      opacity: _dropletsOpacity.value.clamp(0.0, 1.0),
+                      child: _CardinalDroplets(
+                        size: size,
+                        spread: spread,
+                        converge: converge,
+                        floatOffset: floatOffset,
+                      ),
+                    ),
+                  ),
+
+                // ── 5. Hero Logo & AquaVerse Brand Lockup ────────────────────
+                // Centered, prominent, large-scale, authoritative.
+                if (_logoOpacity.value > 0.01)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── HERO LOGO (Large, majestic app emblem) ────────
+                          Transform.scale(
+                            scale: _logoScale.value,
+                            child: Opacity(
+                              opacity: _logoOpacity.value.clamp(0.0, 1.0),
+                              child: _HeroLogoEmblem(
+                                glowProgress: _logoGlow.value,
+                                size: size.shortestSide * 0.34, // ~130-145dp
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          // ── HERO WORDMARK "AquaVerse" ─────────────────────
+                          Transform.translate(
+                            offset: Offset(0, _wordmarkSlide.value),
+                            child: Opacity(
+                              opacity: _wordmarkOpacity.value.clamp(0.0, 1.0),
+                              child: const Text(
+                                'AquaVerse',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'Palatino',
+                                  fontFamilyFallback: [
+                                    'Palatino Linotype',
+                                    'Georgia',
+                                    'serif'
+                                  ],
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 0.8,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // ── LOCALIZED TAGLINE ─────────────────────────────
+                          Transform.translate(
+                            offset: Offset(0, _taglineSlide.value),
+                            child: Opacity(
+                              opacity: _taglineOpacity.value.clamp(0.0, 1.0),
+                              child: Text(
+                                tagline,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                  letterSpacing: 0.3,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // ── 6. Bottom Brand Indicator ───────────────────────────────
+                Positioned(
+                  bottom: MediaQuery.paddingOf(context).bottom + 20,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Opacity(
+                      opacity: _taglineOpacity.value.clamp(0.0, 1.0) * 0.65,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF14B8A6),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'AI FOR SUSTAINABLE AQUACULTURE',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.4,
+                              color: Colors.white.withValues(alpha: 0.65),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 }
 
 // =============================================================================
-// SPLASH CANVAS — Stateless layout widget driven by animation values
+// HERO LOGO EMBLEM
+// Renders the authentic high-resolution AquaVerse app icon with an ambient
+// aqua glow, rounded corner styling, and subtle glass depth border.
 // =============================================================================
 
-class _SplashCanvas extends StatelessWidget {
-  final Size size;
-  final bool reducedMotion;
-  final double seedScale;
-  final double seedOpacity;
-  final double orbsOut;
-  final double orbsIn;
-  final double orbSpinAngle;
-  final double markOpacity;
-  final double markScale;
-  final double wordOpacity;
-  final double wordSlide;
-  final double taglineOpacity;
-  final String tagline;
+class _HeroLogoEmblem extends StatelessWidget {
+  final double glowProgress;
+  final double size;
 
-  const _SplashCanvas({
+  const _HeroLogoEmblem({
+    required this.glowProgress,
     required this.size,
-    required this.reducedMotion,
-    required this.seedScale,
-    required this.seedOpacity,
-    required this.orbsOut,
-    required this.orbsIn,
-    required this.orbSpinAngle,
-    required this.markOpacity,
-    required this.markScale,
-    required this.wordOpacity,
-    required this.wordSlide,
-    required this.taglineOpacity,
-    required this.tagline,
   });
-
-  // ── Orb definitions: 4 aquaculture-themed circles ────────────────────────
-  // Positions follow Slack-style: top-center, left-center, right-center, bottom-center
-  // i.e. a cross/diamond arrangement
-  static const List<_OrbDef> _orbs = [
-    _OrbDef(                                      // TOP — Water / Pond
-      angle: -math.pi / 2,                        // up
-      primaryColor: Color(0xFF27AFC0),             // primary500 aqua
-      secondaryColor: Color(0xFF8DD9DB),           // primary300
-      painter: _OrbType.water,
-    ),
-    _OrbDef(                                      // LEFT — Fish / Aquaculture
-      angle: math.pi,                             // left
-      primaryColor: Color(0xFF35A58A),             // green600 success
-      secondaryColor: Color(0xFFCDEEE3),           // green200
-      painter: _OrbType.fish,
-    ),
-    _OrbDef(                                      // RIGHT — Data / AI
-      angle: 0,                                   // right
-      primaryColor: Color(0xFF4BA8C1),             // mountain500
-      secondaryColor: Color(0xFFCBEAF0),           // mountain200
-      painter: _OrbType.data,
-    ),
-    _OrbDef(                                      // BOTTOM — Harvest / Grain
-      angle: math.pi / 2,                         // down
-      primaryColor: Color(0xFF176F9C),             // mountain700
-      secondaryColor: Color(0xFF8DD9DB),           // primary300
-      painter: _OrbType.harvest,
-    ),
-  ];
 
   @override
   Widget build(BuildContext context) {
-    final cx = size.width  * 0.5;
-    final cy = size.height * 0.5;
+    final clampedSize = size.clamp(120.0, 150.0);
 
-    // Orb radius: 15% of shortest side
-    final orbR = size.shortestSide * 0.15;
-
-    // Orbit radius: how far orbs travel from center
-    final orbitR = size.shortestSide * 0.36;
-
-    // Orbs converge as orbsIn approaches 1
-    // orbsOut drives outward spread: 0 = center → 1 = orbit
-    // orbsIn drives convergence: 0 = orbit → 1 = center
-    final effectiveOrbit = orbitR * (orbsOut - orbsIn).clamp(0.0, 1.0);
-
-    // Orbs visible when out>0 and before mark is fully visible
-    final orbsVisible = orbsOut > 0.0 && markOpacity < 0.95;
-
-    // Seed visible: only during the initial burst outward
-    final seedVisible = seedOpacity > 0.01 && orbsOut < 0.1;
-
-    return Stack(
-      children: [
-        // ── Deep ocean background ──────────────────────────────────────────
-        Positioned.fill(
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF0A2F50), // deep ocean top
-                  Color(0xFF124C73), // mountain900 mid
-                  Color(0xFF0D3D5E), // slightly darker bottom
-                ],
-                stops: [0.0, 0.5, 1.0],
+    return SizedBox(
+      width: clampedSize + 48,
+      height: clampedSize + 48,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Ambient aquatic bloom glow behind logo
+          Opacity(
+            opacity: (glowProgress * 0.85).clamp(0.0, 1.0),
+            child: Container(
+              width: clampedSize + 36,
+              height: clampedSize + 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF14B8A6).withValues(alpha: 0.45),
+                    const Color(0xFF27AFC0).withValues(alpha: 0.20),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.55, 1.0],
+                ),
               ),
             ),
           ),
-        ),
 
-        // ── Subtle wave shimmer (painted once, very cheap) ─────────────────
-        Positioned.fill(
-          child: CustomPaint(
-            painter: _WaveBackgroundPainter(
-              orbSpinAngle * 0.1, // very slow wave undulation
+          // Authentic AquaVerse App Icon
+          Container(
+            width: clampedSize,
+            height: clampedSize,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(clampedSize * 0.24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 28,
+                  offset: const Offset(0, 12),
+                ),
+                BoxShadow(
+                  color: const Color(0xFF0E9488).withValues(alpha: 0.30 * glowProgress),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(clampedSize * 0.24),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/icons/app_icon.png',
+                    fit: BoxFit.cover,
+                  ),
+                  // Subtle top-edge glass rim highlight
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(clampedSize * 0.24),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.28),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+}
 
-        // ── Seed dot ──────────────────────────────────────────────────────
-        if (seedVisible)
+// =============================================================================
+// CARDINAL DROPLETS (4 PURE LIQUID ORBS)
+// Clean minimalist liquid glass beads inspired by the Slack reference motion.
+// No cartoon illustrations or clip art.
+// =============================================================================
+
+class _CardinalDroplets extends StatelessWidget {
+  final Size size;
+  final double spread;
+  final double converge;
+  final double floatOffset;
+
+  const _CardinalDroplets({
+    required this.size,
+    required this.spread,
+    required this.converge,
+    required this.floatOffset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cx = size.width * 0.5;
+    final cy = size.height * 0.5;
+
+    // Radius of the orbit: reaches ~85dp, then snaps back to center
+    final maxOrbit = size.shortestSide * 0.25;
+    final currentOrbit = maxOrbit * (spread - converge).clamp(0.0, 1.0);
+
+    // Droplet size: ~26-30dp
+    const dropletR = 14.0;
+
+    // 4 Cardinal positions: North, East, South, West
+    // Each with its own brand-aligned liquid gradient
+    final droplets = [
+      // Top (North) — Vibrant Aqua
+      _DropletData(
+        offset: Offset(cx, cy - currentOrbit - floatOffset),
+        colors: const [Color(0xFF55C4C8), Color(0xFF1495AE)],
+        shadowColor: const Color(0xFF27AFC0),
+      ),
+      // Right (East) — Luminous Teal
+      _DropletData(
+        offset: Offset(cx + currentOrbit + floatOffset * 0.7, cy),
+        colors: const [Color(0xFF2DD4BF), Color(0xFF0E9488)],
+        shadowColor: const Color(0xFF14B8A6),
+      ),
+      // Bottom (South) — Deep Ocean Blue
+      _DropletData(
+        offset: Offset(cx, cy + currentOrbit + floatOffset),
+        colors: const [Color(0xFF4BA8C1), Color(0xFF124C73)],
+        shadowColor: const Color(0xFF176F9C),
+      ),
+      // Left (West) — Vital Spring Green
+      _DropletData(
+        offset: Offset(cx - currentOrbit - floatOffset * 0.7, cy),
+        colors: const [Color(0xFF34D399), Color(0xFF059669)],
+        shadowColor: const Color(0xFF10B981),
+      ),
+    ];
+
+    return Stack(
+      children: [
+        for (final d in droplets)
           Positioned(
-            left: cx - 8,
-            top:  cy - 8,
-            child: Opacity(
-              opacity: seedOpacity.clamp(0.0, 1.0),
-              child: Transform.scale(
-                scale: seedScale,
+            left: d.offset.dx - dropletR,
+            top: d.offset.dy - dropletR,
+            child: Container(
+              width: dropletR * 2,
+              height: dropletR * 2,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: d.colors,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: d.shadowColor.withValues(alpha: 0.55),
+                    blurRadius: 14,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Center(
+                // Specular liquid reflection dot
                 child: Container(
-                  width: 16,
-                  height: 16,
+                  width: 5,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 5, right: 5),
                   decoration: const BoxDecoration(
-                    color: Colors.white,
+                    color: Colors.white70,
                     shape: BoxShape.circle,
                   ),
                 ),
               ),
             ),
           ),
-
-        // ── 4 Orbs ────────────────────────────────────────────────────────
-        if (orbsVisible)
-          for (final orb in _orbs) ...[
-            _buildOrb(
-              cx: cx,
-              cy: cy,
-              orb: orb,
-              orbitR: effectiveOrbit,
-              orbR: orbR,
-              spinAngle: orbSpinAngle,
-              reducedMotion: reducedMotion,
-            ),
-          ],
-
-        // ── Logo mark + wordmark (centered, slightly above center) ─────────
-        if (markOpacity > 0.0)
-          Positioned.fill(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Logo mark + wordmark row
-                  Opacity(
-                    opacity: markOpacity.clamp(0.0, 1.0),
-                    child: Transform.scale(
-                      scale: markScale,
-                      child: _buildLogoRow(
-                        wordOpacity: wordOpacity,
-                        wordSlide: wordSlide,
-                        orbR: orbR,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Tagline
-                  Opacity(
-                    opacity: taglineOpacity.clamp(0.0, 1.0),
-                    child: Text(
-                      tagline,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.white70,
-                        letterSpacing: 0.4,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildOrb({
-    required double cx,
-    required double cy,
-    required _OrbDef orb,
-    required double orbitR,
-    required double orbR,
-    required double spinAngle,
-    required bool reducedMotion,
-  }) {
-    final x = cx + orbitR * math.cos(orb.angle);
-    final y = cy + orbitR * math.sin(orb.angle) * 0.85; // slight elliptic orbit
-
-    return Positioned(
-      left: x - orbR,
-      top:  y - orbR,
-      child: SizedBox(
-        width:  orbR * 2,
-        height: orbR * 2,
-        child: CustomPaint(
-          painter: _OrbPainter(
-            orb: orb,
-            spinAngle: reducedMotion ? 0.0 : spinAngle,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLogoRow({
-    required double wordOpacity,
-    required double wordSlide,
-    required double orbR,
-  }) {
-    // Logo mark: two overlapping circles (water droplet / aqua orb)
-    // Left circle = solid aqua, right = translucent
-    const markSize = 48.0;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Logo mark
-        SizedBox(
-          width: markSize,
-          height: markSize,
-          child: CustomPaint(
-            painter: _LogoMarkPainter(),
-          ),
-        ),
-
-        const SizedBox(width: 10),
-
-        // Wordmark: clips from right and slides in
-        ClipRect(
-          child: Opacity(
-            opacity: wordOpacity.clamp(0.0, 1.0),
-            child: Transform.translate(
-              offset: Offset(wordSlide * 60, 0),
-              child: const Text(
-                'AquaVerse',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                  height: 1.0,
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
 }
 
-// =============================================================================
-// ORB DEFINITION
-// =============================================================================
+class _DropletData {
+  final Offset offset;
+  final List<Color> colors;
+  final Color shadowColor;
 
-enum _OrbType { water, fish, data, harvest }
-
-class _OrbDef {
-  final double angle;
-  final Color primaryColor;
-  final Color secondaryColor;
-  final _OrbType painter;
-
-  const _OrbDef({
-    required this.angle,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.painter,
+  const _DropletData({
+    required this.offset,
+    required this.colors,
+    required this.shadowColor,
   });
 }
 
 // =============================================================================
-// ORB PAINTER — Each orb is a circle with a distinct aquaculture illustration
-// Painted purely with Canvas primitives (no images, no Lottie, lightweight)
+// OCEAN BACKDROP
+// Premium deep ocean gradient with soft aquatic atmospheric lighting
 // =============================================================================
 
-class _OrbPainter extends CustomPainter {
-  final _OrbDef orb;
-  final double spinAngle;
-
-  const _OrbPainter({required this.orb, required this.spinAngle});
+class _OceanBackdrop extends StatelessWidget {
+  const _OceanBackdrop();
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final r = size.width / 2;
-    final center = Offset(r, r);
-
-    // Clip to circle
-    canvas.save();
-    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: r)));
-
-    // Background fill (radial gradient for depth)
-    final bgPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.3),
-        radius: 1.0,
-        colors: [
-          orb.primaryColor,
-          Color.lerp(orb.primaryColor, const Color(0xFF0A2F50), 0.55)!,
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: r));
-    canvas.drawCircle(center, r, bgPaint);
-
-    // Inner content illustration (type-specific)
-    switch (orb.painter) {
-      case _OrbType.water:
-        _paintWaterOrb(canvas, center, r, orb.secondaryColor, spinAngle);
-      case _OrbType.fish:
-        _paintFishOrb(canvas, center, r, orb.secondaryColor, spinAngle);
-      case _OrbType.data:
-        _paintDataOrb(canvas, center, r, orb.secondaryColor, spinAngle);
-      case _OrbType.harvest:
-        _paintHarvestOrb(canvas, center, r, orb.secondaryColor, spinAngle);
-    }
-
-    canvas.restore();
-
-    // Subtle rim light
-    final rimPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.18)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawCircle(center, r - 0.75, rimPaint);
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.0, -0.15),
+          radius: 1.25,
+          colors: [
+            Color(0xFF0E3854), // Ambient aqua center
+            Color(0xFF0A263D), // Mid ocean blue
+            Color(0xFF061A2B), // Deep abyss foundation
+          ],
+          stops: [0.0, 0.55, 1.0],
+        ),
+      ),
+    );
   }
-
-  // ── Water orb: animated wave with floating bubbles ─────────────────────
-  void _paintWaterOrb(
-      Canvas canvas, Offset center, double r, Color accent, double angle) {
-    // Wave band across lower portion
-    final waveY = center.dy + r * 0.15 + math.sin(angle) * r * 0.06;
-    final wavePaint = Paint()
-      ..color = accent.withValues(alpha: 0.45)
-      ..style = PaintingStyle.fill;
-    final wavePath = Path();
-    wavePath.moveTo(center.dx - r, waveY);
-    for (double x = -r; x <= r; x += 4) {
-      wavePath.lineTo(
-        center.dx + x,
-        waveY + math.sin(angle + x * 0.12) * r * 0.05,
-      );
-    }
-    wavePath.lineTo(center.dx + r, center.dy + r);
-    wavePath.lineTo(center.dx - r, center.dy + r);
-    wavePath.close();
-    canvas.drawPath(wavePath, wavePaint);
-
-    // 3 bubbles floating upward (animated by angle)
-    final bubblePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.30);
-    final positions = [
-      Offset(center.dx - r * 0.3, center.dy + r * 0.3 - (angle % (math.pi * 2)) / (math.pi * 2) * r * 0.6),
-      Offset(center.dx + r * 0.2, center.dy + r * 0.5 - ((angle + 0.7) % (math.pi * 2)) / (math.pi * 2) * r * 0.7),
-      Offset(center.dx - r * 0.1, center.dy + r * 0.4 - ((angle + 1.4) % (math.pi * 2)) / (math.pi * 2) * r * 0.5),
-    ];
-    for (final p in positions) {
-      canvas.drawCircle(p, r * 0.05, bubblePaint);
-    }
-
-    // Water surface shimmer line
-    final shimmerPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.55)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    final shimmerPath = Path();
-    shimmerPath.moveTo(center.dx - r * 0.4, waveY - r * 0.04);
-    shimmerPath.quadraticBezierTo(
-      center.dx,
-      waveY + math.sin(angle + 1.0) * r * 0.04,
-      center.dx + r * 0.4,
-      waveY - r * 0.04,
-    );
-    canvas.drawPath(shimmerPath, shimmerPaint);
-  }
-
-  // ── Fish orb: stylized fish silhouette, tail fin animated ─────────────
-  void _paintFishOrb(
-      Canvas canvas, Offset center, double r, Color accent, double angle) {
-    // Fish body (ellipse)
-    final bodyPaint = Paint()
-      ..color = accent.withValues(alpha: 0.70)
-      ..style = PaintingStyle.fill;
-    final bodyRect = Rect.fromCenter(
-      center: center.translate(-r * 0.05, 0),
-      width: r * 1.0,
-      height: r * 0.55,
-    );
-    canvas.drawOval(bodyRect, bodyPaint);
-
-    // Tail fin (triangle, rotates slightly)
-    final tailAngle = math.sin(angle * 1.5) * 0.25;
-    final tailPaint = Paint()
-      ..color = accent.withValues(alpha: 0.55)
-      ..style = PaintingStyle.fill;
-    final fishRight = center.dx + r * 0.40;
-    final tailPath = Path();
-    tailPath.moveTo(fishRight, center.dy);
-    tailPath.lineTo(
-      fishRight + r * 0.30 * math.cos(tailAngle),
-      center.dy - r * 0.25 * math.sin(tailAngle + 0.6),
-    );
-    tailPath.lineTo(
-      fishRight + r * 0.30 * math.cos(-tailAngle),
-      center.dy + r * 0.25 * math.sin(tailAngle + 0.6),
-    );
-    tailPath.close();
-    canvas.drawPath(tailPath, tailPaint);
-
-    // Eye
-    final eyePaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.80);
-    canvas.drawCircle(center.translate(-r * 0.18, -r * 0.04), r * 0.06, eyePaint);
-    final pupilPaint = Paint()..color = const Color(0xFF0A2F50);
-    canvas.drawCircle(center.translate(-r * 0.17, -r * 0.04), r * 0.03, pupilPaint);
-
-    // Fin on top
-    final finPaint = Paint()
-      ..color = accent.withValues(alpha: 0.45)
-      ..style = PaintingStyle.fill;
-    final finPath = Path();
-    finPath.moveTo(center.dx - r * 0.15, center.dy - r * 0.28);
-    finPath.lineTo(center.dx + r * 0.10, center.dy - r * 0.50);
-    finPath.lineTo(center.dx + r * 0.15, center.dy - r * 0.28);
-    finPath.close();
-    canvas.drawPath(finPath, finPaint);
-  }
-
-  // ── Data orb: grid lines + animated data pulse bars ────────────────────
-  void _paintDataOrb(
-      Canvas canvas, Offset center, double r, Color accent, double angle) {
-    // Light grid
-    final gridPaint = Paint()
-      ..color = accent.withValues(alpha: 0.20)
-      ..strokeWidth = 0.8;
-    for (double i = -r; i <= r; i += r * 0.28) {
-      canvas.drawLine(
-        Offset(center.dx + i, center.dy - r),
-        Offset(center.dx + i, center.dy + r),
-        gridPaint,
-      );
-      canvas.drawLine(
-        Offset(center.dx - r, center.dy + i),
-        Offset(center.dx + r, center.dy + i),
-        gridPaint,
-      );
-    }
-
-    // Bar chart: 3 animated bars
-    final barPaint = Paint()..style = PaintingStyle.fill;
-    final barData = [
-      (offset: -r * 0.28, h: 0.35 + 0.12 * math.sin(angle)),
-      (offset:  0.0,       h: 0.55 + 0.10 * math.sin(angle + 1.0)),
-      (offset:  r * 0.28,  h: 0.45 + 0.15 * math.sin(angle + 2.0)),
-    ];
-    final bw = r * 0.18;
-    for (final b in barData) {
-      final barH = r * b.h;
-      final barRect = Rect.fromLTWH(
-        center.dx + b.offset - bw / 2,
-        center.dy + r * 0.25 - barH,
-        bw,
-        barH,
-      );
-      barPaint.color = accent.withValues(alpha: 0.75);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(barRect, Radius.circular(bw * 0.4)),
-        barPaint,
-      );
-    }
-
-    // Pulse ring
-    final pulseR = r * (0.25 + 0.08 * math.sin(angle * 2));
-    final pulsePaint = Paint()
-      ..color = accent.withValues(alpha: 0.35)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    canvas.drawCircle(center.translate(0, -r * 0.18), pulseR, pulsePaint);
-  }
-
-  // ── Harvest orb: stylized grain/paddy icon with leaf ──────────────────
-  void _paintHarvestOrb(
-      Canvas canvas, Offset center, double r, Color accent, double angle) {
-    // Stem
-    final stemPaint = Paint()
-      ..color = accent.withValues(alpha: 0.70)
-      ..strokeWidth = r * 0.06
-      ..strokeCap = StrokeCap.round;
-    final sway = math.sin(angle) * r * 0.06;
-    canvas.drawLine(
-      Offset(center.dx + sway, center.dy + r * 0.40),
-      Offset(center.dx + sway, center.dy - r * 0.30),
-      stemPaint,
-    );
-
-    // Grain head (cluster of ovals)
-    final grainPaint = Paint()
-      ..color = accent.withValues(alpha: 0.80)
-      ..style = PaintingStyle.fill;
-    final grainPositions = [
-      Offset(center.dx + sway,            center.dy - r * 0.28),
-      Offset(center.dx + sway - r * 0.14, center.dy - r * 0.18),
-      Offset(center.dx + sway + r * 0.14, center.dy - r * 0.18),
-      Offset(center.dx + sway - r * 0.10, center.dy - r * 0.08),
-      Offset(center.dx + sway + r * 0.10, center.dy - r * 0.08),
-    ];
-    for (final gp in grainPositions) {
-      canvas.drawOval(
-        Rect.fromCenter(center: gp, width: r * 0.16, height: r * 0.22),
-        grainPaint,
-      );
-    }
-
-    // Leaf (bezier arc to the left of stem)
-    final leafPaint = Paint()
-      ..color = accent.withValues(alpha: 0.55)
-      ..style = PaintingStyle.fill;
-    final leafPath = Path();
-    leafPath.moveTo(center.dx + sway, center.dy + r * 0.05);
-    leafPath.quadraticBezierTo(
-      center.dx + sway - r * 0.35,
-      center.dy - r * 0.12,
-      center.dx + sway - r * 0.20,
-      center.dy - r * 0.22,
-    );
-    leafPath.quadraticBezierTo(
-      center.dx + sway - r * 0.05,
-      center.dy - r * 0.10,
-      center.dx + sway,
-      center.dy + r * 0.05,
-    );
-    leafPath.close();
-    canvas.drawPath(leafPath, leafPaint);
-  }
-
-  @override
-  bool shouldRepaint(_OrbPainter oldDelegate) =>
-      oldDelegate.spinAngle != spinAngle;
 }
 
 // =============================================================================
-// LOGO MARK PAINTER
-// AquaVerse logo mark: two overlapping circles — left solid aqua, right ghost.
-// Adapted from the app_icon.png style.
+// WATER RIPPLES PAINTER
+// Fine concentric ripples that expand outwards from center like water droplets
 // =============================================================================
 
-class _LogoMarkPainter extends CustomPainter {
-  const _LogoMarkPainter();
+class _WaterRipplesPainter extends CustomPainter {
+  final double progress;
+  final double spread;
+
+  const _WaterRipplesPainter({
+    required this.progress,
+    required this.spread,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final r = size.width / 2;
+    if (spread <= 0.05) return;
 
-    // Left circle: solid gradient aqua
-    final leftPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF2E8B77), Color(0xFF27AFC0)],
-      ).createShader(Rect.fromCircle(center: Offset(r * 0.65, r), radius: r * 0.55));
-    canvas.drawCircle(Offset(r * 0.65, r), r * 0.55, leftPaint);
+    final center = Offset(size.width * 0.5, size.height * 0.5);
+    final maxRadius = size.shortestSide * 0.45;
 
-    // Right circle: translucent white (water shine)
-    final rightPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.35);
-    canvas.drawCircle(Offset(r * 1.25, r), r * 0.45, rightPaint);
-
-    // Intersection highlight: bright aqua
-    final intersectPaint = Paint()
-      ..color = const Color(0xFF8DD9DB).withValues(alpha: 0.60)
-      ..blendMode = BlendMode.screen;
-    canvas.drawCircle(Offset(r * 0.95, r), r * 0.22, intersectPaint);
-
-    // Rim
-    final rimPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.25)
+    final ripplePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(Offset(r * 0.65, r), r * 0.55, rimPaint);
-  }
-
-  @override
-  bool shouldRepaint(_LogoMarkPainter _) => false;
-}
-
-// =============================================================================
-// WAVE BACKGROUND PAINTER — Very cheap subtle underwater animation
-// =============================================================================
-
-class _WaveBackgroundPainter extends CustomPainter {
-  final double phase;
-
-  const _WaveBackgroundPainter(this.phase);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF1495AE).withValues(alpha: 0.06)
-      ..style = PaintingStyle.fill;
+      ..strokeWidth = 1.2;
 
     for (int i = 0; i < 3; i++) {
-      final wavePhase = phase + i * (math.pi * 2 / 3);
-      final waveY = size.height * (0.25 + i * 0.28);
-      final path = Path();
-      path.moveTo(0, waveY);
-      for (double x = 0; x <= size.width; x += 8) {
-        path.lineTo(
-          x,
-          waveY + math.sin(wavePhase + x / size.width * math.pi * 4) * 8,
-        );
+      final waveOffset = (spread * 1.5 - i * 0.28).clamp(0.0, 1.0);
+      if (waveOffset > 0.0 && waveOffset < 1.0) {
+        final currentR = waveOffset * maxRadius;
+        final opacity = ((1.0 - waveOffset) * 0.22).clamp(0.0, 1.0);
+
+        ripplePaint.color = const Color(0xFF27AFC0).withValues(alpha: opacity);
+        canvas.drawCircle(center, currentR, ripplePaint);
       }
-      path.lineTo(size.width, size.height);
-      path.lineTo(0, size.height);
-      path.close();
-      canvas.drawPath(path, paint);
     }
   }
 
   @override
-  bool shouldRepaint(_WaveBackgroundPainter old) => old.phase != phase;
+  bool shouldRepaint(_WaterRipplesPainter old) =>
+      old.progress != progress || old.spread != spread;
 }

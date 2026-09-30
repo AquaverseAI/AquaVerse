@@ -12,7 +12,6 @@ void main() {
   });
 
   testWidgets('AquaVerseApp initializes and renders splash screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const ProviderScope(child: AquaVerseApp()));
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(
       ProviderScope(

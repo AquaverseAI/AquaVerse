@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
@@ -7,40 +8,39 @@ import '../../l10n/app_localizations.dart';
 import 'splash_controller.dart';
 
 // =============================================================================
-// TIMING CONSTANTS — Derived from frame-by-frame analysis of reference video
-// (see splash_frame_analysis.md for full breakdown)
+// TIMING CONSTANTS
 //
-// Reference: Planoo splash, 6fps extraction, frames 4–30 = t≈500ms→4833ms
+// Adapted from Slack-style reference video (Splash screen reference.mp4):
 //
-// Phase 1 — Blob orbit loader:       t=0ms      → t=2000ms
-// Phase 2 — Blobs merge + expand:    t=2000ms   → t=3833ms
-// Phase 3 — Background fill settle:  t=3833ms   → t=4000ms
-// Phase 4 — Logo mark fade-in:       t=4000ms   → t=4300ms
-// Phase 5 — Text reveal top-down:    t=4300ms   → t=4833ms (each line +166ms)
-// Phase 6 — Button resolves:         t=4300ms   → t=4600ms
-// Total:                             ≈4833ms
+// STATE 01 — Solid ocean background:               t=0ms     → t=400ms
+// STATE 02 — Seed dot appears at center:           t=400ms   → t=700ms
+// STATE 03 — 4 orbs burst outward to positions:   t=700ms   → t=1600ms
+// STATE 04 — Orbs animate content inside:         t=1600ms  → t=2800ms
+// STATE 05 — Orbs converge back to center:        t=2800ms  → t=3600ms
+// STATE 06 — Logo mark assembles from orbs:       t=3500ms  → t=4000ms
+// STATE 07 — Wordmark letters fly in right→left:  t=3900ms  → t=4700ms
+// STATE 08 — Tagline fades in:                    t=4600ms  → t=5000ms
+// STATE 09 — Static hold then navigate:           t=5000ms  → t=5600ms
+//
+// Total controller duration: 5600ms
 // =============================================================================
 
-/// Total controller duration covering all phases.
-const int kTotalMs = 5200;
+const int _kTotalMs = 5600;
 
-// Phase boundaries as fractions of [kTotalMs]
-const double _kBlobOrbitEnd    = 2000 / kTotalMs; // 0.385
-const double _kExpandStart     = 1800 / kTotalMs; // 0.346 — merge starts early
-const double _kExpandEnd       = 3833 / kTotalMs; // 0.737 — fill complete
-const double _kLogoStart       = 3900 / kTotalMs; // 0.750
-const double _kLogoEnd         = 4200 / kTotalMs; // 0.808
-const double _kLine1Start      = 4100 / kTotalMs; // 0.789
-const double _kLine1End        = 4400 / kTotalMs; // 0.846
-const double _kLine2Start      = 4250 / kTotalMs; // 0.817
-const double _kLine2End        = 4600 / kTotalMs; // 0.885
-const double _kLine3Start      = 4400 / kTotalMs; // 0.846
-const double _kLine3End        = 4833 / kTotalMs; // 0.930
-const double _kButtonStart     = 4100 / kTotalMs; // 0.789
-const double _kButtonEnd       = 4600 / kTotalMs; // 0.885
-
-/// Max sigma for blur-to-focus sweep (capped for Android Go 2GB raster budget).
-const double kMaxBlurSigma = 12.0;
+// Phase fractions (out of _kTotalMs)
+const double _kSeedStart        = 400  / _kTotalMs;
+const double _kSeedEnd          = 700  / _kTotalMs;
+const double _kOrbsOutStart     = 700  / _kTotalMs;
+const double _kOrbsOutEnd       = 1600 / _kTotalMs;
+const double _kOrbsInStart      = 2800 / _kTotalMs;
+const double _kOrbsInEnd        = 3600 / _kTotalMs;
+const double _kMarkStart        = 3500 / _kTotalMs;
+const double _kMarkEnd          = 4000 / _kTotalMs;
+const double _kWordStart        = 3900 / _kTotalMs;
+const double _kWordEnd          = 4700 / _kTotalMs;
+const double _kTaglineStart     = 4600 / _kTotalMs;
+const double _kTaglineEnd       = 5000 / _kTotalMs;
+const double _kNavigateAt       = 5400 / _kTotalMs;
 
 // =============================================================================
 // SPLASH SCREEN
@@ -58,441 +58,166 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   // Main timeline controller
   late final AnimationController _ctrl;
 
-  // --- Phase 1: Blob orbit ---
-  late final Animation<double> _orbitAngle; // 0→2π continuously during phase 1
+  // Seed dot
+  late final Animation<double> _seedScale;
+  late final Animation<double> _seedOpacity;
 
-  // --- Phase 2: Blob expand → background fill ---
-  late final Animation<double> _expandProgress; // 0→1
+  // Orb burst outward (0 = center, 1 = final orbit position)
+  late final Animation<double> _orbsOut;
 
-  // --- Phase 3: Logo mark ---
-  late final Animation<double> _logoOpacity;
+  // Orbs hold — individual rotation per orb for content animation
+  late final AnimationController _orbSpinCtrl;
 
-  // --- Phase 4: Text lines (top-down reveal, one at a time) ---
-  late final Animation<double> _line1Opacity;
-  late final Animation<double> _line1Blur;
-  late final Animation<double> _line2Opacity;
-  late final Animation<double> _line2Blur;
-  late final Animation<double> _line3Opacity;
-  late final Animation<double> _line3Blur;
+  // Orbs converge back (0 = orbit, 1 = center merged)
+  late final Animation<double> _orbsIn;
 
-  // --- Phase 5: Button resolve ---
-  late final Animation<double> _buttonProgress;
+  // Logo mark: as orbs converge, the mark appears
+  late final Animation<double> _markOpacity;
+  late final Animation<double> _markScale;
 
-  bool _isLoadingRoute = false;
+  // Wordmark letter-by-letter slide in
+  late final Animation<double> _wordOpacity;
+  late final Animation<double> _wordSlide;
+
+  // Tagline
+  late final Animation<double> _taglineOpacity;
+
+  bool _hasNavigated = false;
 
   @override
   void initState() {
     super.initState();
 
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: kTotalMs),
+      duration: const Duration(milliseconds: _kTotalMs),
     );
 
-    // ── Orbit angle: continuously rotates during blob phase ──────────────────
-    // Maps 0→_kBlobOrbitEnd to 0→2π (one full revolution visible to user)
-    _orbitAngle = Tween<double>(begin: 0, end: math.pi * 2).animate(
+    // Orb spin: continuous 360° during hold phase
+    _orbSpinCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+
+    // ── Seed dot ──────────────────────────────────────────────────────────
+    _seedScale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _ctrl,
-        curve: Interval(0.0, _kBlobOrbitEnd, curve: Curves.linear),
+        curve: Interval(_kSeedStart, _kSeedEnd, curve: Curves.easeOut),
+      ),
+    );
+    _seedOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Interval(_kSeedStart, _kSeedEnd, curve: Curves.easeIn),
       ),
     );
 
-    // ── Expand progress: 0=two blobs at rest, 1=full-screen fill ─────────────
-    _expandProgress = CurvedAnimation(
+    // ── Orbs burst outward ─────────────────────────────────────────────────
+    _orbsOut = CurvedAnimation(
       parent: _ctrl,
-      curve: Interval(_kExpandStart, _kExpandEnd, curve: Curves.easeInOut),
+      curve: Interval(_kOrbsOutStart, _kOrbsOutEnd, curve: Curves.easeOutBack),
     );
 
-    // ── Logo opacity ─────────────────────────────────────────────────────────
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLogoStart, _kLogoEnd, curve: Curves.easeOut),
-      ),
-    );
-
-    // ── Text line 1 ("Better") ───────────────────────────────────────────────
-    _line1Blur = Tween<double>(begin: kMaxBlurSigma, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLine1Start, _kLine1End, curve: Curves.easeOutQuart),
-      ),
-    );
-    _line1Opacity = Tween<double>(begin: 0.0, end: 0.55).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLine1Start, _kLine1End, curve: Curves.easeOut),
-      ),
-    );
-
-    // ── Text lines 2–3 ("AquaVerse AI") ─────────────────────────────────────
-    _line2Blur = Tween<double>(begin: kMaxBlurSigma, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLine2Start, _kLine2End, curve: Curves.easeOutQuart),
-      ),
-    );
-    _line2Opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLine2Start, _kLine2End, curve: Curves.easeOut),
-      ),
-    );
-
-    // ── Text line 4–5 (tagline — "Better decisions, better harvest.") ────────
-    _line3Blur = Tween<double>(begin: kMaxBlurSigma, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLine3Start, _kLine3End, curve: Curves.easeOutQuart),
-      ),
-    );
-    _line3Opacity = Tween<double>(begin: 0.0, end: 0.70).animate(
-      CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(_kLine3Start, _kLine3End, curve: Curves.easeOut),
-      ),
-    );
-
-    // ── Button ghost→solid ───────────────────────────────────────────────────
-    _buttonProgress = CurvedAnimation(
+    // ── Orbs converge back ─────────────────────────────────────────────────
+    _orbsIn = CurvedAnimation(
       parent: _ctrl,
-      curve: Interval(_kButtonStart, _kButtonEnd, curve: Curves.easeOut),
+      curve: Interval(_kOrbsInStart, _kOrbsInEnd, curve: Curves.easeInBack),
+    );
+
+    // ── Logo mark ──────────────────────────────────────────────────────────
+    _markOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Interval(_kMarkStart, _kMarkEnd, curve: Curves.easeOut),
+      ),
+    );
+    _markScale = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Interval(_kMarkStart, _kMarkEnd, curve: Curves.easeOutBack),
+      ),
+    );
+
+    // ── Wordmark ────────────────────────────────────────────────────────────
+    _wordOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Interval(_kWordStart, _kWordEnd, curve: Curves.easeOut),
+      ),
+    );
+    _wordSlide = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Interval(_kWordStart, _kWordEnd, curve: Curves.easeOut),
+      ),
+    );
+
+    // ── Tagline ─────────────────────────────────────────────────────────────
+    _taglineOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ctrl,
+        curve: Interval(_kTaglineStart, _kTaglineEnd, curve: Curves.easeOut),
+      ),
     );
 
     _ctrl.forward();
+
+    // Navigate when animation reaches the trigger point
+    _ctrl.addListener(_checkNavigate);
   }
 
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
+  void _checkNavigate() {
+    if (!_hasNavigated && _ctrl.value >= _kNavigateAt) {
+      _hasNavigated = true;
+      _navigateAway();
+    }
   }
 
-  Future<void> _handleGetStarted() async {
-    if (_isLoadingRoute) return;
-    setState(() => _isLoadingRoute = true);
+  Future<void> _navigateAway() async {
     final splashController = ref.read(splashControllerProvider);
     final targetRoute = await splashController.determineNextRoute();
     if (mounted) context.go(targetRoute);
   }
 
-  /// Blur-to-sharp text helper. Skips ImageFiltered when sigma ≤ 0.3
-  /// to avoid unnecessary raster overhead on low-end devices.
-  /// Clean, crisp text reveal helper without blurry image filters
-  Widget _buildBlurText({
-    required String text,
-    required TextStyle style,
-    required double sigma,
-    required double opacity,
-    TextAlign textAlign = TextAlign.left,
-  }) {
-    final clampedOpacity = opacity.clamp(0.0, 1.0);
-    return Opacity(
-      opacity: clampedOpacity,
-      child: Text(text, style: style, textAlign: textAlign),
-    );
+  @override
+  void dispose() {
+    _ctrl.removeListener(_checkNavigate);
+    _ctrl.dispose();
+    _orbSpinCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
+    final reducedMotion =
+        MediaQuery.of(context).disableAnimations;
     final l10n = AppLocalizations.of(context);
-    final taglineText =
-        l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest';
-
-    const palatinoFont = 'Palatino';
-    const palatinoFallbacks = ['Palatino Linotype', 'Georgia', 'serif'];
+    final tagline =
+        l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest.';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.mountain900,
       body: AnimatedBuilder(
-        animation: _ctrl,
+        animation: Listenable.merge([_ctrl, _orbSpinCtrl]),
         builder: (context, _) {
-          final expand = _expandProgress.value;   // 0→1
-          final orbit  = _orbitAngle.value;       // 0→2π
-
-          // ── Blob geometry ─────────────────────────────────────────────────
-          final blobRadius = size.shortestSide * 0.12; // 12% of screen width
-          final orbitRadius = blobRadius * 1.6;
-
-          // Blob positions: orbit contracts as expand increases
-          final contractedOrbit = orbitRadius * (1.0 - expand);
-          final cx = size.width  * 0.5;
-          final cy = size.height * 0.47;
-
-          final dot1x = cx + contractedOrbit * math.cos(orbit);
-          final dot1y = cy + contractedOrbit * math.sin(orbit) * 0.7;
-          final dot2x = cx + contractedOrbit * math.cos(orbit + math.pi);
-          final dot2y = cy + contractedOrbit * math.sin(orbit + math.pi) * 0.7;
-
-          // As expand→1, the blobs scale up to fill screen diagonally
-          final fillDiagonal = math.sqrt(
-            size.width * size.width + size.height * size.height,
-          );
-          final blob1W = blobRadius * 2 * (1 + expand * (fillDiagonal / (blobRadius * 2) - 1));
-          final blob1H = blob1W * (0.75 + 0.25 * expand);
-          final blob2W = blob1W * (1.0 - expand * 0.5);
-          final blob2H = blob1H * (1.0 - expand * 0.5);
-
-          final bgOpacity = expand.clamp(0.0, 1.0);
-
-          return Stack(
-            children: [
-              // ── White base ────────────────────────────────────────────────
-              Positioned.fill(child: Container(color: Colors.white)),
-
-              // ── Background Image Fill (appears as expand increases) ────
-              Positioned.fill(
-                child: Opacity(
-                  opacity: bgOpacity,
-                  child: Stack(
-                    children: [
-                      // High-res Aquaculture Background Image
-                      Positioned.fill(
-                        child: Image.asset(
-                          'assets/images/splash_background.png',
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                        ),
-                      ),
-                      // Deep contrast gradient backdrop for crystal-clear readability
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.50),
-                                Colors.black.withValues(alpha: 0.20),
-                                Colors.black.withValues(alpha: 0.65),
-                              ],
-                              stops: const [0.0, 0.40, 1.0],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ── Blob 1: solid seaGreen ───
-              if (expand < 0.95)
-                Positioned(
-                  left: dot1x - blob1W / 2,
-                  top:  dot1y - blob1H / 2,
-                  child: Opacity(
-                    opacity: (1.0 - expand).clamp(0.0, 1.0),
-                    child: Container(
-                      width:  blob1W,
-                      height: blob1H,
-                      decoration: BoxDecoration(
-                        color: AppColors.seaGreen,
-                        borderRadius: BorderRadius.circular(blob1W),
-                      ),
-                    ),
-                  ),
-                ),
-
-              // ── Blob 2: translucent brightMint ──
-              if (expand < 0.85)
-                Positioned(
-                  left: dot2x - blob2W / 2,
-                  top:  dot2y - blob2H / 2,
-                  child: Opacity(
-                    opacity: (0.45 * (1.0 - expand / 0.85)).clamp(0.0, 1.0),
-                    child: Container(
-                      width:  blob2W,
-                      height: blob2H,
-                      decoration: BoxDecoration(
-                        color: AppColors.brightMint,
-                        borderRadius: BorderRadius.circular(blob2W),
-                      ),
-                    ),
-                  ),
-                ),
-
-              // ── Text + Logo + Button (shown once background fills) ────────
-              if (expand > 0.65)
-                Positioned.fill(
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 16),
-
-                          // ── Logo mark (top-left) ────────────────────────
-                          Opacity(
-                            opacity: _logoOpacity.value,
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 32,
-                                  height: 20,
-                                  child: Stack(
-                                    children: [
-                                      Positioned(
-                                        left: 0,
-                                        top: 2,
-                                        child: Container(
-                                          width: 16,
-                                          height: 16,
-                                          decoration: const BoxDecoration(
-                                            color: Colors.white,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        left: 12,
-                                        top: 2,
-                                        child: Container(
-                                          width: 16,
-                                          height: 16,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.45),
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'AquaVerse',
-                                  style: TextStyle(
-                                    fontFamily: palatinoFont,
-                                    fontFamilyFallback: palatinoFallbacks,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const Spacer(flex: 2),
-
-                          // ── Line 1: lead-in ("Get ready to") ─────────
-                          _buildBlurText(
-                            text: 'Get ready to',
-                            sigma: _line1Blur.value,
-                            opacity: _line1Opacity.value,
-                            style: const TextStyle(
-                              fontFamily: palatinoFont,
-                              fontFamilyFallback: palatinoFallbacks,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                              height: 1.2,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-
-                          const SizedBox(height: 4),
-
-                          // ── Line 2: hero title ("AquaVerse AI") ──────────
-                          _buildBlurText(
-                            text: 'AquaVerse AI',
-                            sigma: _line2Blur.value,
-                            opacity: _line2Opacity.value,
-                            style: const TextStyle(
-                              fontFamily: palatinoFont,
-                              fontFamilyFallback: palatinoFallbacks,
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              height: 1.1,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-
-                          // ── Line 3: sub-headline ("your pond, your harvest.") ──
-                          _buildBlurText(
-                            text: 'your pond,\nyour harvest.',
-                            sigma: _line2Blur.value,
-                            opacity: _line2Opacity.value * 0.95,
-                            style: const TextStyle(
-                              fontFamily: palatinoFont,
-                              fontFamilyFallback: palatinoFallbacks,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              height: 1.15,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-
-                          const SizedBox(height: 14),
-
-                          // ── Line 4: tagline ─────────────────────────
-                          _buildBlurText(
-                            text: taglineText,
-                            sigma: _line3Blur.value,
-                            opacity: _line3Opacity.value,
-                            style: TextStyle(
-                              fontFamily: palatinoFont,
-                              fontFamilyFallback: palatinoFallbacks,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: 0.95),
-                              height: 1.3,
-                            ),
-                          ),
-
-                          const SizedBox(height: 6),
-
-                          // ── Line 5: dim descriptor ───
-                          _buildBlurText(
-                            text: 'AI-powered aquaculture for every farmer.',
-                            sigma: _line3Blur.value,
-                            opacity: _line3Opacity.value * 0.90,
-                            style: TextStyle(
-                              fontFamily: palatinoFont,
-                              fontFamilyFallback: palatinoFallbacks,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: 0.85),
-                              height: 1.4,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-
-                          const Spacer(flex: 3),
-
-                          // ── Loading indicator while routing ───────────────
-                          if (_isLoadingRoute)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Center(
-                                child: _TwoDotsLoader(
-                                  color1: AppColors.seaGreen,
-                                  color2: AppColors.brightMint.withValues(alpha: 0.5),
-                                ),
-                              ),
-                            ),
-
-                          // ── Get Started button ─────────────────────────
-                          _GetStartedButton(
-                            progress: _buttonProgress.value,
-                            isLoading: _isLoadingRoute,
-                            onTap: _handleGetStarted,
-                          ),
-
-                          const SizedBox(height: 28),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+          return _SplashCanvas(
+            size: size,
+            reducedMotion: reducedMotion,
+            seedScale: _seedScale.value,
+            seedOpacity: _seedOpacity.value,
+            orbsOut: _orbsOut.value,
+            orbsIn: _orbsIn.value,
+            orbSpinAngle: _orbSpinCtrl.value * math.pi * 2,
+            markOpacity: _markOpacity.value,
+            markScale: _markScale.value,
+            wordOpacity: _wordOpacity.value,
+            wordSlide: _wordSlide.value,
+            taglineOpacity: _taglineOpacity.value,
+            tagline: tagline,
           );
         },
       ),
@@ -501,162 +226,642 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 }
 
 // =============================================================================
-// GET STARTED BUTTON
-// Matches reference: ghost (seaGreen tint) → solid white pill
-// No arrow icon — reference has plain text only.
+// SPLASH CANVAS — Stateless layout widget driven by animation values
 // =============================================================================
 
-class _GetStartedButton extends StatelessWidget {
-  final double progress; // 0→1
-  final bool isLoading;
-  final VoidCallback onTap;
+class _SplashCanvas extends StatelessWidget {
+  final Size size;
+  final bool reducedMotion;
+  final double seedScale;
+  final double seedOpacity;
+  final double orbsOut;
+  final double orbsIn;
+  final double orbSpinAngle;
+  final double markOpacity;
+  final double markScale;
+  final double wordOpacity;
+  final double wordSlide;
+  final double taglineOpacity;
+  final String tagline;
 
-  const _GetStartedButton({
-    required this.progress,
-    required this.isLoading,
-    required this.onTap,
+  const _SplashCanvas({
+    required this.size,
+    required this.reducedMotion,
+    required this.seedScale,
+    required this.seedOpacity,
+    required this.orbsOut,
+    required this.orbsIn,
+    required this.orbSpinAngle,
+    required this.markOpacity,
+    required this.markScale,
+    required this.wordOpacity,
+    required this.wordSlide,
+    required this.taglineOpacity,
+    required this.tagline,
   });
+
+  // ── Orb definitions: 4 aquaculture-themed circles ────────────────────────
+  // Positions follow Slack-style: top-center, left-center, right-center, bottom-center
+  // i.e. a cross/diamond arrangement
+  static const List<_OrbDef> _orbs = [
+    _OrbDef(                                      // TOP — Water / Pond
+      angle: -math.pi / 2,                        // up
+      primaryColor: Color(0xFF27AFC0),             // primary500 aqua
+      secondaryColor: Color(0xFF8DD9DB),           // primary300
+      painter: _OrbType.water,
+    ),
+    _OrbDef(                                      // LEFT — Fish / Aquaculture
+      angle: math.pi,                             // left
+      primaryColor: Color(0xFF35A58A),             // green600 success
+      secondaryColor: Color(0xFFCDEEE3),           // green200
+      painter: _OrbType.fish,
+    ),
+    _OrbDef(                                      // RIGHT — Data / AI
+      angle: 0,                                   // right
+      primaryColor: Color(0xFF4BA8C1),             // mountain500
+      secondaryColor: Color(0xFFCBEAF0),           // mountain200
+      painter: _OrbType.data,
+    ),
+    _OrbDef(                                      // BOTTOM — Harvest / Grain
+      angle: math.pi / 2,                         // down
+      primaryColor: Color(0xFF176F9C),             // mountain700
+      secondaryColor: Color(0xFF8DD9DB),           // primary300
+      painter: _OrbType.harvest,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final t = progress;
+    final cx = size.width  * 0.5;
+    final cy = size.height * 0.5;
 
-    // Ghost: seaGreen@20% border on transparent bg
-    // Solid: white/cream fill (#FFFFFF), dark text
-    final bgColor = Color.lerp(
-      AppColors.seaGreen.withValues(alpha: 0.18),
-      Colors.white,
-      t,
-    )!;
-    final borderColor = Color.lerp(
-      Colors.white.withValues(alpha: 0.30),
-      Colors.white.withValues(alpha: 0.0),
-      t,
-    )!;
-    final textColor = Color.lerp(
-      Colors.white.withValues(alpha: 0.40),
-      AppColors.deepNavy,
-      t,
-    )!;
+    // Orb radius: 15% of shortest side
+    final orbR = size.shortestSide * 0.15;
 
-    return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: Container(
-        width: double.infinity,
-        height: 56,
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: borderColor, width: 1.5),
-          boxShadow: t > 0.6
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12 * t),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Center(
-          child: Text(
-            'Get Started',
-            style: TextStyle(
-              fontFamily: 'Palatino',
-              fontFamilyFallback: const ['Palatino Linotype', 'Georgia', 'serif'],
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-              letterSpacing: 0.3,
+    // Orbit radius: how far orbs travel from center
+    final orbitR = size.shortestSide * 0.36;
+
+    // Orbs converge as orbsIn approaches 1
+    // orbsOut drives outward spread: 0 = center → 1 = orbit
+    // orbsIn drives convergence: 0 = orbit → 1 = center
+    final effectiveOrbit = orbitR * (orbsOut - orbsIn).clamp(0.0, 1.0);
+
+    // Orbs visible when out>0 and before mark is fully visible
+    final orbsVisible = orbsOut > 0.0 && markOpacity < 0.95;
+
+    // Seed visible: only during the initial burst outward
+    final seedVisible = seedOpacity > 0.01 && orbsOut < 0.1;
+
+    return Stack(
+      children: [
+        // ── Deep ocean background ──────────────────────────────────────────
+        Positioned.fill(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF0A2F50), // deep ocean top
+                  Color(0xFF124C73), // mountain900 mid
+                  Color(0xFF0D3D5E), // slightly darker bottom
+                ],
+                stops: [0.0, 0.5, 1.0],
+              ),
             ),
+          ),
+        ),
+
+        // ── Subtle wave shimmer (painted once, very cheap) ─────────────────
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _WaveBackgroundPainter(
+              orbSpinAngle * 0.1, // very slow wave undulation
+            ),
+          ),
+        ),
+
+        // ── Seed dot ──────────────────────────────────────────────────────
+        if (seedVisible)
+          Positioned(
+            left: cx - 8,
+            top:  cy - 8,
+            child: Opacity(
+              opacity: seedOpacity.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: seedScale,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // ── 4 Orbs ────────────────────────────────────────────────────────
+        if (orbsVisible)
+          for (final orb in _orbs) ...[
+            _buildOrb(
+              cx: cx,
+              cy: cy,
+              orb: orb,
+              orbitR: effectiveOrbit,
+              orbR: orbR,
+              spinAngle: orbSpinAngle,
+              reducedMotion: reducedMotion,
+            ),
+          ],
+
+        // ── Logo mark + wordmark (centered, slightly above center) ─────────
+        if (markOpacity > 0.0)
+          Positioned.fill(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Logo mark + wordmark row
+                  Opacity(
+                    opacity: markOpacity.clamp(0.0, 1.0),
+                    child: Transform.scale(
+                      scale: markScale,
+                      child: _buildLogoRow(
+                        wordOpacity: wordOpacity,
+                        wordSlide: wordSlide,
+                        orbR: orbR,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Tagline
+                  Opacity(
+                    opacity: taglineOpacity.clamp(0.0, 1.0),
+                    child: Text(
+                      tagline,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white70,
+                        letterSpacing: 0.4,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildOrb({
+    required double cx,
+    required double cy,
+    required _OrbDef orb,
+    required double orbitR,
+    required double orbR,
+    required double spinAngle,
+    required bool reducedMotion,
+  }) {
+    final x = cx + orbitR * math.cos(orb.angle);
+    final y = cy + orbitR * math.sin(orb.angle) * 0.85; // slight elliptic orbit
+
+    return Positioned(
+      left: x - orbR,
+      top:  y - orbR,
+      child: SizedBox(
+        width:  orbR * 2,
+        height: orbR * 2,
+        child: CustomPaint(
+          painter: _OrbPainter(
+            orb: orb,
+            spinAngle: reducedMotion ? 0.0 : spinAngle,
           ),
         ),
       ),
     );
   }
-}
 
-// =============================================================================
-// TWO DOTS LOADER
-// Used only during route-determination delay after "Get Started" is tapped.
-// Kept as a simple orbiting widget; different from the background blob animation.
-// =============================================================================
+  Widget _buildLogoRow({
+    required double wordOpacity,
+    required double wordSlide,
+    required double orbR,
+  }) {
+    // Logo mark: two overlapping circles (water droplet / aqua orb)
+    // Left circle = solid aqua, right = translucent
+    const markSize = 48.0;
 
-class _TwoDotsLoader extends StatefulWidget {
-  final Color color1;
-  final Color color2;
-
-  const _TwoDotsLoader({required this.color1, required this.color2});
-
-  @override
-  State<_TwoDotsLoader> createState() => _TwoDotsLoaderState();
-}
-
-class _TwoDotsLoaderState extends State<_TwoDotsLoader>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _lc;
-
-  @override
-  void initState() {
-    super.initState();
-    _lc = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _lc.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _lc,
-      builder: (context, _) {
-        final angle = _lc.value * math.pi * 2;
-        const r = 14.0;
-        const d = 8.0;
-        return SizedBox(
-          width: (r + d) * 2 + 4,
-          height: (r + d) * 2 + 4,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Transform.translate(
-                offset: Offset(
-                  r * math.cos(angle),
-                  r * math.sin(angle),
-                ),
-                child: Container(
-                  width: d,
-                  height: d,
-                  decoration: BoxDecoration(
-                    color: widget.color1,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              Transform.translate(
-                offset: Offset(
-                  r * math.cos(angle + math.pi),
-                  r * math.sin(angle + math.pi),
-                ),
-                child: Container(
-                  width: d,
-                  height: d,
-                  decoration: BoxDecoration(
-                    color: widget.color2,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Logo mark
+        SizedBox(
+          width: markSize,
+          height: markSize,
+          child: CustomPaint(
+            painter: _LogoMarkPainter(),
           ),
-        );
-      },
+        ),
+
+        const SizedBox(width: 10),
+
+        // Wordmark: clips from right and slides in
+        ClipRect(
+          child: Opacity(
+            opacity: wordOpacity.clamp(0.0, 1.0),
+            child: Transform.translate(
+              offset: Offset(wordSlide * 60, 0),
+              child: const Text(
+                'AquaVerse',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                  height: 1.0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
+}
+
+// =============================================================================
+// ORB DEFINITION
+// =============================================================================
+
+enum _OrbType { water, fish, data, harvest }
+
+class _OrbDef {
+  final double angle;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final _OrbType painter;
+
+  const _OrbDef({
+    required this.angle,
+    required this.primaryColor,
+    required this.secondaryColor,
+    required this.painter,
+  });
+}
+
+// =============================================================================
+// ORB PAINTER — Each orb is a circle with a distinct aquaculture illustration
+// Painted purely with Canvas primitives (no images, no Lottie, lightweight)
+// =============================================================================
+
+class _OrbPainter extends CustomPainter {
+  final _OrbDef orb;
+  final double spinAngle;
+
+  const _OrbPainter({required this.orb, required this.spinAngle});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+    final center = Offset(r, r);
+
+    // Clip to circle
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: r)));
+
+    // Background fill (radial gradient for depth)
+    final bgPaint = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-0.3, -0.3),
+        radius: 1.0,
+        colors: [
+          orb.primaryColor,
+          Color.lerp(orb.primaryColor, const Color(0xFF0A2F50), 0.55)!,
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: r));
+    canvas.drawCircle(center, r, bgPaint);
+
+    // Inner content illustration (type-specific)
+    switch (orb.painter) {
+      case _OrbType.water:
+        _paintWaterOrb(canvas, center, r, orb.secondaryColor, spinAngle);
+      case _OrbType.fish:
+        _paintFishOrb(canvas, center, r, orb.secondaryColor, spinAngle);
+      case _OrbType.data:
+        _paintDataOrb(canvas, center, r, orb.secondaryColor, spinAngle);
+      case _OrbType.harvest:
+        _paintHarvestOrb(canvas, center, r, orb.secondaryColor, spinAngle);
+    }
+
+    canvas.restore();
+
+    // Subtle rim light
+    final rimPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, r - 0.75, rimPaint);
+  }
+
+  // ── Water orb: animated wave with floating bubbles ─────────────────────
+  void _paintWaterOrb(
+      Canvas canvas, Offset center, double r, Color accent, double angle) {
+    // Wave band across lower portion
+    final waveY = center.dy + r * 0.15 + math.sin(angle) * r * 0.06;
+    final wavePaint = Paint()
+      ..color = accent.withValues(alpha: 0.45)
+      ..style = PaintingStyle.fill;
+    final wavePath = Path();
+    wavePath.moveTo(center.dx - r, waveY);
+    for (double x = -r; x <= r; x += 4) {
+      wavePath.lineTo(
+        center.dx + x,
+        waveY + math.sin(angle + x * 0.12) * r * 0.05,
+      );
+    }
+    wavePath.lineTo(center.dx + r, center.dy + r);
+    wavePath.lineTo(center.dx - r, center.dy + r);
+    wavePath.close();
+    canvas.drawPath(wavePath, wavePaint);
+
+    // 3 bubbles floating upward (animated by angle)
+    final bubblePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.30);
+    final positions = [
+      Offset(center.dx - r * 0.3, center.dy + r * 0.3 - (angle % (math.pi * 2)) / (math.pi * 2) * r * 0.6),
+      Offset(center.dx + r * 0.2, center.dy + r * 0.5 - ((angle + 0.7) % (math.pi * 2)) / (math.pi * 2) * r * 0.7),
+      Offset(center.dx - r * 0.1, center.dy + r * 0.4 - ((angle + 1.4) % (math.pi * 2)) / (math.pi * 2) * r * 0.5),
+    ];
+    for (final p in positions) {
+      canvas.drawCircle(p, r * 0.05, bubblePaint);
+    }
+
+    // Water surface shimmer line
+    final shimmerPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.55)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final shimmerPath = Path();
+    shimmerPath.moveTo(center.dx - r * 0.4, waveY - r * 0.04);
+    shimmerPath.quadraticBezierTo(
+      center.dx,
+      waveY + math.sin(angle + 1.0) * r * 0.04,
+      center.dx + r * 0.4,
+      waveY - r * 0.04,
+    );
+    canvas.drawPath(shimmerPath, shimmerPaint);
+  }
+
+  // ── Fish orb: stylized fish silhouette, tail fin animated ─────────────
+  void _paintFishOrb(
+      Canvas canvas, Offset center, double r, Color accent, double angle) {
+    // Fish body (ellipse)
+    final bodyPaint = Paint()
+      ..color = accent.withValues(alpha: 0.70)
+      ..style = PaintingStyle.fill;
+    final bodyRect = Rect.fromCenter(
+      center: center.translate(-r * 0.05, 0),
+      width: r * 1.0,
+      height: r * 0.55,
+    );
+    canvas.drawOval(bodyRect, bodyPaint);
+
+    // Tail fin (triangle, rotates slightly)
+    final tailAngle = math.sin(angle * 1.5) * 0.25;
+    final tailPaint = Paint()
+      ..color = accent.withValues(alpha: 0.55)
+      ..style = PaintingStyle.fill;
+    final fishRight = center.dx + r * 0.40;
+    final tailPath = Path();
+    tailPath.moveTo(fishRight, center.dy);
+    tailPath.lineTo(
+      fishRight + r * 0.30 * math.cos(tailAngle),
+      center.dy - r * 0.25 * math.sin(tailAngle + 0.6),
+    );
+    tailPath.lineTo(
+      fishRight + r * 0.30 * math.cos(-tailAngle),
+      center.dy + r * 0.25 * math.sin(tailAngle + 0.6),
+    );
+    tailPath.close();
+    canvas.drawPath(tailPath, tailPaint);
+
+    // Eye
+    final eyePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.80);
+    canvas.drawCircle(center.translate(-r * 0.18, -r * 0.04), r * 0.06, eyePaint);
+    final pupilPaint = Paint()..color = const Color(0xFF0A2F50);
+    canvas.drawCircle(center.translate(-r * 0.17, -r * 0.04), r * 0.03, pupilPaint);
+
+    // Fin on top
+    final finPaint = Paint()
+      ..color = accent.withValues(alpha: 0.45)
+      ..style = PaintingStyle.fill;
+    final finPath = Path();
+    finPath.moveTo(center.dx - r * 0.15, center.dy - r * 0.28);
+    finPath.lineTo(center.dx + r * 0.10, center.dy - r * 0.50);
+    finPath.lineTo(center.dx + r * 0.15, center.dy - r * 0.28);
+    finPath.close();
+    canvas.drawPath(finPath, finPaint);
+  }
+
+  // ── Data orb: grid lines + animated data pulse bars ────────────────────
+  void _paintDataOrb(
+      Canvas canvas, Offset center, double r, Color accent, double angle) {
+    // Light grid
+    final gridPaint = Paint()
+      ..color = accent.withValues(alpha: 0.20)
+      ..strokeWidth = 0.8;
+    for (double i = -r; i <= r; i += r * 0.28) {
+      canvas.drawLine(
+        Offset(center.dx + i, center.dy - r),
+        Offset(center.dx + i, center.dy + r),
+        gridPaint,
+      );
+      canvas.drawLine(
+        Offset(center.dx - r, center.dy + i),
+        Offset(center.dx + r, center.dy + i),
+        gridPaint,
+      );
+    }
+
+    // Bar chart: 3 animated bars
+    final barPaint = Paint()..style = PaintingStyle.fill;
+    final barData = [
+      (offset: -r * 0.28, h: 0.35 + 0.12 * math.sin(angle)),
+      (offset:  0.0,       h: 0.55 + 0.10 * math.sin(angle + 1.0)),
+      (offset:  r * 0.28,  h: 0.45 + 0.15 * math.sin(angle + 2.0)),
+    ];
+    final bw = r * 0.18;
+    for (final b in barData) {
+      final barH = r * b.h;
+      final barRect = Rect.fromLTWH(
+        center.dx + b.offset - bw / 2,
+        center.dy + r * 0.25 - barH,
+        bw,
+        barH,
+      );
+      barPaint.color = accent.withValues(alpha: 0.75);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(barRect, Radius.circular(bw * 0.4)),
+        barPaint,
+      );
+    }
+
+    // Pulse ring
+    final pulseR = r * (0.25 + 0.08 * math.sin(angle * 2));
+    final pulsePaint = Paint()
+      ..color = accent.withValues(alpha: 0.35)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(center.translate(0, -r * 0.18), pulseR, pulsePaint);
+  }
+
+  // ── Harvest orb: stylized grain/paddy icon with leaf ──────────────────
+  void _paintHarvestOrb(
+      Canvas canvas, Offset center, double r, Color accent, double angle) {
+    // Stem
+    final stemPaint = Paint()
+      ..color = accent.withValues(alpha: 0.70)
+      ..strokeWidth = r * 0.06
+      ..strokeCap = StrokeCap.round;
+    final sway = math.sin(angle) * r * 0.06;
+    canvas.drawLine(
+      Offset(center.dx + sway, center.dy + r * 0.40),
+      Offset(center.dx + sway, center.dy - r * 0.30),
+      stemPaint,
+    );
+
+    // Grain head (cluster of ovals)
+    final grainPaint = Paint()
+      ..color = accent.withValues(alpha: 0.80)
+      ..style = PaintingStyle.fill;
+    final grainPositions = [
+      Offset(center.dx + sway,            center.dy - r * 0.28),
+      Offset(center.dx + sway - r * 0.14, center.dy - r * 0.18),
+      Offset(center.dx + sway + r * 0.14, center.dy - r * 0.18),
+      Offset(center.dx + sway - r * 0.10, center.dy - r * 0.08),
+      Offset(center.dx + sway + r * 0.10, center.dy - r * 0.08),
+    ];
+    for (final gp in grainPositions) {
+      canvas.drawOval(
+        Rect.fromCenter(center: gp, width: r * 0.16, height: r * 0.22),
+        grainPaint,
+      );
+    }
+
+    // Leaf (bezier arc to the left of stem)
+    final leafPaint = Paint()
+      ..color = accent.withValues(alpha: 0.55)
+      ..style = PaintingStyle.fill;
+    final leafPath = Path();
+    leafPath.moveTo(center.dx + sway, center.dy + r * 0.05);
+    leafPath.quadraticBezierTo(
+      center.dx + sway - r * 0.35,
+      center.dy - r * 0.12,
+      center.dx + sway - r * 0.20,
+      center.dy - r * 0.22,
+    );
+    leafPath.quadraticBezierTo(
+      center.dx + sway - r * 0.05,
+      center.dy - r * 0.10,
+      center.dx + sway,
+      center.dy + r * 0.05,
+    );
+    leafPath.close();
+    canvas.drawPath(leafPath, leafPaint);
+  }
+
+  @override
+  bool shouldRepaint(_OrbPainter oldDelegate) =>
+      oldDelegate.spinAngle != spinAngle;
+}
+
+// =============================================================================
+// LOGO MARK PAINTER
+// AquaVerse logo mark: two overlapping circles — left solid aqua, right ghost.
+// Adapted from the app_icon.png style.
+// =============================================================================
+
+class _LogoMarkPainter extends CustomPainter {
+  const _LogoMarkPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+
+    // Left circle: solid gradient aqua
+    final leftPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF2E8B77), Color(0xFF27AFC0)],
+      ).createShader(Rect.fromCircle(center: Offset(r * 0.65, r), radius: r * 0.55));
+    canvas.drawCircle(Offset(r * 0.65, r), r * 0.55, leftPaint);
+
+    // Right circle: translucent white (water shine)
+    final rightPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.35);
+    canvas.drawCircle(Offset(r * 1.25, r), r * 0.45, rightPaint);
+
+    // Intersection highlight: bright aqua
+    final intersectPaint = Paint()
+      ..color = const Color(0xFF8DD9DB).withValues(alpha: 0.60)
+      ..blendMode = BlendMode.screen;
+    canvas.drawCircle(Offset(r * 0.95, r), r * 0.22, intersectPaint);
+
+    // Rim
+    final rimPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawCircle(Offset(r * 0.65, r), r * 0.55, rimPaint);
+  }
+
+  @override
+  bool shouldRepaint(_LogoMarkPainter _) => false;
+}
+
+// =============================================================================
+// WAVE BACKGROUND PAINTER — Very cheap subtle underwater animation
+// =============================================================================
+
+class _WaveBackgroundPainter extends CustomPainter {
+  final double phase;
+
+  const _WaveBackgroundPainter(this.phase);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF1495AE).withValues(alpha: 0.06)
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < 3; i++) {
+      final wavePhase = phase + i * (math.pi * 2 / 3);
+      final waveY = size.height * (0.25 + i * 0.28);
+      final path = Path();
+      path.moveTo(0, waveY);
+      for (double x = 0; x <= size.width; x += 8) {
+        path.lineTo(
+          x,
+          waveY + math.sin(wavePhase + x / size.width * math.pi * 4) * 8,
+        );
+      }
+      path.lineTo(size.width, size.height);
+      path.lineTo(0, size.height);
+      path.close();
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveBackgroundPainter old) => old.phase != phase;
 }

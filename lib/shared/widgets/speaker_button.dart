@@ -1,133 +1,133 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/localization/app_translations.dart';
-import '../../core/services/bhashini_tts_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_spacing.dart';
 
-/// SpeakerButton Component with Bhashini Read-Aloud Integration.
-/// Every action/advisory text includes a SpeakerButton that reads text aloud
-/// in the farmer's preferred language (Tamil default / English switchable).
-class SpeakerButton extends ConsumerStatefulWidget {
+/// SpeakerButton — text read-aloud component.
+///
+/// HONESTY CONTRACT (Phase A fix):
+/// The Bhashini TTS audio binary endpoint is not yet confirmed in the
+/// OpenAPI contract. POST /v1/translate returns translated text only —
+/// NOT audio bytes.
+///
+/// Current behavior:
+///   - Renders a muted/unavailable speaker icon.
+///   - On tap, shows the source text in a SnackBar (text fallback).
+///   - Does NOT show a playing animation or pretend audio is active.
+///
+/// When real TTS audio is confirmed (backend delivers audio bytes):
+///   - Set [_ttsAudioAvailable] to true.
+///   - Re-enable _ActiveSpeakerButton.
+///
+/// BACKEND GAP: POST /v1/tts → audio binary — MISSING from confirmed contract.
+
+// Set to true only when POST /v1/tts returning audio bytes is confirmed.
+const bool _ttsAudioAvailable = false;
+
+class SpeakerButton extends ConsumerWidget {
   final String textToSpeak;
   final double size;
   final Color? color;
-  final VoidCallback? onSpeakPressed;
 
   const SpeakerButton({
     super.key,
     required this.textToSpeak,
-    this.size = 24.0,
+    this.size = AppIconSize.lg,
     this.color,
-    this.onSpeakPressed,
   });
 
   @override
-  ConsumerState<SpeakerButton> createState() => _SpeakerButtonState();
-}
-
-class _SpeakerButtonState extends ConsumerState<SpeakerButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _waveController;
-  Timer? _autoStopTimer;
-  bool _isPlaying = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!_ttsAudioAvailable) {
+      return _UnavailableSpeakerButton(
+        size: size,
+        color: color,
+        textToSpeak: textToSpeak,
+      );
+    }
+    // When TTS audio becomes available, replace with _ActiveSpeakerButton here.
+    return _UnavailableSpeakerButton(
+      size: size,
+      color: color,
+      textToSpeak: textToSpeak,
     );
   }
+}
 
-  @override
-  void dispose() {
-    _autoStopTimer?.cancel();
-    _waveController.dispose();
-    super.dispose();
-  }
+// ── Unavailable State ────────────────────────────────────────────────────────
 
-  void _handleTap() {
-    if (widget.onSpeakPressed != null) {
-      widget.onSpeakPressed!();
-    }
+class _UnavailableSpeakerButton extends StatelessWidget {
+  final double size;
+  final Color? color;
+  final String textToSpeak;
 
-    _autoStopTimer?.cancel();
-
-    final currentLang = ref.read(appLanguageProvider);
-    final ttsService = ref.read(bhashiniTtsServiceProvider);
-
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
-
-    if (_isPlaying) {
-      _waveController.repeat(reverse: true);
-
-      // Trigger Bhashini Audio Read Aloud
-      ttsService.speakText(text: widget.textToSpeak, langCode: currentLang);
-
-      final toastMsg = currentLang == 'ta'
-          ? '🔊 பாஷினி குரல் வழிகாட்டி: உரக்கப் படிக்கிறது…'
-          : '🔊 Bhashini Voice Assistant: Reading aloud…';
-
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(toastMsg),
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      _autoStopTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) {
-          setState(() {
-            _isPlaying = false;
-          });
-          _waveController.stop();
-          _waveController.reset();
-        }
-      });
-    } else {
-      ttsService.stop();
-      _waveController.stop();
-      _waveController.reset();
-    }
-  }
+  const _UnavailableSpeakerButton({
+    required this.size,
+    required this.textToSpeak,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = widget.color ?? AppColors.seaGreen;
+    final iconColor = color ?? AppColors.textDisabled;
 
     return Semantics(
-      label: 'Read text aloud: ${widget.textToSpeak}',
       button: true,
-      child: InkWell(
-        onTap: _handleTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _isPlaying
-                ? activeColor.withValues(alpha: 0.15)
-                : Colors.transparent,
+      label: 'Text-to-speech unavailable',
+      hint: 'Audio reading is not yet supported. Tap to view text.',
+      child: Tooltip(
+        message: 'Audio not available — tap to view text',
+        preferBelow: false,
+        child: InkWell(
+          onTap: () => _showTextFallback(context),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.border.withValues(alpha: 0.3),
+            ),
+            child: Icon(
+              Icons.volume_off_rounded,
+              size: size,
+              color: iconColor,
+            ),
           ),
-          child: AnimatedBuilder(
-            animation: _waveController,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: _isPlaying ? 1.0 + (_waveController.value * 0.15) : 1.0,
-                child: Icon(
-                  _isPlaying ? Icons.volume_up_rounded : Icons.volume_up_outlined,
-                  size: widget.size,
-                  color: _isPlaying ? AppColors.brightMint : activeColor,
-                ),
-              );
-            },
-          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTextFallback(BuildContext context) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Audio not available',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              textToSpeak,
+              style: const TextStyle(fontSize: 13),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'OK',
+          onPressed: () =>
+              ScaffoldMessenger.of(context).hideCurrentSnackBar(),
         ),
       ),
     );

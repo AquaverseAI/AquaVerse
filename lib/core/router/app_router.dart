@@ -8,10 +8,9 @@ import '../../features/splash/splash_screen.dart';
 
 // Onboarding
 import '../../features/onboarding/presentation/language_select_screen.dart';
+import '../../features/onboarding/presentation/role_selection_screen.dart';
 import '../../features/onboarding/presentation/phone_entry_screen.dart';
 import '../../features/onboarding/presentation/otp_verify_screen.dart';
-import '../../features/onboarding/presentation/role_selection_screen.dart';
-import '../../features/onboarding/presentation/ai_intro_screen.dart';
 
 // Farmer Main
 import '../../features/today/presentation/today_screen.dart';
@@ -21,8 +20,6 @@ import '../../features/alerts/presentation/alerts_screen.dart';
 import '../../features/crop/presentation/crop_screen.dart';
 
 // Secondary
-import '../../features/notifications/presentation/notifications_screen.dart';
-import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/ponds/presentation/my_ponds_screen.dart';
 import '../../features/ponds/presentation/pond_details_screen.dart';
@@ -32,10 +29,16 @@ import '../../features/help/presentation/help_center_screen.dart';
 import '../../features/officer/presentation/officer_dashboard_screen.dart';
 import '../../features/officer/presentation/officer_visit_log_screen.dart';
 import '../../features/officer/presentation/officer_profile_screen.dart';
-import '../../features/officer/presentation/officer_send_advice_screen.dart';
+
+import 'route_guard.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  redirect: (context, state) async {
+    if (state.matchedLocation == '/') return null;
+    final guard = await RouteGuard.getInstance();
+    return guard.redirect(state.matchedLocation);
+  },
   routes: [
     // ── Splash ──────────────────────────────────────────────────────────────
     GoRoute(
@@ -48,7 +51,7 @@ final GoRouter appRouter = GoRouter(
       path: '/login',
       pageBuilder: (context, state) => buildIrisTransitionPage(
         key: state.pageKey,
-        child: const PhoneEntryScreen(),
+        child: const RoleSelectionScreen(),
       ),
     ),
     GoRoute(
@@ -56,6 +59,14 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => buildIrisTransitionPage(
         key: state.pageKey,
         child: const LanguageSelectScreen(),
+      ),
+    ),
+    // ── NEW: Role Selection — Step 1 of 2-screen auth flow ────────────────────
+    GoRoute(
+      path: '/onboarding/role',
+      pageBuilder: (context, state) => buildSmoothPushPage(
+        key: state.pageKey,
+        child: const RoleSelectionScreen(),
       ),
     ),
     GoRoute(
@@ -72,20 +83,7 @@ final GoRouter appRouter = GoRouter(
         child: const OtpVerifyScreen(),
       ),
     ),
-    GoRoute(
-      path: '/onboarding/role',
-      pageBuilder: (context, state) => buildSmoothPushPage(
-        key: state.pageKey,
-        child: const RoleSelectionScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/onboarding/intro',
-      pageBuilder: (context, state) => buildSmoothPushPage(
-        key: state.pageKey,
-        child: const AiIntroScreen(),
-      ),
-    ),
+
 
     // ── Farmer Main Screens (Smooth Fade-Through Tab Transitions) ─────────────
     GoRoute(
@@ -125,20 +123,6 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // ── Secondary Screens (Smooth Push & Slide Transitions) ───────────────────
-    GoRoute(
-      path: '/notifications',
-      pageBuilder: (context, state) => buildSmoothPushPage(
-        key: state.pageKey,
-        child: const NotificationsScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/settings',
-      pageBuilder: (context, state) => buildSmoothPushPage(
-        key: state.pageKey,
-        child: const SettingsScreen(),
-      ),
-    ),
     GoRoute(
       path: '/profile',
       pageBuilder: (context, state) => buildSmoothPushPage(
@@ -188,13 +172,6 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => buildSmoothPushPage(
         key: state.pageKey,
         child: const OfficerProfileScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/officer/send-advice',
-      pageBuilder: (context, state) => buildSmoothSlideUpPage(
-        key: state.pageKey,
-        child: const OfficerSendAdviceScreen(),
       ),
     ),
   ],

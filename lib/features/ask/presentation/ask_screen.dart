@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_translations.dart';
-import '../../../core/services/demo_data_service.dart';
+import '../../../core/models/models.dart';
+import '../../../core/providers/data_providers.dart';
+import '../../../core/providers/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -17,6 +19,20 @@ enum AskState { idle, listening, thinking, response }
 final askStateProvider = StateProvider<AskState>((ref) => AskState.idle);
 final recognizedTextProvider = StateProvider<String?>((ref) => null);
 final answerTextProvider = StateProvider<String?>((ref) => null);
+
+const _defaultQuestionsEn = [
+  'How much feed should I give today?',
+  'What to do if dissolved oxygen falls below 4 mg/L?',
+  'How to manage pond pH during heavy rains?',
+  'How to control ammonia spikes?',
+];
+
+const _defaultQuestionsTa = [
+  'இன்று மீன்களுக்கு எவ்வளவு தீவனம் போட வேண்டும்?',
+  'ஆக்சிஜன் 4 mg/L கீழே குறைந்தால் என்ன செய்ய வேண்டும்?',
+  'மழைக்காலத்தில் pH சமநிலை பராமரிப்பது எப்படி?',
+  'அமோனியா அளவை எவ்வாறு கட்டுப்படுத்துவது?',
+];
 
 class AskScreen extends ConsumerStatefulWidget {
   const AskScreen({super.key});
@@ -53,6 +69,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
       ref.read(askStateProvider.notifier).state = AskState.listening;
       _waveController.repeat();
       await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(milliseconds: 1500));
       if (!mounted) return;
 
       final sampleQuestion = currentLang == 'ta'
@@ -72,6 +89,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
 
       ref.read(answerTextProvider.notifier).state = offlineNotice;
       ref.read(askStateProvider.notifier).state = AskState.response;
+      await _executeAsk(sampleQuestion, currentLang);
     } else {
       ref.read(askStateProvider.notifier).state = AskState.idle;
       ref.read(recognizedTextProvider.notifier).state = null;
@@ -89,15 +107,33 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     ref.read(askStateProvider.notifier).state = AskState.thinking;
     await Future.delayed(const Duration(seconds: 1));
     if (!mounted) return;
-
-    // Honest offline / unreachable state: Ask requires an internet connection
-    final offlineNotice = currentLang == 'ta'
-        ? 'அக்வா AI நேரலை செயலாக்கத்திற்கு இணைய இணைப்பு தேவை. உங்கள் பிணைய இணைப்பைச் சரிபார்க்கவும்.'
-        : 'Aqua AI requires an active internet connection to backend server. Please check your connection and try again.';
-
-    ref.read(answerTextProvider.notifier).state = offlineNotice;
-    ref.read(askStateProvider.notifier).state = AskState.response;
     _textController.clear();
+
+    await _executeAsk(text, currentLang);
+  }
+
+  Future<void> _executeAsk(String question, String currentLang) async {
+    try {
+      final currentPondId = ref.read(currentPondIdProvider);
+      final api = ref.read(apiClientProvider);
+
+      final response = await api.askAqua(AskRequest(
+        question: question,
+        language: currentLang,
+        pondId: currentPondId,
+      )).timeout(const Duration(seconds: 15));
+
+      if (!mounted) return;
+      ref.read(answerTextProvider.notifier).state = response.answer;
+      ref.read(askStateProvider.notifier).state = AskState.response;
+    } catch (_) {
+      if (!mounted) return;
+      final offlineNotice = currentLang == 'ta'
+          ? 'அக்வா AI நேரலை செயலாக்கத்திற்கு பிணைய இணைப்பு தேவை. உங்கள் இணைப்பைச் சரிபார்க்கவும்.'
+          : 'Aqua AI requires an active internet connection to backend server. Please check your connection and try again.';
+      ref.read(answerTextProvider.notifier).state = offlineNotice;
+      ref.read(askStateProvider.notifier).state = AskState.response;
+    }
   }
 
   @override
@@ -108,13 +144,8 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
     final currentLang = ref.watch(appLanguageProvider);
 
     final recentQuestionsList = currentLang == 'ta'
-        ? [
-            'இன்று மீன்களுக்கு எவ்வளவு தீவனம் போட வேண்டும்?',
-            'ஆக்சிஜன் 4 mg/L கீழே குறைந்தால் என்ன செய்ய வேண்டும்?',
-            'மழைக்காலத்தில் pH சமநிலை பராமரிப்பது எப்படி?',
-            'அமோனியா அளவை எவ்வாறு கட்டுப்படுத்துவது?',
-          ]
-        : DemoDataService.recentQuestions;
+        ? _defaultQuestionsTa
+        : _defaultQuestionsEn;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -126,7 +157,7 @@ class _AskScreenState extends ConsumerState<AskScreen> with TickerProviderStateM
         ),
         actions: [
           IconButton(
-            onPressed: () => context.push('/notifications'),
+            onPressed: () => context.go('/alerts'),
             icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
           ),
         ],

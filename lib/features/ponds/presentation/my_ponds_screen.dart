@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
-import '../../../core/services/demo_data_service.dart';
+import '../../../core/providers/data_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -14,7 +14,8 @@ class MyPondsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentLang = ref.watch(appLanguageProvider);
-    final ponds = [DemoDataService.pond];
+    final pondsAsync = ref.watch(allPondsProvider);
+    final ponds = pondsAsync.valueOrNull ?? const [];
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
@@ -28,75 +29,84 @@ class MyPondsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: ponds.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, i) {
-          if (i == ponds.length) {
-            return PrimaryButton(
-              label: currentLang == 'ta' ? '+ புதிய குளம் சேர்' : '+ Add Pond',
-              onPressed: () => _showAddPond(context, currentLang),
-            );
-          }
-          final pond = ponds[i];
-          Color statusColor;
-          String statusLabel;
-          switch (pond.status) {
-            case PondStatus.good:
-              statusColor = AppColors.success;
-              statusLabel = currentLang == 'ta' ? 'சீராக உள்ளது' : 'Good';
-              break;
-            case PondStatus.caution:
-              statusColor = AppColors.warning;
-              statusLabel = currentLang == 'ta' ? 'கவனம்' : 'Caution';
-              break;
-            case PondStatus.critical:
-              statusColor = AppColors.critical;
-              statusLabel = currentLang == 'ta' ? 'அபாயம்' : 'Critical';
-              break;
-          }
+      body: RefreshIndicator(
+        onRefresh: () async => ref.refresh(allPondsProvider.future),
+        child: pondsAsync.isLoading && ponds.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                itemCount: ponds.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, i) {
+                  if (i == ponds.length) {
+                    return PrimaryButton(
+                      label: currentLang == 'ta' ? '+ புதிய குளம் சேர்' : '+ Add Pond',
+                      onPressed: () => _showAddPond(context, currentLang),
+                    );
+                  }
+                  final pond = ponds[i];
+                  Color statusColor;
+                  String statusLabel;
+                  switch (pond.status) {
+                    case PondStatus.good:
+                      statusColor = AppColors.success;
+                      statusLabel = currentLang == 'ta' ? 'சீராக உள்ளது' : 'Good';
+                      break;
+                    case PondStatus.caution:
+                      statusColor = AppColors.warning;
+                      statusLabel = currentLang == 'ta' ? 'கவனம்' : 'Caution';
+                      break;
+                    case PondStatus.critical:
+                      statusColor = AppColors.critical;
+                      statusLabel = currentLang == 'ta' ? 'அபாயம்' : 'Critical';
+                      break;
+                  }
 
-          return AppCard(
-            onTap: () => context.push('/pond-details'),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.water_rounded, color: statusColor, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(pond.id, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      const SizedBox(height: 2),
-                      Text(pond.name, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                      const SizedBox(height: 4),
-                      Text(currentLang == 'ta' ? 'புதுப்பிக்கப்பட்டது ${_timeAgo(pond.lastUpdated, currentLang)}' : 'Updated ${_timeAgo(pond.lastUpdated, currentLang)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(statusLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: statusColor)),
-                ),
-                const SizedBox(width: 6),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 18),
-              ],
-            ),
-          );
-        },
+                  return AppCard(
+                    onTap: () {
+                      ref.read(currentPondIdProvider.notifier).state = pond.id;
+                      context.push('/pond-details');
+                    },
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.water_rounded, color: statusColor, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(pond.id, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                              const SizedBox(height: 2),
+                              Text(pond.name, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                              const SizedBox(height: 4),
+                              Text(currentLang == 'ta' ? 'புதுப்பிக்கப்பட்டது ${_timeAgo(pond.lastUpdated ?? DateTime.now(), currentLang)}' : 'Updated ${_timeAgo(pond.lastUpdated ?? DateTime.now(), currentLang)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: statusColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(statusLabel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: statusColor)),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 18),
+                      ],
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }

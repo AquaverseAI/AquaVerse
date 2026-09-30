@@ -2,231 +2,398 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../shared/widgets/onboarding_scaffold.dart';
-import '../../../shared/widgets/speaker_button.dart';
 import 'controllers/onboarding_controller.dart';
 
+/// RoleSelectionScreen — first step of the two-screen authentication flow.
+///
+/// Route: `/onboarding/role`
+///
+/// The user picks their role (Farmer or Extension Officer) BEFORE entering
+/// a phone number. The selection is stored as `selectedRole` (user intent only).
+/// The verified role from the backend JWT is the final authorization authority.
+///
+/// Continue is disabled until a role card has been tapped.
 class RoleSelectionScreen extends ConsumerWidget {
   const RoleSelectionScreen({super.key});
-
-  void _onContinue(BuildContext context, WidgetRef ref) async {
-    final state = ref.read(onboardingControllerProvider);
-    if (state.selectedRole == 'farmer') {
-      context.go('/onboarding/intro');
-    } else {
-      final controller = ref.read(onboardingControllerProvider.notifier);
-      final targetRoute = await controller.completeOnboarding();
-      if (context.mounted) {
-        context.go(targetRoute);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(onboardingControllerProvider);
     final controller = ref.read(onboardingControllerProvider.notifier);
 
-    final roles = [
-      {
-        'id': 'farmer',
-        'title': 'Farmer',
-        'subtitle': 'Pond management, daily logs, AI advisory & alerts',
-        'icon': Icons.water_drop_rounded,
-      },
-      {
-        'id': 'officer',
-        'title': 'Extension Officer',
-        'subtitle': 'Multi-pond oversight, farmer visit logs & report verification',
-        'icon': Icons.assignment_ind_rounded,
-      },
-    ];
-
     return OnboardingScaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-      ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.pageMargin, vertical: 12.0),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight - 24),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title & Subtitle Row
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Select Your Role',
-                                  style: Theme.of(context).textTheme.headlineLarge,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Choose how you want to use AquaVerse AI',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: AppColors.textSecondary,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SpeakerButton(
-                            textToSpeak: 'Select Your Role. Choose how you want to use AquaVerse AI.',
-                          ),
-                        ],
+        child: Column(
+          children: [
+            // ── Top bar ───────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Row(
+                children: [
+                  // Back arrow visible only when returning via back navigation
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back_rounded,
+                      color: AppColors.textPrimary,
+                    ),
+                    tooltip: 'Back',
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/onboarding/language');
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Scrollable body ───────────────────────────────────────────────
+            Expanded(
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
                       ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: AppSpacing.md),
 
-                      const SizedBox(height: 32),
-
-                      // Dual Selectable Role Cards
-                      ...roles.map((role) {
-                        final isSelected = state.selectedRole == role['id'];
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: InkWell(
-                            onTap: () => controller.selectRole(role['id'] as String),
-                            borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                          // ── Brand logo / icon ────────────────────────────────
+                          Center(
                             child: Container(
-                              padding: const EdgeInsets.all(20),
+                              width: 64,
+                              height: 64,
                               decoration: BoxDecoration(
-                                color: isSelected ? AppColors.surfaceAqua : AppColors.surface,
-                                borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-                                border: Border.all(
-                                  color: isSelected ? AppColors.primary500 : AppColors.border,
-                                  width: isSelected ? 2.0 : 1.0,
-                                ),
+                                shape: BoxShape.circle,
+                                gradient: AppColors.langCtaGradient,
                                 boxShadow: [
-                                  if (!isSelected)
-                                    BoxShadow(
-                                      color: AppColors.mountain900.withValues(alpha: 0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    )
+                                  BoxShadow(
+                                    color: AppColors.langAccentPrimary
+                                        .withValues(alpha: 0.25),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 6),
+                                  ),
                                 ],
                               ),
-                              child: Row(
-                                children: [
-                                  // Role Icon Container
-                                  Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: isSelected
-                                          ? AppColors.primary100
-                                          : AppColors.background,
-                                    ),
-                                    child: Icon(
-                                      role['icon'] as IconData,
-                                      size: 28,
-                                      color: isSelected ? AppColors.primary700 : AppColors.mountain700,
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 16),
-
-                                  // Text Content
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          role['title'] as String,
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: isSelected ? AppColors.primary700 : AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          role['subtitle'] as String,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: isSelected ? AppColors.primary500 : AppColors.textMuted,
-                                            height: 1.3,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 8),
-
-                                  // Custom Selection Radio Indicator Disc
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: isSelected ? AppColors.primary500 : AppColors.borderStrong,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: isSelected
-                                        ? Center(
-                                            child: Container(
-                                              width: 12,
-                                              height: 12,
-                                              decoration: const BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: AppColors.primary500,
-                                              ),
-                                            ),
-                                          )
-                                        : null,
-                                  ),
-                                ],
+                              child: const Icon(
+                                Icons.waves_rounded,
+                                size: 30,
+                                color: Colors.white,
                               ),
                             ),
                           ),
-                        );
-                      }),
 
-                      const Spacer(),
+                          const SizedBox(height: AppSpacing.xl),
 
-                      // "Continue" Primary Action Button
-                      ElevatedButton(
-                        onPressed: () => _onContinue(context, ref),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('Continue'),
-                            SizedBox(width: 8),
-                            Icon(
-                              Icons.arrow_forward_rounded,
-                              size: 20,
-                              color: Colors.white,
+                          // ── Title ────────────────────────────────────────────
+                          const Text(
+                            'Who are you?',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0D2B3E),
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.sm),
+
+                          // ── Subtitle ─────────────────────────────────────────
+                          const Text(
+                            'Select your role to get started',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.xxl),
+
+                          // ── Role cards ───────────────────────────────────────
+                          _RoleCard(
+                            roleKey: 'farmer',
+                            label: 'Farmer',
+                            sublabel: 'Manage your pond and get daily recommendations',
+                            icon: Icons.water_drop_rounded,
+                            isSelected: state.selectedRole == 'farmer' &&
+                                state.isRoleExplicitlySet,
+                            onTap: () => controller.selectRole('farmer'),
+                          ),
+
+                          const SizedBox(height: AppSpacing.md),
+
+                          _RoleCard(
+                            roleKey: 'officer',
+                            label: 'Extension Officer',
+                            sublabel: 'Oversee multiple ponds and log field visits',
+                            icon: Icons.assignment_ind_rounded,
+                            isSelected: state.selectedRole == 'officer' &&
+                                state.isRoleExplicitlySet,
+                            onTap: () => controller.selectRole('officer'),
+                          ),
+
+                          // ── Validation message ───────────────────────────────
+                          if (!state.isRoleExplicitlySet) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            const Text(
+                              'Please select a role to continue',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textMuted,
+                              ),
                             ),
                           ],
-                        ),
+
+                          const Spacer(flex: 3),
+
+                          // ── Continue button ──────────────────────────────────
+                          _ContinueButton(
+                            enabled: state.canContinueFromRoleSelection,
+                            onTap: () => context.push('/onboarding/mobile'),
+                          ),
+
+                          const SizedBox(height: AppSpacing.xl),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
   }
 }
+
+// ── Role Card ────────────────────────────────────────────────────────────────
+
+class _RoleCard extends StatelessWidget {
+  final String roleKey;
+  final String label;
+  final String sublabel;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _RoleCard({
+    required this.roleKey,
+    required this.label,
+    required this.sublabel,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  static const _selectedBorder = Color(0xFF0E9488);
+  static const _restBorder = Color(0xFFD8E8E4);
+  static const _selectedBg = Color(0xFFE6F4F1);
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '$label role ${isSelected ? ', selected' : ''}',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          color: isSelected ? _selectedBg : Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(
+            color: isSelected ? _selectedBorder : _restBorder,
+            width: isSelected ? 2.0 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? _selectedBorder.withValues(alpha: 0.15)
+                  : Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.lg,
+              ),
+              child: Row(
+                children: [
+                  // Icon container
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected
+                          ? _selectedBorder.withValues(alpha: 0.12)
+                          : AppColors.background,
+                      border: Border.all(
+                        color: isSelected
+                            ? _selectedBorder.withValues(alpha: 0.4)
+                            : _restBorder,
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: AppIconSize.xl,
+                      color: isSelected
+                          ? _selectedBorder
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+
+                  const SizedBox(width: AppSpacing.lg),
+
+                  // Text content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? _selectedBorder
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          sublabel,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: AppSpacing.sm),
+
+                  // Selected check / unselected ring
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isSelected ? _selectedBorder : Colors.transparent,
+                      border: Border.all(
+                        color: isSelected ? _selectedBorder : _restBorder,
+                        width: 2.0,
+                      ),
+                    ),
+                    child: isSelected
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: Colors.white,
+                          )
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Continue Button ──────────────────────────────────────────────────────────
+
+class _ContinueButton extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _ContinueButton({required this.enabled, required this.onTap});
+
+  static const _activeGradient = LinearGradient(
+    colors: [Color(0xFF0E9488), Color(0xFF1495AE)],
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: 'Continue to phone number entry',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: double.infinity,
+        constraints: const BoxConstraints(maxWidth: 360),
+        height: AppTouchTarget.buttonHeight + 6, // 54dp
+        decoration: BoxDecoration(
+          gradient: enabled
+              ? _activeGradient
+              : LinearGradient(
+                  colors: [
+                    AppColors.primary500.withValues(alpha: 0.45),
+                    AppColors.primary600.withValues(alpha: 0.45),
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          boxShadow: enabled
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary500.withValues(alpha: 0.30),
+                    blurRadius: 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: ElevatedButton(
+          onPressed: enabled ? onTap : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+          ),
+          child: const Text(
+            'Continue',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

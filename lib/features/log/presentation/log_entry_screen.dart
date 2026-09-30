@@ -1,159 +1,264 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/data_providers.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/repositories/log_repository.dart';
+import '../../../core/sync/outbox_processor.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
-import '../../../shared/widgets/offline_banner.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
-import '../../../shared/widgets/staleness_badge.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-class LogEntryState {
+class LogEntryFormState {
+  final double feedGivenKg;
+  final int mortalityCount;
+  final FeedTrayStatus? feedTray;
+  final WaterAppearance? waterColor;
+  final double? ph;
+  final double? dissolvedOxygen;
+  final double? temperature;
+  final double? salinity;
   final List<String> photos;
-  final bool isSaving;
-  final bool isSaved;
-  final bool savedOffline;
+  final String notes;
+  final bool showAdvanced;
+  final bool isSubmitting;
+  final bool isSuccess;
   final String? errorMessage;
 
-  const LogEntryState({
+  const LogEntryFormState({
+    this.feedGivenKg = 20.0,
+    this.mortalityCount = 0,
+    this.feedTray = FeedTrayStatus.empty,
+    this.waterColor = WaterAppearance.good,
+    this.ph,
+    this.dissolvedOxygen,
+    this.temperature,
+    this.salinity,
     this.photos = const [],
-    this.isSaving = false,
-    this.isSaved = false,
-    this.savedOffline = false,
+    this.notes = '',
+    this.showAdvanced = false,
+    this.isSubmitting = false,
+    this.isSuccess = false,
     this.errorMessage,
   });
 
-  LogEntryState copyWith({
+  LogEntryFormState copyWith({
+    double? feedGivenKg,
+    int? mortalityCount,
+    FeedTrayStatus? feedTray,
+    WaterAppearance? waterColor,
+    double? ph,
+    double? dissolvedOxygen,
+    double? temperature,
+    double? salinity,
     List<String>? photos,
-    bool? isSaving,
-    bool? isSaved,
-    bool? savedOffline,
+    String? notes,
+    bool? showAdvanced,
+    bool? isSubmitting,
+    bool? isSuccess,
     String? errorMessage,
   }) {
-    return LogEntryState(
+    return LogEntryFormState(
+      feedGivenKg: feedGivenKg ?? this.feedGivenKg,
+      mortalityCount: mortalityCount ?? this.mortalityCount,
+      feedTray: feedTray ?? this.feedTray,
+      waterColor: waterColor ?? this.waterColor,
+      ph: ph ?? this.ph,
+      dissolvedOxygen: dissolvedOxygen ?? this.dissolvedOxygen,
+      temperature: temperature ?? this.temperature,
+      salinity: salinity ?? this.salinity,
       photos: photos ?? this.photos,
-      isSaving: isSaving ?? this.isSaving,
-      isSaved: isSaved ?? this.isSaved,
-      savedOffline: savedOffline ?? this.savedOffline,
+      notes: notes ?? this.notes,
+      showAdvanced: showAdvanced ?? this.showAdvanced,
+      isSubmitting: isSubmitting ?? this.isSubmitting,
+      isSuccess: isSuccess ?? this.isSuccess,
       errorMessage: errorMessage,
     );
   }
 }
 
-class LogEntryController extends StateNotifier<LogEntryState> {
+class LogEntryController extends StateNotifier<LogEntryFormState> {
   final Ref ref;
 
-  LogEntryController(this.ref) : super(const LogEntryState());
+  LogEntryController(this.ref) : super(const LogEntryFormState());
 
-  Future<void> addPhotoWithUpload() async {
-    final photoIndex = state.photos.length + 1;
-    final dummyMediaId = 'media_photo_$photoIndex';
-    state = state.copyWith(isSaving: true, errorMessage: null);
+  void setFeedKg(double value) {
+    state = state.copyWith(feedGivenKg: value.clamp(0.0, 500.0));
+  }
+
+  void addFeedKg(double delta) {
+    state = state.copyWith(feedGivenKg: (state.feedGivenKg + delta).clamp(0.0, 500.0));
+  }
+
+  void setMortality(int value) {
+    state = state.copyWith(mortalityCount: value.clamp(0, 5000));
+  }
+
+  void addMortality(int delta) {
+    state = state.copyWith(mortalityCount: (state.mortalityCount + delta).clamp(0, 5000));
+  }
+
+  void setFeedTray(FeedTrayStatus status) {
+    state = state.copyWith(feedTray: status);
+  }
+
+  void setWaterAppearance(WaterAppearance appearance) {
+    state = state.copyWith(waterColor: appearance);
+  }
+
+  void setPh(double? val) => state = state.copyWith(ph: val);
+  void setDissolvedOxygen(double? val) => state = state.copyWith(dissolvedOxygen: val);
+  void setTemperature(double? val) => state = state.copyWith(temperature: val);
+  void setSalinity(double? val) => state = state.copyWith(salinity: val);
+  void setNotes(String val) => state = state.copyWith(notes: val);
+  void toggleAdvanced() => state = state.copyWith(showAdvanced: !state.showAdvanced);
+
+  Future<void> addPhoto() async {
+    final nextIdx = state.photos.length + 1;
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
 
     try {
       final api = ref.read(apiClientProvider);
-      // Phase 1: Request upload URL (/v1/media/upload-url)
+      final pondId = ref.read(currentPondIdProvider);
       final uploadRes = await api.getUploadUrl({
-        'filename': 'water_check_$photoIndex.jpg',
-        'content_type': 'image/jpeg',
+        'pond_id': pondId,
+        'filename': 'log_photo_$nextIdx.jpg',
+        'mime_type': 'image/jpeg',
       });
 
-      final String mediaId = (uploadRes is Map<String, dynamic> &&
-              uploadRes.containsKey('media_id'))
-          ? uploadRes['media_id'] as String
-          : dummyMediaId;
+      final mediaId = uploadRes.mediaId.isNotEmpty
+          ? uploadRes.mediaId
+          : 'local_photo_$nextIdx';
 
-      // Phase 2: Commit media (/v1/media/{media_id}/commit)
       await api.commitMedia(mediaId);
 
       state = state.copyWith(
-        isSaving: false,
-        photos: [...state.photos, 'uploaded_$mediaId'],
+        isSubmitting: false,
+        photos: [...state.photos, mediaId],
       );
     } catch (_) {
-      // Offline fallback: keep local reference
+      // Offline fallback: keep local media id
       state = state.copyWith(
-        isSaving: false,
-        photos: [...state.photos, dummyMediaId],
+        isSubmitting: false,
+        photos: [...state.photos, 'local_photo_$nextIdx'],
       );
     }
   }
 
-  Future<void> submitPhotoCheck({required bool isOffline}) async {
-    if (state.photos.isEmpty) {
-      state = state.copyWith(
-        errorMessage: 'Please capture at least one water photo for AI analysis',
-      );
-      return;
-    }
+  void removePhoto(int index) {
+    final updated = List<String>.from(state.photos)..removeAt(index);
+    state = state.copyWith(photos: updated);
+  }
 
-    state = state.copyWith(isSaving: true, errorMessage: null);
+  Future<void> submitLog(String pondId) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
 
     try {
-      final currentPondId = ref.read(currentPondIdProvider);
-      final repo = ref.read(logRepositoryProvider);
+      final clientLogId = const Uuid().v4();
+      final now = DateTime.now();
 
-      // TODO(contract): POST /v1/logs is missing from confirmed endpoint contract. See openapi_contract.md.
-      // Farmer observation writes are stored in local SQLite outbox until write endpoint is confirmed.
       final log = PondLog(
-        id: 'log_${DateTime.now().millisecondsSinceEpoch}',
-        pondId: currentPondId,
-        loggedAt: DateTime.now(),
+        id: clientLogId,
+        clientLogId: clientLogId,
+        pondId: pondId,
+        loggedAt: now,
+        feedGivenKg: state.feedGivenKg,
+        mortalityCount: state.mortalityCount,
+        feedTray: state.feedTray,
+        waterColor: state.waterColor,
+        ph: state.ph,
+        dissolvedOxygen: state.dissolvedOxygen,
+        temperature: state.temperature,
+        salinity: state.salinity,
         photoUrls: state.photos,
-        syncStatus: isOffline ? SyncStatus.pending : SyncStatus.synced,
+        syncStatus: SyncStatus.pending,
+        notes: state.notes.isNotEmpty ? state.notes : null,
       );
 
-      // Save photo media record locally
-      await repo.addLog(log);
+      // Save to Drift local logs & outbox tables
+      await ref.read(logRepositoryProvider).addLog(log);
 
-      state = state.copyWith(isSaving: false, isSaved: true, savedOffline: isOffline);
+      // Trigger background outbox sync
+      Future.microtask(() => ref.read(outboxProcessorProvider).syncOutbox());
+
+      // Refresh log provider
+      ref.invalidate(pondLogsProvider);
+
+      state = state.copyWith(isSubmitting: false, isSuccess: true);
     } catch (e) {
       state = state.copyWith(
-        isSaving: false,
-        isSaved: true,
-        savedOffline: true,
+        isSubmitting: false,
+        errorMessage: 'Failed to save log: $e',
       );
     }
   }
 
   void reset() {
-    state = const LogEntryState();
+    state = const LogEntryFormState();
   }
 }
 
 final logEntryControllerProvider =
-    StateNotifierProvider<LogEntryController, LogEntryState>(
-  (ref) => LogEntryController(ref),
-);
+    StateNotifierProvider<LogEntryController, LogEntryFormState>((ref) {
+  return LogEntryController(ref);
+});
 
-// ── Screen ────────────────────────────────────────────────────────────────────
-class LogEntryScreen extends ConsumerWidget {
+// ── UI Screen ─────────────────────────────────────────────────────────────────
+class LogEntryScreen extends ConsumerStatefulWidget {
   const LogEntryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LogEntryScreen> createState() => _LogEntryScreenState();
+}
+
+class _LogEntryScreenState extends ConsumerState<LogEntryScreen> {
+  late final TextEditingController _phCtrl;
+  late final TextEditingController _doCtrl;
+  late final TextEditingController _tempCtrl;
+  late final TextEditingController _salCtrl;
+  late final TextEditingController _notesCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _phCtrl = TextEditingController();
+    _doCtrl = TextEditingController();
+    _tempCtrl = TextEditingController();
+    _salCtrl = TextEditingController();
+    _notesCtrl = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _phCtrl.dispose();
+    _doCtrl.dispose();
+    _tempCtrl.dispose();
+    _salCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(logEntryControllerProvider);
     final ctrl = ref.read(logEntryControllerProvider.notifier);
-    final logsAsync = ref.watch(pondLogsProvider);
     final currentLang = ref.watch(appLanguageProvider);
-    final logs = logsAsync.valueOrNull ?? [];
-    final latestLog = logs.isNotEmpty ? logs.first : null;
+    final pondId = ref.watch(currentPondIdProvider);
 
-    if (state.isSaved) {
-      return _LogSavedScreen(
-        offline: state.savedOffline,
-        onReset: () {
-          ctrl.reset();
-          context.go('/today');
-        },
+    if (state.isSuccess) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(currentLang == 'ta' ? 'பதிவு சேமிக்கப்பட்டது' : 'Log Saved'),
+        ),
+        body: _buildSuccessView(context, currentLang),
       );
     }
 
@@ -161,464 +266,562 @@ class LogEntryScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/today')),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              AppTranslations.getText('pondTelemetryAndAi', currentLang),
-              style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold),
-            ),
-            Text(
-              _dateLabel(),
-              style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w400),
-            ),
-          ],
+        title: Text(
+          currentLang == 'ta' ? 'குளத்துப் பதிவு — $pondId' : 'Log Pond Check — $pondId',
+          style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
         ),
         actions: [
           SpeakerButton(
-            textToSpeak:
-                AppTranslations.getText('pondTelemetryAndAi', currentLang),
+            textToSpeak: currentLang == 'ta'
+                ? 'இன்றைய குளத்துப் பதிவை முடிக்க தீவனம், இறப்பு மற்றும் நீர் நிறத்தை பதிவு செய்யவும்.'
+                : 'Complete today pond log by entering feed, mortalities, and water appearance.',
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: Column(
-        children: [
-          OfflineBanner(message: AppTranslations.getText('offlineNotice', currentLang)),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppTheme.pageMargin),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppTheme.pageMargin),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Target speed banner
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary500.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.primary500.withValues(alpha: 0.2)),
+              ),
+              child: Row(
                 children: [
-                  // 1. FULL SCREEN SENSOR TELEMETRY COVERAGE
-                  _FullSensorTelemetryCard(log: latestLog),
-                  const SizedBox(height: 16),
-
-                  // 2. PHOTO MEDIA WATER APPEARANCE & QUALITY CHECK
-                  AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.camera_alt_rounded,
-                                size: 18, color: AppColors.langAccentPrimary),
-                            const SizedBox(width: 8),
-                            Text(
-                              AppTranslations.getText('waterPhotosMedia', currentLang),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          currentLang == 'ta'
-                              ? 'குளத்து நீரின் புகைப்படங்களைச் சமர்ப்பித்து AI பரிசோதனை செய்யவும்.'
-                              : 'Upload pond water photos via media API (/v1/media/upload-url + commit). AI vision automatically analyzes water quality.',
-                          style: const TextStyle(
-                              fontSize: 11.5,
-                              color: AppColors.textSecondary,
-                              height: 1.4),
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Photo Upload Strip
-                        SizedBox(
-                          height: 84,
-                          child: Row(
-                            children: [
-                              ...state.photos
-                                  .take(3)
-                                  .map((url) => _PhotoThumbnail(url: url)),
-                              if (state.photos.length < 3)
-                                _AddPhotoButton(
-                                  onTap: () => ctrl.addPhotoWithUpload(),
-                                ),
-                            ],
-                          ),
-                        ),
-
-                        if (state.errorMessage != null) ...[
-                          const SizedBox(height: 10),
-                          Text(
-                            state.errorMessage!,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.riskHigh,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 3. SUBMIT AI PHOTO CHECK BUTTON
-                  PrimaryButton(
-                    label: state.isSaving
-                        ? (currentLang == 'ta' ? 'பதிவேற்றப்படுகிறது…' : 'Uploading Media…')
-                        : AppTranslations.getText('submitWaterPhotos', currentLang),
-                    isLoading: state.isSaving,
-                    icon: Icons.cloud_upload_rounded,
-                    onPressed: () => ctrl.submitPhotoCheck(isOffline: false),
-                  ),
-                  const SizedBox(height: 12),
-                  const Center(
+                  const Icon(Icons.timer_outlined, size: 18, color: AppColors.primary500),
+                  const SizedBox(width: 8),
+                  Expanded(
                     child: Text(
-                      'Photos committed via /v1/media/* · Live IoT Telemetry Synced',
-                      style: TextStyle(
-                          fontSize: 11.5, color: AppColors.textSecondary),
+                      currentLang == 'ta'
+                          ? 'இலக்கு: 45 நொடிகளில் விரைவுப் பதிவு • ஆஃப்லைனில் செயல்படும்'
+                          : 'Target: <45 seconds daily log • Works 100% offline',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primary700),
                     ),
                   ),
-                  const SizedBox(height: 24),
                 ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+
+            // ── 1. Feed Given (kg) ─────────────────────────────────────────
+            _buildSectionCard(
+              title: currentLang == 'ta' ? 'வழங்கப்பட்ட தீவனம் (கிலோ)' : 'Feed Given (kg)',
+              icon: Icons.scale_rounded,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildCircleButton(
+                        icon: Icons.remove_rounded,
+                        onTap: () => ctrl.addFeedKg(-1.0),
+                      ),
+                      const SizedBox(width: 20),
+                      Text(
+                        '${state.feedGivenKg.toStringAsFixed(1)} kg',
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(width: 20),
+                      _buildCircleButton(
+                        icon: Icons.add_rounded,
+                        onTap: () => ctrl.addFeedKg(1.0),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      _buildQuickChip('+1 kg', () => ctrl.addFeedKg(1.0)),
+                      _buildQuickChip('+5 kg', () => ctrl.addFeedKg(5.0)),
+                      _buildQuickChip('+10 kg', () => ctrl.addFeedKg(10.0)),
+                      _buildQuickChip('+25 kg', () => ctrl.addFeedKg(25.0)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 2. Mortality Count ─────────────────────────────────────────
+            _buildSectionCard(
+              title: currentLang == 'ta' ? 'இறப்பு எண்ணிக்கை' : 'Mortality Count',
+              icon: Icons.warning_amber_rounded,
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildCircleButton(
+                        icon: Icons.remove_rounded,
+                        onTap: () => ctrl.addMortality(-1),
+                      ),
+                      const SizedBox(width: 20),
+                      Text(
+                        '${state.mortalityCount}',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: state.mortalityCount > 0 ? AppColors.critical : AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      _buildCircleButton(
+                        icon: Icons.add_rounded,
+                        onTap: () => ctrl.addMortality(1),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      _buildQuickChip('0 (None)', () => ctrl.setMortality(0)),
+                      _buildQuickChip('+1', () => ctrl.addMortality(1)),
+                      _buildQuickChip('+5', () => ctrl.addMortality(5)),
+                      _buildQuickChip('+10', () => ctrl.addMortality(10)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 3. Feed Tray Observation ───────────────────────────────────
+            _buildSectionCard(
+              title: currentLang == 'ta' ? 'தீவனத் தட்டு நிலை' : 'Feed Tray Status',
+              icon: Icons.restaurant_rounded,
+              child: Row(
+                children: [
+                  _buildChoiceChip(
+                    label: currentLang == 'ta' ? 'காலி' : 'Empty',
+                    sublabel: currentLang == 'ta' ? 'முழுதும் தின்றது' : '100% Consumed',
+                    isSelected: state.feedTray == FeedTrayStatus.empty,
+                    color: AppColors.green600,
+                    onTap: () => ctrl.setFeedTray(FeedTrayStatus.empty),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildChoiceChip(
+                    label: currentLang == 'ta' ? 'சிறிது' : 'Some Left',
+                    sublabel: currentLang == 'ta' ? '20-30% மீதி' : '~25% Remains',
+                    isSelected: state.feedTray == FeedTrayStatus.some,
+                    color: AppColors.warning,
+                    onTap: () => ctrl.setFeedTray(FeedTrayStatus.some),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildChoiceChip(
+                    label: currentLang == 'ta' ? 'நிறைய' : 'Lots Left',
+                    sublabel: currentLang == 'ta' ? '>50% மீதி' : '>50% Remains',
+                    isSelected: state.feedTray == FeedTrayStatus.lots,
+                    color: AppColors.critical,
+                    onTap: () => ctrl.setFeedTray(FeedTrayStatus.lots),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 4. Water Appearance ────────────────────────────────────────
+            _buildSectionCard(
+              title: currentLang == 'ta' ? 'குளத்து நீர் நிறம்' : 'Water Appearance',
+              icon: Icons.water_rounded,
+              child: Row(
+                children: [
+                  _buildChoiceChip(
+                    label: currentLang == 'ta' ? 'தெளிந்த பச்சை' : 'Clear Green',
+                    sublabel: currentLang == 'ta' ? 'சீராக உள்ளது' : 'Healthy Bloom',
+                    isSelected: state.waterColor == WaterAppearance.good,
+                    color: AppColors.green600,
+                    onTap: () => ctrl.setWaterAppearance(WaterAppearance.good),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildChoiceChip(
+                    label: currentLang == 'ta' ? 'பழுப்பு' : 'Brownish',
+                    sublabel: currentLang == 'ta' ? 'கண்காணிக்கவும்' : 'Diatom Shift',
+                    isSelected: state.waterColor == WaterAppearance.average,
+                    color: AppColors.warning,
+                    onTap: () => ctrl.setWaterAppearance(WaterAppearance.average),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildChoiceChip(
+                    label: currentLang == 'ta' ? 'கலங்கலாக' : 'Murky / Turbid',
+                    sublabel: currentLang == 'ta' ? 'அபாயம்' : 'Critical Bloom',
+                    isSelected: state.waterColor == WaterAppearance.bad,
+                    color: AppColors.critical,
+                    onTap: () => ctrl.setWaterAppearance(WaterAppearance.bad),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 5. Photo Upload ────────────────────────────────────────────
+            _buildSectionCard(
+              title: currentLang == 'ta' ? 'புகைப்படம் (விரும்பினால்)' : 'Photo (Optional)',
+              icon: Icons.camera_alt_rounded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (state.photos.isNotEmpty) ...[
+                    SizedBox(
+                      height: 80,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: state.photos.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (context, i) {
+                          return Stack(
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary500.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: AppColors.primary500.withValues(alpha: 0.3)),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.image_rounded, color: AppColors.primary500, size: 32),
+                                ),
+                              ),
+                              Positioned(
+                                top: 2,
+                                right: 2,
+                                child: GestureDetector(
+                                  onTap: () => ctrl.removePhoto(i),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close, color: Colors.white, size: 14),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  OutlinedButton.icon(
+                    onPressed: ctrl.addPhoto,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary500,
+                      side: const BorderSide(color: AppColors.primary500),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.add_a_photo_rounded, size: 16),
+                    label: Text(currentLang == 'ta' ? 'படம் சேர்' : 'Add Photo'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 6. Advanced Parameters (Collapsible) ────────────────────────
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: ctrl.toggleAdvanced,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.tune_rounded, size: 18, color: AppColors.primary500),
+                            const SizedBox(width: 8),
+                            Text(
+                              currentLang == 'ta'
+                                  ? 'நீரின் வேதியியல் அளவீடுகள் (pH, DO, Temp)'
+                                  : 'Water Chemistry (pH, DO, Temp, Salinity)',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            ),
+                          ],
+                        ),
+                        Icon(
+                          state.showAdvanced ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                          color: AppColors.textSecondary,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (state.showAdvanced) ...[
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildNumericField(
+                            controller: _phCtrl,
+                            label: 'pH',
+                            hint: '7.8',
+                            onChanged: (v) => ctrl.setPh(double.tryParse(v)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildNumericField(
+                            controller: _doCtrl,
+                            label: 'DO (mg/L)',
+                            hint: '5.4',
+                            onChanged: (v) => ctrl.setDissolvedOxygen(double.tryParse(v)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildNumericField(
+                            controller: _tempCtrl,
+                            label: 'Temp (°C)',
+                            hint: '28.5',
+                            onChanged: (v) => ctrl.setTemperature(double.tryParse(v)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildNumericField(
+                            controller: _salCtrl,
+                            label: 'Salinity (ppt)',
+                            hint: '15.0',
+                            onChanged: (v) => ctrl.setSalinity(double.tryParse(v)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // ── 7. Optional Notes ──────────────────────────────────────────
+            AppCard(
+              child: TextField(
+                controller: _notesCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: currentLang == 'ta' ? 'குறிப்புகள் (விரும்பினால்)' : 'Observations / Notes (Optional)',
+                  hintText: currentLang == 'ta' ? 'எ.கா. காலை வேளையில் நீரோட்டம் குறைவு' : 'e.g. Aerator #2 serviced this morning',
+                  border: InputBorder.none,
+                ),
+                onChanged: ctrl.setNotes,
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // Error display
+            if (state.errorMessage != null) ...[
+              Text(
+                state.errorMessage!,
+                style: const TextStyle(color: AppColors.critical, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // Submit Button
+            PrimaryButton(
+              label: currentLang == 'ta' ? 'பதிவைச் சேமி' : 'Save Pond Check',
+              isLoading: state.isSubmitting,
+              onPressed: state.isSubmitting ? null : () => ctrl.submitLog(pondId),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
       bottomNavigationBar: FarmerBottomNavBar(
         currentIndex: 1,
         onTap: (i) {
           switch (i) {
-            case 0:
-              context.go('/today');
-              break;
-            case 1:
-              break;
-            case 2:
-              context.go('/ask');
-              break;
-            case 3:
-              context.go('/alerts');
-              break;
-            case 4:
-              context.go('/crop');
-              break;
+            case 0: context.go('/today'); break;
+            case 1: break;
+            case 2: context.go('/ask'); break;
+            case 3: context.go('/alerts'); break;
+            case 4: context.go('/crop'); break;
           }
         },
       ),
     );
   }
 
-  String _dateLabel() {
-    final now = DateTime.now();
-    return '${now.day}/${now.month}/${now.year}';
-  }
-}
-
-// ── Full-Screen IoT Sensor Telemetry Display ──────────────────────────────────
-class _FullSensorTelemetryCard extends ConsumerWidget {
-  final PondLog? log;
-
-  const _FullSensorTelemetryCard({this.log});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currentLang = ref.watch(appLanguageProvider);
-    final ph = log?.ph ?? 7.8;
-    final doVal = log?.dissolvedOxygen ?? 5.4;
-    final temp = log?.temperature ?? 28.0;
-    final sal = log?.salinity ?? 15.0;
-    final syncedAt = log?.loggedAt;
-
-    return AppCard(
-      type: CardType.info,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.sensors_rounded,
-                      size: 20, color: AppColors.langAccentPrimary),
-                  const SizedBox(width: 8),
-                  Text(
-                    AppTranslations.getText('sensorReadings', currentLang),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              StalenessBadge(syncedAt: syncedAt),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            currentLang == 'ta'
-                ? 'நேரலை சென்சார்களிலிருந்து பெறப்பட்ட குளத்து நீர் அளவீடுகள்.'
-                : 'Continuous water chemistry readings supplied automatically by IoT sensors.',
-            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 14),
-
-          // Primary Grid Telemetry Tiles
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.6,
-            children: [
-              _TelemetryTile(
-                label: AppTranslations.getText('dissolvedOxygen', currentLang),
-                value: doVal.toStringAsFixed(1),
-                unit: 'mg/L',
-                status: doVal < 4.0
-                    ? (currentLang == 'ta' ? 'குறைந்த DO எச்சரிக்கை' : 'Low DO Warning')
-                    : (currentLang == 'ta' ? 'உகந்தது (>4.0)' : 'Optimal (>4.0)'),
-                isAlert: doVal < 4.0,
-                icon: Icons.air_rounded,
-              ),
-              _TelemetryTile(
-                label: AppTranslations.getText('pHLevel', currentLang),
-                value: ph.toStringAsFixed(1),
-                unit: 'pH',
-                status: (ph < 6.5 || ph > 8.5)
-                    ? (currentLang == 'ta' ? 'pH வேறுபாடு' : 'pH Variance')
-                    : (currentLang == 'ta' ? 'சீரானது (6.5-8.5)' : 'Stable (6.5-8.5)'),
-                isAlert: ph < 6.5 || ph > 8.5,
-                icon: Icons.water_drop_rounded,
-              ),
-              _TelemetryTile(
-                label: AppTranslations.getText('temperature', currentLang),
-                value: temp.toStringAsFixed(0),
-                unit: '°C',
-                status: currentLang == 'ta' ? 'சாதாரண அளவு' : 'Normal Range',
-                isAlert: false,
-                icon: Icons.thermostat_rounded,
-              ),
-              _TelemetryTile(
-                label: AppTranslations.getText('salinity', currentLang),
-                value: sal.toStringAsFixed(1),
-                unit: 'ppt',
-                status: currentLang == 'ta' ? 'உகந்த உவர்ப்பு' : 'Optimal Brackish',
-                isAlert: false,
-                icon: Icons.waves_rounded,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TelemetryTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final String unit;
-  final String status;
-  final bool isAlert;
-  final IconData icon;
-
-  const _TelemetryTile({
-    required this.label,
-    required this.value,
-    required this.unit,
-    required this.status,
-    required this.isAlert,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isAlert ? AppColors.riskHigh : AppColors.langAccentPrimary;
-    final bgColor = isAlert ? AppColors.criticalSurface : AppColors.surface;
-    final borderColor = isAlert ? AppColors.criticalBorder : AppColors.border;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: isAlert ? AppColors.riskHigh : AppColors.textPrimary),
-              ),
-              const SizedBox(width: 3),
-              Text(
-                unit,
-                style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            status,
-            style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w600,
-                color: isAlert ? AppColors.riskHigh : AppColors.green600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Log Saved Confirmation Screen ─────────────────────────────────────────────
-class _LogSavedScreen extends StatelessWidget {
-  final bool offline;
-  final VoidCallback onReset;
-
-  const _LogSavedScreen({required this.offline, required this.onReset});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.green600.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: AppColors.green600.withValues(alpha: 0.3), width: 2),
-                  ),
-                  child: const Icon(Icons.check_rounded,
-                      color: AppColors.green600, size: 40),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Water Photos & Telemetry Synced',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  offline
-                      ? 'Photos queued for media API upload when online'
-                      : 'Water appearance photos committed & sent to AI vision',
-                  style: const TextStyle(
-                      fontSize: 13, color: AppColors.textSecondary),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-                PrimaryButton(
-                  label: 'Back to Dashboard',
-                  onPressed: onReset,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Photo Thumbnail & Add Button ──────────────────────────────────────────────
-class _PhotoThumbnail extends StatelessWidget {
-  final String url;
-  const _PhotoThumbnail({required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 76,
-      height: 76,
-      margin: const EdgeInsets.only(right: 10),
-      decoration: BoxDecoration(
-        color: AppColors.langAccentPrimary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.langAccentPrimary.withValues(alpha: 0.3)),
-      ),
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.image_rounded, color: AppColors.langAccentPrimary, size: 28),
-          SizedBox(height: 2),
-          Text('Media API', style: TextStyle(fontSize: 9, color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddPhotoButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _AddPhotoButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 76,
-        height: 76,
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Column(
+  Widget _buildSuccessView(BuildContext context, String currentLang) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_a_photo_rounded, color: AppColors.langAccentPrimary, size: 24),
-            SizedBox(height: 4),
-            Text('Add Photo', style: TextStyle(fontSize: 10, color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.green600.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle_rounded, size: 72, color: AppColors.green600),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              currentLang == 'ta' ? 'பதிவு வெற்றிகரமாகச் சேமிக்கப்பட்டது!' : 'Pond Check Recorded!',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              currentLang == 'ta'
+                  ? 'உங்கள் பதிவு உள்ளூர் சேமிப்பகத்தில் பாதுகாப்பாக உள்ளது. இணைப்பு கிடைத்ததும் தானாகவே ஒத்திசைக்கப்படும்.'
+                  : 'Saved locally to SQLite outbox. Will sync automatically when online.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            PrimaryButton(
+              label: currentLang == 'ta' ? 'டாஷ்போர்டுக்குத் திரும்பு' : 'Back to Today Dashboard',
+              onPressed: () {
+                ref.read(logEntryControllerProvider.notifier).reset();
+                context.go('/today');
+              },
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.primary500),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCircleButton({required IconData icon, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppColors.primary500.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.primary500.withValues(alpha: 0.2)),
+        ),
+        child: Icon(icon, color: AppColors.primary500, size: 22),
+      ),
+    );
+  }
+
+  Widget _buildQuickChip(String label, VoidCallback onTap) {
+    return ActionChip(
+      label: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+      onPressed: onTap,
+      backgroundColor: AppColors.background,
+      side: const BorderSide(color: AppColors.border),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
+  }
+
+  Widget _buildChoiceChip({
+    required String label,
+    required String sublabel,
+    required bool isSelected,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withValues(alpha: 0.15) : AppColors.background,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : AppColors.border,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? color : AppColors.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                sublabel,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected ? color.withValues(alpha: 0.8) : AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNumericField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required ValueChanged<String> onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: onChanged,
     );
   }
 }

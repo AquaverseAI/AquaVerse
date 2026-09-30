@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/auth_api_service.dart';
-import '../../../core/services/demo_data_service.dart';
+import '../../../core/providers/data_providers.dart';
 import '../../../core/storage/onboarding_flag_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -9,12 +10,12 @@ import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/speaker_button.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  void _showFarmerDetailsDialog(BuildContext context) {
-    final farmer = DemoDataService.farmer;
-    final pond = DemoDataService.pond;
+  void _showFarmerDetailsDialog(BuildContext context, WidgetRef ref) {
+    final me = ref.read(meProvider).valueOrNull;
+    final pond = ref.read(currentPondProvider).valueOrNull;
 
     showDialog(
       context: context,
@@ -31,23 +32,142 @@ class ProfileScreen extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _DetailRow(label: 'Farmer Name', value: farmer.name),
+              _DetailRow(label: 'Farmer Name', value: me?.name ?? 'Farmer'),
               const Divider(height: 12),
-              _DetailRow(label: 'Registered Phone', value: farmer.phone),
+              _DetailRow(label: 'Registered Phone', value: me?.phone ?? '—'),
               const Divider(height: 12),
-              _DetailRow(label: 'Assigned Pond ID', value: farmer.pondId),
+              _DetailRow(label: 'Assigned Pond ID', value: pond?.id ?? '—'),
               const Divider(height: 12),
-              _DetailRow(label: 'Farm Location', value: pond.location),
+              _DetailRow(label: 'Farm Location', value: pond?.location ?? '—'),
               const Divider(height: 12),
-              _DetailRow(label: 'Culture Species', value: pond.species),
+              _DetailRow(label: 'Culture Species', value: pond?.species ?? '—'),
               const Divider(height: 12),
-              _DetailRow(label: 'Pond Area / Depth', value: '${pond.areaSqM.toInt()} m² / ${pond.depthM}m'),
+              _DetailRow(label: 'Pond Area / Depth', value: '${pond?.areaSqM?.toInt() ?? 0} m² / ${pond?.depthM ?? 0}m'),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Close', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showNotificationSettingsDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Consumer(
+          builder: (context, ref, child) {
+            final pushNotif = ref.watch(pushNotifProvider);
+            final alertPref = ref.watch(alertPrefProvider);
+            final unit = ref.watch(selectedUnitProvider);
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.tune_rounded, color: AppColors.langAccentPrimary),
+                  SizedBox(width: 8),
+                  Text('Preferences', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Push Notifications', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Real-time alerts & advice', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    value: pushNotif,
+                    activeTrackColor: AppColors.seaGreen,
+                    onChanged: (v) => ref.read(pushNotifProvider.notifier).state = v,
+                  ),
+                  const Divider(height: 8),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('SMS Critical Alerts', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Direct SMS for hypoxia risk', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    value: alertPref,
+                    activeTrackColor: AppColors.seaGreen,
+                    onChanged: (v) => ref.read(alertPrefProvider.notifier).state = v,
+                  ),
+                  const Divider(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Units', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        Row(
+                          children: ['metric', 'imperial'].map((u) {
+                            final selected = unit == u;
+                            return GestureDetector(
+                              onTap: () => ref.read(selectedUnitProvider.notifier).state = u,
+                              child: Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: selected ? AppColors.seaGreen : AppColors.background,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: selected ? AppColors.seaGreen : AppColors.border),
+                                ),
+                                child: Text(
+                                  u,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: selected ? Colors.white : AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showLegalDialog(BuildContext context, String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.description_rounded, color: AppColors.langAccentPrimary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              content,
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -73,15 +193,15 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'AquaVerse Farmer App · Version 1.2.0',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                'AquaVerse AI Mobile Client',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
               ),
-              SizedBox(height: 6),
+              SizedBox(height: 4),
               Text(
-                'Smart Aquaculture Precision Platform for Farmers & Extension Officers.\n\n'
-                '• Offline-First Drift (SQLite) Telemetry Cache\n'
-                '• AI Sensor-Driven Pond Health Risk Engine\n'
-                '• Native Multi-Language Support (Tamil, English, Hindi, Telugu)',
+                'Production Build • v1.0.0 (Foundation)\n'
+                'Production Build • v1.2.0 (Foundation)\n'
+                'Offline-first architecture with Drift and Riverpod.\n'
+                'Designed for aquaculture farmers and extension officers.',
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
               ),
             ],
@@ -89,7 +209,7 @@ class ProfileScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
+              child: const Text('OK', style: TextStyle(color: AppColors.langAccentPrimary, fontWeight: FontWeight.bold)),
             ),
           ],
         );
@@ -98,8 +218,11 @@ class ProfileScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final farmer = DemoDataService.farmer;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(meProvider).valueOrNull;
+    final pond = ref.watch(currentPondProvider).valueOrNull;
+    final farmerName = me?.name ?? 'Farmer';
+    final pondId = pond?.id ?? '—';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -107,7 +230,7 @@ class ProfileScreen extends StatelessWidget {
         leading: BackButton(onPressed: () => context.go('/today')),
         title: const Text('Farmer Profile', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         actions: [
-          SpeakerButton(textToSpeak: 'Farmer Profile for ${DemoDataService.farmer.name}. Pond ${DemoDataService.farmer.pondId}.'),
+          SpeakerButton(textToSpeak: 'Farmer Profile for $farmerName. Pond $pondId.'),
           const SizedBox(width: 8),
         ],
       ),
@@ -142,7 +265,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        farmer.name.isNotEmpty ? farmer.name[0].toUpperCase() : 'F',
+                        farmerName.isNotEmpty ? farmerName[0].toUpperCase() : 'F',
                         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ),
@@ -153,12 +276,12 @@ class ProfileScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          farmer.name,
+                          farmerName,
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          farmer.phone,
+                          me?.phone ?? '—',
                           style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.87)),
                         ),
                         const SizedBox(height: 6),
@@ -169,7 +292,7 @@ class ProfileScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            'Pond ID: ${farmer.pondId} · Active',
+                            'Pond ID: $pondId · Active',
                             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                         ),
@@ -192,7 +315,7 @@ class ProfileScreen extends StatelessWidget {
                     icon: Icons.person_rounded,
                     title: 'My Profile & Farm Info',
                     subtitle: 'View registered farmer details and pond spec',
-                    onTap: () => _showFarmerDetailsDialog(context),
+                    onTap: () => _showFarmerDetailsDialog(context, ref),
                   ),
                   const Divider(height: 1),
                   _MenuItem(
@@ -204,9 +327,9 @@ class ProfileScreen extends StatelessWidget {
                   const Divider(height: 1),
                   _MenuItem(
                     icon: Icons.notifications_rounded,
-                    title: 'Notification Settings',
-                    subtitle: 'Manage SMS & push alerts',
-                    onTap: () => context.push('/settings'),
+                    title: 'Notification & App Settings',
+                    subtitle: 'Manage alerts, SMS preferences & units',
+                    onTap: () => _showNotificationSettingsDialog(context, ref),
                   ),
                   const Divider(height: 1),
                   _MenuItem(
@@ -221,6 +344,20 @@ class ProfileScreen extends StatelessWidget {
                     title: 'Help & Escalation Support',
                     subtitle: 'Contact officer or call helpline',
                     onTap: () => context.push('/help'),
+                  ),
+                  const Divider(height: 1),
+                  _MenuItem(
+                    icon: Icons.privacy_tip_rounded,
+                    title: 'Privacy Policy & Terms',
+                    subtitle: 'Data handling, consent & service terms',
+                    onTap: () => _showLegalDialog(
+                      context,
+                      'Privacy & Terms',
+                      'AquaVerse AI is dedicated to safeguarding farmer and pond data privacy.\n\n'
+                      '• Data Storage: All telemetry, logs, and sensor alerts remain locally on your device via SQLite and sync encrypted.\n'
+                      '• Usage: Pond parameters and harvest estimates are used solely for localized advisory and disease alerts.\n'
+                      '• Terms: Recommendations are AI-assisted guidelines; always verify with extension officers for critical treatments.',
+                    ),
                   ),
                   const Divider(height: 1),
                   _MenuItem(
@@ -239,12 +376,13 @@ class ProfileScreen extends StatelessWidget {
               label: 'Sign Out',
               icon: Icons.logout_rounded,
               onPressed: () async {
-                final authService = AuthApiService();
-                await authService.logout();
+                await ref.read(authApiServiceProvider).logout();
                 final store = await OnboardingFlagStore.create();
                 await store.clearSession();
                 if (context.mounted) {
-                  context.go('/onboarding/mobile');
+                  // Route to role selection so stale role state is cleared
+                  // on the next login attempt.
+                  context.go('/onboarding/role');
                 }
               },
             ),

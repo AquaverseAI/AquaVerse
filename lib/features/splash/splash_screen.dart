@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -180,6 +179,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   /// Blur-to-sharp text helper. Skips ImageFiltered when sigma ≤ 0.3
   /// to avoid unnecessary raster overhead on low-end devices.
+  /// Clean, crisp text reveal helper without blurry image filters
   Widget _buildBlurText({
     required String text,
     required TextStyle style,
@@ -188,18 +188,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     TextAlign textAlign = TextAlign.left,
   }) {
     final clampedOpacity = opacity.clamp(0.0, 1.0);
-    if (sigma <= 0.3) {
-      return Opacity(
-        opacity: clampedOpacity,
-        child: Text(text, style: style, textAlign: textAlign),
-      );
-    }
     return Opacity(
       opacity: clampedOpacity,
-      child: ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-        child: Text(text, style: style, textAlign: textAlign),
-      ),
+      child: Text(text, style: style, textAlign: textAlign),
     );
   }
 
@@ -210,6 +201,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final taglineText =
         l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest';
 
+    const palatinoFont = 'Palatino';
+    const palatinoFallbacks = ['Palatino Linotype', 'Georgia', 'serif'];
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: AnimatedBuilder(
@@ -219,8 +213,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           final orbit  = _orbitAngle.value;       // 0→2π
 
           // ── Blob geometry ─────────────────────────────────────────────────
-          // At expand=0: two oval blobs orbiting at orbit radius.
-          // At expand=1: single ellipse fills the screen completely.
           final blobRadius = size.shortestSide * 0.12; // 12% of screen width
           final orbitRadius = blobRadius * 1.6;
 
@@ -238,13 +230,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           final fillDiagonal = math.sqrt(
             size.width * size.width + size.height * size.height,
           );
-          // Blob width: small at 0, fills screen at 1
           final blob1W = blobRadius * 2 * (1 + expand * (fillDiagonal / (blobRadius * 2) - 1));
-          final blob1H = blob1W * (0.75 + 0.25 * expand); // aspect ratio rounds to circle as it fills
-          final blob2W = blob1W * (1.0 - expand * 0.5);   // dot2 shrinks/merges
+          final blob1H = blob1W * (0.75 + 0.25 * expand);
+          final blob2W = blob1W * (1.0 - expand * 0.5);
           final blob2H = blob1H * (1.0 - expand * 0.5);
 
-          // Background: white → teal gradient (driven by expand)
           final bgOpacity = expand.clamp(0.0, 1.0);
 
           return Stack(
@@ -266,7 +256,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           alignment: Alignment.center,
                         ),
                       ),
-                      // Subtle gradient vignette overlay to ensure white text & logo remain crisp
+                      // Deep contrast gradient backdrop for crystal-clear readability
                       Positioned.fill(
                         child: Container(
                           decoration: BoxDecoration(
@@ -274,11 +264,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withValues(alpha: 0.35),
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.40),
+                                Colors.black.withValues(alpha: 0.50),
+                                Colors.black.withValues(alpha: 0.20),
+                                Colors.black.withValues(alpha: 0.65),
                               ],
-                              stops: const [0.0, 0.45, 1.0],
+                              stops: const [0.0, 0.40, 1.0],
                             ),
                           ),
                         ),
@@ -288,7 +278,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
               ),
 
-              // ── Blob 1: solid seaGreen (fades out as background image reveals) ───
+              // ── Blob 1: solid seaGreen ───
               if (expand < 0.95)
                 Positioned(
                   left: dot1x - blob1W / 2,
@@ -306,7 +296,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   ),
                 ),
 
-              // ── Blob 2: translucent brightMint (merges & fades away early) ──
+              // ── Blob 2: translucent brightMint ──
               if (expand < 0.85)
                 Positioned(
                   left: dot2x - blob2W / 2,
@@ -340,7 +330,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             opacity: _logoOpacity.value,
                             child: Row(
                               children: [
-                                // Two-circle toggle icon mark
                                 SizedBox(
                                   width: 32,
                                   height: 20,
@@ -377,8 +366,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 const Text(
                                   'AquaVerse',
                                   style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w300,
+                                    fontFamily: palatinoFont,
+                                    fontFamilyFallback: palatinoFallbacks,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
                                     color: Colors.white,
                                     letterSpacing: 0.5,
                                   ),
@@ -395,107 +386,82 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             sigma: _line1Blur.value,
                             opacity: _line1Opacity.value,
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontFamily: palatinoFont,
+                              fontFamilyFallback: palatinoFallbacks,
+                              fontSize: 20,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
-                              height: 1.15,
+                              height: 1.2,
                               letterSpacing: 0.3,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
                             ),
                           ),
 
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 4),
 
-                          // ── Lines 2: hero bold ("AquaVerse AI") ──────────
+                          // ── Line 2: hero title ("AquaVerse AI") ──────────
                           _buildBlurText(
                             text: 'AquaVerse AI',
                             sigma: _line2Blur.value,
                             opacity: _line2Opacity.value,
                             style: const TextStyle(
-                              fontSize: 42,
-                              fontWeight: FontWeight.w900,
+                              fontFamily: palatinoFont,
+                              fontFamilyFallback: palatinoFallbacks,
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              height: 1.08,
+                              height: 1.1,
                               letterSpacing: -0.5,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 10,
-                                  offset: Offset(0, 3),
-                                ),
-                              ],
                             ),
                           ),
 
-                          // ── Line 3: bold sub-headline ──────────────────
+                          // ── Line 3: sub-headline ("your pond, your harvest.") ──
                           _buildBlurText(
                             text: 'your pond,\nyour harvest.',
                             sigma: _line2Blur.value,
                             opacity: _line2Opacity.value * 0.95,
                             style: const TextStyle(
-                              fontSize: 34,
-                              fontWeight: FontWeight.w800,
+                              fontFamily: palatinoFont,
+                              fontFamilyFallback: palatinoFallbacks,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              height: 1.1,
+                              height: 1.15,
                               letterSpacing: -0.3,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 10,
-                                  offset: Offset(0, 3),
-                                ),
-                              ],
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 14),
 
-                          // ── Lines 4–5: tagline ─────────────────────────
+                          // ── Line 4: tagline ─────────────────────────
                           _buildBlurText(
                             text: taglineText,
                             sigma: _line3Blur.value,
                             opacity: _line3Opacity.value,
-                            style: const TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                            style: TextStyle(
+                              fontFamily: palatinoFont,
+                              fontFamilyFallback: palatinoFallbacks,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.95),
                               height: 1.3,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
                             ),
                           ),
 
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
 
                           // ── Line 5: dim descriptor ───
                           _buildBlurText(
                             text: 'AI-powered aquaculture for every farmer.',
                             sigma: _line3Blur.value,
-                            opacity: _line3Opacity.value * 0.85,
-                            style: const TextStyle(
-                              fontSize: 15,
+                            opacity: _line3Opacity.value * 0.90,
+                            style: TextStyle(
+                              fontFamily: palatinoFont,
+                              fontFamilyFallback: palatinoFallbacks,
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                              color: Colors.white.withValues(alpha: 0.85),
                               height: 1.4,
-                              letterSpacing: 0.1,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black87,
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
+                              letterSpacing: 0.2,
                             ),
                           ),
 
@@ -596,8 +562,10 @@ class _GetStartedButton extends StatelessWidget {
           child: Text(
             'Get Started',
             style: TextStyle(
+              fontFamily: 'Palatino',
+              fontFamilyFallback: const ['Palatino Linotype', 'Georgia', 'serif'],
               fontSize: 17,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               color: textColor,
               letterSpacing: 0.3,
             ),

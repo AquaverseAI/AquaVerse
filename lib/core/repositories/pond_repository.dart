@@ -16,8 +16,8 @@ class PondRepository {
 
   Future<void> syncPonds() async {
     try {
-      final ponds = await api.getPonds();
-      for (final p in ponds) {
+      final response = await api.getPonds();
+      for (final p in response.pondList) {
         await db.insertOrUpdatePond(PondsTableCompanion(
           id: Value(p.id),
           name: Value(p.name),
@@ -33,7 +33,7 @@ class PondRepository {
           lastUpdated: Value(p.lastUpdated),
         ));
       }
-    } catch (e) {
+    } catch (_) {
       // Offline or error — fallback to local Drift data implicitly
     }
   }
@@ -57,7 +57,7 @@ class PondRepository {
     )).toList();
   }
 
-  Future<Pond> getPondById(String pondId) async {
+  Future<Pond?> getPondById(String pondId) async {
     try {
       final p = await api.getPondDetails(pondId);
       await db.insertOrUpdatePond(PondsTableCompanion(
@@ -77,6 +77,7 @@ class PondRepository {
     } catch (_) {}
 
     final d = await db.getPondById(pondId);
+    if (d == null) return null;
     return Pond(
       id: d.id,
       name: d.name,
@@ -97,14 +98,14 @@ class PondRepository {
     final key = 'risk_$pondId';
     try {
       final raw = await api.getPondRisk(pondId);
-      await cache.write(key, raw);
-      return PondRisk.fromJson(raw, syncedAt: DateTime.now());
+      await cache.write(key, raw.toJson());
+      return raw;
     } catch (_) {
       final cached = await cache.read(key);
       if (cached != null) {
         try {
-          final decoded = jsonDecode(cached.blob);
-          return PondRisk.fromJson(decoded, syncedAt: cached.syncedAt);
+          final decoded = jsonDecode(cached.blob) as Map<String, dynamic>;
+          return PondRisk.fromJson(decoded);
         } catch (_) {}
       }
       return const PondRisk(tier: 'low');
@@ -114,12 +115,10 @@ class PondRepository {
   Future<List<PondEvent>> getPondEvents(String pondId) async {
     final key = 'events_$pondId';
     try {
-      final raw = await api.getPondEvents(pondId);
-      await cache.write(key, raw);
-      if (raw is List) {
-        return raw.map((e) => PondEvent.fromJson(e as Map<String, dynamic>)).toList();
-      }
-      return [];
+      final response = await api.getPondEvents(pondId);
+      final events = response.items;
+      await cache.write(key, events.map((e) => e.toJson()).toList());
+      return events;
     } catch (_) {
       final cached = await cache.read(key);
       if (cached != null) {
@@ -141,4 +140,3 @@ final pondRepositoryProvider = Provider<PondRepository>((ref) {
   final cache = ref.watch(dashboardCacheRepositoryProvider);
   return PondRepository(db, api, cache);
 });
-

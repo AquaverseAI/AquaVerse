@@ -4,14 +4,32 @@ import 'app_colors.dart';
 /// Centralised Material 3 theme for AquaVerse AI.
 /// Light theme — strictly implementing AquaVerse_AI_Design_System.md
 class AppTheme {
-  static const double cardRadius   = 16.0;
-  static const double buttonRadius = 14.0;
-  static const double inputRadius  = 12.0;
-  static const double pageMargin   = 16.0;
-  static const double buttonHeight = 48.0;
+  // Legacy constants kept for backward compatibility with existing widgets.
+  // New code should use AppRadius and AppSpacing from app_spacing.dart.
+  static const double cardRadius   = 16.0;   // = AppRadius.card
+  static const double buttonRadius = 14.0;   // = AppRadius.button
+  static const double inputRadius  = 12.0;   // = AppRadius.sm
+  static const double pageMargin   = 16.0;   // = AppSpacing.lg
+  static const double buttonHeight = 48.0;   // = AppTouchTarget.buttonHeight
+
+
+  /// Returns the correct body text line-height for tall Indic scripts.
+  /// Tamil (ta), Telugu (te), Kannada (kn), and Malayalam (ml) glyphs
+  /// have ascenders/descenders that clip at the standard 1.5 height.
+  ///
+  /// Usage: height: AppTheme.bodyLineHeight(Localizations.localeOf(context))
+  static double bodyLineHeight(Locale? locale) {
+    const tallScripts = {'ta', 'te', 'kn', 'ml'};
+    if (locale != null && tallScripts.contains(locale.languageCode)) {
+      return 1.65;
+    }
+    return 1.5;
+  }
 
   static ThemeData get light {
     final base = ThemeData.light(useMaterial3: true);
+    const palatino = 'Palatino';
+    const palatinoFallbacks = ['Palatino Linotype', 'Georgia', 'serif'];
 
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
@@ -138,19 +156,19 @@ class AppTheme {
 
       // ── Text ────────────────────────────────────────────────────────────────
       textTheme: const TextTheme(
-        displayLarge: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.2),
-        headlineLarge: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.2),
-        headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        headlineSmall: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        titleLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        titleMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        titleSmall: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        bodyLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: AppColors.textPrimary, height: 1.5),
-        bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.textPrimary, height: 1.5),
-        bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: AppColors.textSecondary, height: 1.4),
-        labelLarge: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
-        labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+        displayLarge: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 30, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.2),
+        headlineLarge: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.textPrimary, height: 1.2),
+        headlineMedium: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+        headlineSmall: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        titleLarge: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+        titleMedium: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        titleSmall: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        bodyLarge: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 15, fontWeight: FontWeight.w400, color: AppColors.textPrimary, height: 1.5),
+        bodyMedium: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 14, fontWeight: FontWeight.w400, color: AppColors.textPrimary, height: 1.5),
+        bodySmall: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 12, fontWeight: FontWeight.w400, color: AppColors.textSecondary, height: 1.4),
+        labelLarge: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        labelMedium: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSecondary),
+        labelSmall: TextStyle(fontFamily: palatino, fontFamilyFallback: palatinoFallbacks, fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
       ),
 
       // ── Icon ────────────────────────────────────────────────────────────────

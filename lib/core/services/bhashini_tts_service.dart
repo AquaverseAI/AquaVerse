@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import '../models/models.dart';
 import '../network/api_client.dart';
 import '../providers/providers.dart';
 
@@ -35,14 +36,13 @@ class BhashiniTtsService {
     }
 
     try {
-      // 1. Hook for Bhashini API / translate endpoint
-      final res = await _api.translate({
-        'text': text,
-        'source_language': langCode == 'ta' ? 'en' : 'ta',
-        'target_language': langCode,
-      });
+      final res = await _api.translate(TranslationRequest(
+        text: text,
+        sourceLanguage: langCode == 'ta' ? 'en' : 'ta',
+        targetLanguage: langCode,
+      ));
 
-      _audioCache[cacheKey] = res['translated_text'] ?? text;
+      _audioCache[cacheKey] = res.translatedText;
       return true;
     } catch (e) {
       debugPrint('🔊 [Bhashini TTS] Fallback audio playback triggered for: $text');

@@ -1,7 +1,29 @@
 import 'package:flutter/material.dart';
-import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
+
+const List<Map<String, String>> _helpFaqs = [
+  {
+    'q': 'How often should I log my pond data?',
+    'a': 'Log at least once daily, preferably in the morning. Consistent logging improves AI forecast accuracy significantly.',
+  },
+  {
+    'q': 'What is a safe dissolved oxygen level?',
+    'a': 'Dissolved oxygen should be above 4.0 mg/L at all times. Below 3.0 mg/L is critical and requires immediate aeration.',
+  },
+  {
+    'q': 'When should I use Ask Aqua?',
+    'a': 'Ask Aqua any time you have a question about your pond. It works best when you have logged regularly and have recent data.',
+  },
+  {
+    'q': 'What does the blind state warning mean?',
+    'a': 'Blind state means AI cannot generate reliable advice because no log has been recorded for 3+ days. Log your data to resume alerts.',
+  },
+  {
+    'q': 'How do I sync offline logs?',
+    'a': 'Offline logs sync automatically when you reconnect to the internet. You can see pending logs in the Log screen.',
+  },
+];
 
 class HelpCenterScreen extends StatefulWidget {
   const HelpCenterScreen({super.key});
@@ -23,7 +45,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final faqs = DemoDataService.faqs
+    final faqs = _helpFaqs
         .where((f) => _query.isEmpty || f['q']!.toLowerCase().contains(_query.toLowerCase()))
         .toList();
 

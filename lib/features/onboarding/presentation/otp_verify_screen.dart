@@ -198,27 +198,27 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen>
         // Start continuous looping radial glow
         _glowController.repeat(reverse: true);
 
-        // Check onboarding status and persist selected role
+        // Persist verified onboarding state
         final flagStore = await OnboardingFlagStore.create();
         final state = ref.read(onboardingControllerProvider);
-        await flagStore.setSelectedRole(state.selectedRole);
+        final verifiedRole = state.verifiedRole;
+
+        if (verifiedRole == null || verifiedRole.isEmpty) {
+          _triggerErrorFlow();
+          return;
+        }
+
+        await flagStore.setSelectedRole(verifiedRole);
         await flagStore.setSelectedLanguage(state.selectedLanguage);
         await flagStore.setMobileNumber(state.mobileNumber);
+        await flagStore.setHasOnboarded(true);
 
-        final hasOnboardedAlready = flagStore.hasOnboarded;
-
-        final String nextRoute;
-        if (state.selectedRole == 'officer') {
-          // Extension Officer role -> Always route directly to Officer Dashboard
-          await flagStore.setHasOnboarded(true);
-          nextRoute = '/officer/dashboard';
-        } else if (hasOnboardedAlready) {
-          // Returning farmer user -> Go directly to Today dashboard
-          nextRoute = '/today';
-        } else {
-          // First-time onboarding farmer -> Proceed to Role Selection
-          nextRoute = '/onboarding/role';
-        }
+        // Authoritative verified role routes to Officer Dashboard or Farmer Today
+        final String nextRoute = verifiedRole == 'officer'
+            ? '/officer/dashboard'
+            : verifiedRole == 'farmer'
+                ? '/today'
+                : '/onboarding/role'; // unknown role → role selection for safe re-login
 
         // Brief delay to wow user with success state before route transition
         await Future.delayed(const Duration(milliseconds: 1600));

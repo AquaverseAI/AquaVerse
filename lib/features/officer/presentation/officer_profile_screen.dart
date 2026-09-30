@@ -342,7 +342,7 @@ class OfficerProfileScreen extends ConsumerWidget {
                     icon: Icons.language_rounded,
                     title: currentLang == 'ta' ? 'செயலி மொழி' : 'App Language',
                     subtitle: currentLang == 'ta' ? 'தமிழ் (Tamil) / English' : 'English / Tamil (தமிழ்)',
-                    onTap: () => context.push('/settings'),
+                    onTap: () => context.push('/onboarding/language'),
                   ),
                   const Divider(height: 1),
                   _OptionTile(
@@ -368,12 +368,12 @@ class OfficerProfileScreen extends ConsumerWidget {
               label: currentLang == 'ta' ? 'வெளியேறு' : 'Sign Out',
               icon: Icons.logout_rounded,
               onPressed: () async {
-                final authService = AuthApiService();
-                await authService.logout();
+                await ref.read(authApiServiceProvider).logout();
                 final flagStore = await OnboardingFlagStore.create();
                 await flagStore.clearSession();
                 if (context.mounted) {
-                  context.go('/onboarding/mobile');
+                  // /onboarding/role forces re-selection — prevents stale role state.
+                  context.go('/onboarding/role');
                 }
               },
             ),

@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
-import '../../../core/services/demo_data_service.dart';
+import '../../../core/providers/data_providers.dart';
+import '../../../core/repositories/alert_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/blind_state_banner.dart';
@@ -11,7 +12,6 @@ import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../../shared/widgets/speaker_button.dart';
 
 // ── Providers ─────────────────────────────────────────────────────────────────
-final alertsProvider = StateProvider<List<AlertItem>>((ref) => DemoDataService.alerts);
 final alertsTabProvider = StateProvider<int>((ref) => 0);
 
 class AlertsScreen extends ConsumerWidget {
@@ -19,7 +19,8 @@ class AlertsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final alerts = ref.watch(alertsProvider);
+    final alertsAsync = ref.watch(alertsListProvider);
+    final alerts = alertsAsync.valueOrNull ?? const [];
     final tabIdx = ref.watch(alertsTabProvider);
     final currentLang = ref.watch(appLanguageProvider);
 
@@ -29,9 +30,9 @@ class AlertsScreen extends ConsumerWidget {
 
     List<AlertItem> filtered;
     switch (tabIdx) {
-      case 1: filtered = alerts.where((a) => a.severity == AlertSeverity.critical).toList(); break;
-      case 2: filtered = alerts.where((a) => a.severity == AlertSeverity.attention).toList(); break;
-      case 3: filtered = alerts.where((a) => a.severity == AlertSeverity.info).toList(); break;
+      case 1: filtered = alerts.where((a) => a.severityEnum == AlertSeverity.high).toList(); break;
+      case 2: filtered = alerts.where((a) => a.severityEnum == AlertSeverity.warning).toList(); break;
+      case 3: filtered = alerts.where((a) => a.severityEnum == AlertSeverity.low).toList(); break;
       default: filtered = alerts;
     }
 
@@ -45,9 +46,12 @@ class AlertsScreen extends ConsumerWidget {
         title: Text(AppTranslations.getText('alerts', currentLang), style: const TextStyle(color: AppColors.textPrimary)),
         actions: [
           TextButton(
-            onPressed: () {
-              final updated = alerts.map((a) => a.copyWith(acknowledged: true)).toList();
-              ref.read(alertsProvider.notifier).state = updated;
+            onPressed: () async {
+              final unacked = alerts.where((a) => !a.acknowledged).toList();
+              for (final a in unacked) {
+                await ref.read(alertRepositoryProvider).acknowledgeAlert(a.id);
+              }
+              ref.invalidate(alertsListProvider);
             },
             child: Text(
               currentLang == 'ta' ? 'அனைத்தும் சரி' : 'Mark all read',
@@ -104,37 +108,39 @@ class AlertsScreen extends ConsumerWidget {
 
           // ── Alert list ───────────────────────────────────────────────────────
           Expanded(
-            child: filtered.isEmpty
-                ? const Center(
-                    child: Text('No alerts in this category.',
-                      style: TextStyle(color: AppColors.textSecondary)),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) => _AlertCard(
-                      alert: filtered[i],
-                      onAck: () {
-                        // POST /v1/alerts/{alert_id}/ack
-                        final idx = alerts.indexWhere((a) => a.id == filtered[i].id);
-                        if (idx >= 0) {
-                          final updated = List<AlertItem>.from(alerts);
-                          updated[idx] = alerts[idx].copyWith(acknowledged: true);
-                          ref.read(alertsProvider.notifier).state = updated;
-                        }
-                      },
-                      onFeedback: (fb) {
-                        // POST /v1/alerts/{alert_id}/feedback — labeled-data flywheel
-                        final idx = alerts.indexWhere((a) => a.id == filtered[i].id);
-                        if (idx >= 0) {
-                          final updated = List<AlertItem>.from(alerts);
-                          updated[idx] = alerts[idx].copyWith(feedback: fb);
-                          ref.read(alertsProvider.notifier).state = updated;
-                        }
-                      },
-                    ),
-                  ),
+            child: RefreshIndicator(
+              onRefresh: () async => ref.refresh(alertsListProvider.future),
+              child: alertsAsync.isLoading && alerts.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : filtered.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(
+                              child: Text('No alerts in this category.',
+                                style: TextStyle(color: AppColors.textSecondary)),
+                            ),
+                          ],
+                        )
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
+                          itemBuilder: (context, i) => _AlertCard(
+                            alert: filtered[i],
+                            onAck: () async {
+                              await ref.read(alertRepositoryProvider).acknowledgeAlert(filtered[i].id);
+                              ref.invalidate(alertsListProvider);
+                            },
+                            onFeedback: (fb) async {
+                              await ref.read(alertRepositoryProvider).sendFeedback(filtered[i].id, fb);
+                              ref.invalidate(alertsListProvider);
+                            },
+                          ),
+                        ),
+            ),
           ),
         ],
       ),
@@ -168,20 +174,20 @@ class _AlertCard extends StatelessWidget {
     IconData severityIcon;
     CardType type;
 
-    switch (alert.severity) {
-      case AlertSeverity.critical:
+    switch (alert.severityEnum) {
+      case AlertSeverity.high:
         severityColor = AppColors.critical;
         severityLabel = 'CRITICAL';
         severityIcon = Icons.error_rounded;
         type = CardType.critical;
         break;
-      case AlertSeverity.attention:
+      case AlertSeverity.warning:
         severityColor = AppColors.warning;
         severityLabel = 'ATTENTION';
         severityIcon = Icons.warning_rounded;
-        type = CardType.standard; // Use standard since there's no attention specific background in tokens
+        type = CardType.standard;
         break;
-      case AlertSeverity.info:
+      case AlertSeverity.low:
         severityColor = AppColors.primary500;
         severityLabel = 'INFO';
         severityIcon = Icons.info_rounded;
@@ -284,7 +290,7 @@ class _AlertCard extends StatelessWidget {
           ),
 
           // Call Officer button for critical alerts
-          if (alert.severity == AlertSeverity.critical) ...[
+          if (alert.severityEnum == AlertSeverity.high) ...[
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,

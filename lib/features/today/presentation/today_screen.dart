@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
 import '../../../core/providers/data_providers.dart';
-import '../../../core/services/demo_data_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/action_card.dart';
 import '../../../shared/widgets/blind_state_banner.dart';
@@ -161,20 +160,23 @@ class _TodayDashboardViewState extends ConsumerState<_TodayDashboardView>
     final advisoriesAsync = ref.watch(advisoriesProvider);
     final logsAsync = ref.watch(pondLogsProvider);
 
-    final pond = pondAsync.valueOrNull ?? DemoDataService.pond;
+    final activePondId = ref.watch(currentPondIdProvider);
+    final pond = pondAsync.valueOrNull ??
+        Pond(
+          id: activePondId,
+          name: 'Pond $activePondId',
+          status: PondStatus.good,
+        );
     final ponds = pondsAsync.valueOrNull ?? [pond];
     final me = meAsync.valueOrNull;
     final risk = riskAsync.valueOrNull ?? const PondRisk(tier: 'low');
     final dataQuality = dataQualityAsync.valueOrNull ?? const DataQualitySignal(isBlind: false);
-    final events = eventsAsync.valueOrNull ?? [];
-    final alerts = alertsAsync.valueOrNull ?? DemoDataService.alerts;
-    final advisories = advisoriesAsync.valueOrNull ?? DemoDataService.recommendations;
-    final logs = logsAsync.valueOrNull ?? [];
+    final events = eventsAsync.valueOrNull ?? const [];
+    final alerts = alertsAsync.valueOrNull ?? const [];
+    final advisories = advisoriesAsync.valueOrNull ?? const [];
+    final logs = logsAsync.valueOrNull ?? const [];
 
-    final farmerName = (me?['name'] as String?) ??
-        (me?['full_name'] as String?) ??
-        (me?['phone'] as String?) ??
-        DemoDataService.farmer.name;
+    final farmerName = me?.name ?? me?.phone ?? 'Farmer';
 
     final unackedAlertsCount = alerts.where((a) => !a.acknowledged).length;
     final latestLog = logs.isNotEmpty ? logs.first : null;
@@ -442,7 +444,7 @@ class _DashboardHeader extends ConsumerWidget {
 
           // Bell button — clean static icon with unread red dot
           IconButton(
-            onPressed: () => context.push('/notifications'),
+            onPressed: () => context.go('/alerts'),
             icon: Stack(
               clipBehavior: Clip.none,
               children: [

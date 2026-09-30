@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/localization/app_translations.dart';
+import 'core/providers/shared_preferences_provider.dart';
 import 'core/router/app_router.dart';
+import 'core/sync/connectivity_service.dart';
+import 'core/sync/outbox_processor.dart';
 import 'core/theme/app_theme.dart';
+import 'l10n/app_localizations.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(
@@ -15,31 +21,47 @@ void main() {
       statusBarIconBrightness: Brightness.dark,
     ),
   );
+
+  final sharedPreferences = await SharedPreferences.getInstance();
+
   runApp(
-    const ProviderScope(
-      child: AquaVerseApp(),
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+      ],
+      child: const AquaVerseApp(),
     ),
   );
 }
 
-class AquaVerseApp extends StatelessWidget {
+class AquaVerseApp extends ConsumerWidget {
   const AquaVerseApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLang = ref.watch(appLanguageProvider);
+
+    // Listen to real-time connectivity
+    ref.listen<AsyncValue<bool>>(connectivityProvider, (prev, next) {
+      final isOnline = next.valueOrNull ?? true;
+      ref.read(isOfflineProvider.notifier).state = !isOnline;
+
+      // When transitioning to online, trigger outbox processor
+      final wasOffline = prev?.valueOrNull == false;
+      if (wasOffline && isOnline) {
+        ref.read(outboxProcessorProvider).syncOutbox();
+      }
+    });
+
     return MaterialApp.router(
       title: 'AquaVerse AI',
       debugShowCheckedModeBanner: false,
       routerConfig: appRouter,
       theme: AppTheme.light,
-      locale: const Locale('ta'),
-      supportedLocales: const [
-        Locale('ta'),
-        Locale('en'),
-        Locale('hi'),
-        Locale('te'),
-      ],
+      locale: Locale(currentLang),
+      supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: const [
+        AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -63,3 +85,4 @@ class AquaVerseApp extends StatelessWidget {
 final isOfflineProvider = StateProvider<bool>((ref) => false);
 final syncStatusProvider = StateProvider<String?>((ref) => null);
 // 'null' = idle | '2/3 syncing' | 'Synced' | 'Failed'
+

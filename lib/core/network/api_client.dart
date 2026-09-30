@@ -8,73 +8,119 @@ part 'api_client.g.dart';
 abstract class ApiClient {
   factory ApiClient(Dio dio, {String baseUrl}) = _ApiClient;
 
-  // -- Auth --
+  // ── AUTHENTICATION ───────────────────────────────────────────────────────
   @POST('/v1/auth/otp/request')
-  Future<void> requestOtp(@Body() Map<String, dynamic> body);
+  Future<OtpRequestResponse> requestOtp(
+    @Body() Map<String, dynamic> body,
+  );
 
   @POST('/v1/auth/otp/verify')
-  Future<dynamic> verifyOtp(@Body() Map<String, dynamic> body);
+  Future<AuthTokenResponse> verifyOtp(
+    @Body() Map<String, dynamic> body,
+  );
 
-  // TODO(contract): Revisit if staff/admin login (/v1/auth/token) is confirmed for Extension Officers
   @POST('/v1/auth/token')
-  Future<dynamic> staffTokenLogin(@Body() Map<String, dynamic> body);
+  Future<AuthTokenResponse> staffTokenLogin(
+    @Body() Map<String, dynamic> body,
+  );
 
   @GET('/v1/auth/me')
-  Future<dynamic> getMe();
+  Future<User> getMe();
 
-  // -- Ponds --
+  // ── PONDS ────────────────────────────────────────────────────────────────
   @GET('/v1/ponds')
-  Future<List<Pond>> getPonds();
+  Future<PondListResponse> getPonds([
+    @Query('cursor') String? cursor,
+    @Query('limit') int? limit,
+    @Query('district') String? district,
+  ]);
 
   @GET('/v1/ponds/{pond_id}')
   Future<Pond> getPondDetails(@Path('pond_id') String pondId);
 
   @GET('/v1/ponds/{pond_id}/events')
-  Future<dynamic> getPondEvents(@Path('pond_id') String pondId);
+  Future<PondEventListResponse> getPondEvents(
+    @Path('pond_id') String pondId, [
+    @Query('cursor') String? cursor,
+    @Query('limit') int? limit,
+  ]);
 
-  // TODO(contract): Dedicated forecast endpoint is missing. Risk score/tier comes from /v1/ponds/{pond_id}/risk.
   @GET('/v1/ponds/{pond_id}/risk')
-  Future<dynamic> getPondRisk(@Path('pond_id') String pondId);
+  Future<PondRisk> getPondRisk(@Path('pond_id') String pondId);
 
-  // -- Data Quality --
+  @GET('/v1/ponds/{pond_id}/forecast/do')
+  Future<DOForecast> getDOForecast(@Path('pond_id') String pondId);
+
+  @GET('/v1/ponds/{pond_id}/timeseries')
+  Future<PondTimeseriesOut> getTimeseries(
+    @Path('pond_id') String pondId, [
+    @Query('parameter') String? parameter,
+    @Query('from_ts') String? fromTs,
+    @Query('to_ts') String? toTs,
+    @Query('cursor') String? cursor,
+    @Query('limit') int? limit,
+  ]);
+
+  // ── DATA QUALITY ─────────────────────────────────────────────────────────
   @GET('/v1/data-quality')
-  Future<dynamic> getDataQuality();
+  Future<DataQualitySignal> getDataQuality([
+    @Query('pond_id') String? pondId,
+  ]);
 
-  // -- Logs --
+  // ── LOGS ─────────────────────────────────────────────────────────────────
   @GET('/v1/logs')
-  Future<List<PondLog>> getLogs();
+  Future<LogListResponse> getLogs([
+    @Query('pond_id') String? pondId,
+    @Query('cursor') String? cursor,
+    @Query('limit') int? limit,
+  ]);
 
-  // TODO(contract): POST /v1/logs is missing from confirmed endpoint contract. See openapi_contract.md.
-  // Farmer & Extension Officer observation writes are stored in local SQLite outbox until write endpoint is confirmed.
+  @POST('/v1/logs')
+  Future<PondLog> createLog(@Body() Map<String, dynamic> body);
 
-  // -- Media --
+  // ── MEDIA ────────────────────────────────────────────────────────────────
   @POST('/v1/media/upload-url')
-  Future<dynamic> getUploadUrl(@Body() Map<String, dynamic> body);
+  Future<MediaUploadUrlResponse> getUploadUrl(
+    @Body() Map<String, dynamic> body,
+  );
 
   @POST('/v1/media/{media_id}/commit')
-  Future<void> commitMedia(@Path('media_id') String mediaId);
+  Future<MediaCommitResponse> commitMedia(@Path('media_id') String mediaId);
 
-  // -- Alerts --
+  // ── ALERTS ───────────────────────────────────────────────────────────────
   @GET('/v1/alerts')
-  Future<List<AlertItem>> getAlerts();
+  Future<AlertListResponse> getAlerts([
+    @Query('pond_id') String? pondId,
+    @Query('severity') String? severity,
+    @Query('acked') bool? acked,
+    @Query('cursor') String? cursor,
+    @Query('limit') int? limit,
+  ]);
 
   @POST('/v1/alerts/{alert_id}/ack')
-  Future<void> ackAlert(@Path('alert_id') String alertId);
+  Future<AlertAckOut> ackAlert(
+    @Path('alert_id') String alertId, [
+    @Body() AlertAckIn body = const AlertAckIn(),
+  ]);
 
   @POST('/v1/alerts/{alert_id}/feedback')
-  Future<void> sendAlertFeedback(@Path('alert_id') String alertId, @Body() Map<String, dynamic> body);
+  Future<AlertFeedbackOut> sendAlertFeedback(
+    @Path('alert_id') String alertId,
+    @Body() Map<String, dynamic> body,
+  );
 
-  // -- Advisories & Ask --
+  // ── ADVISORIES & ASK ─────────────────────────────────────────────────────
   @GET('/v1/advisories')
-  Future<List<Recommendation>> getAdvisories();
+  Future<AdvisoryListResponse> getAdvisories([
+    @Query('district') String? district,
+    @Query('cursor') String? cursor,
+    @Query('limit') int? limit,
+  ]);
 
   @POST('/v1/ask')
-  Future<dynamic> askAqua(@Body() Map<String, dynamic> body);
+  Future<AskResponse> askAqua(@Body() AskRequest request);
 
-  // -- Utils --
-  @POST('/v1/reason')
-  Future<dynamic> getReasoning(@Body() Map<String, dynamic> body);
-
+  // ── TRANSLATION ──────────────────────────────────────────────────────────
   @POST('/v1/translate')
-  Future<dynamic> translate(@Body() Map<String, dynamic> body);
+  Future<TranslationResponse> translate(@Body() TranslationRequest request);
 }

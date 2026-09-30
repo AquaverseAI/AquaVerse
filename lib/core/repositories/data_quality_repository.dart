@@ -18,15 +18,15 @@ class DataQualityRepository {
   /// If both network and local cache miss, returns isBlind: true to protect the farmer.
   Future<DataQualitySignal> getDataQuality() async {
     try {
-      final raw = await _api.getDataQuality();
-      await _cache.write(_cacheKey, raw);
-      return DataQualitySignal.fromJson(raw, syncedAt: DateTime.now());
+      final res = await _api.getDataQuality();
+      await _cache.write(_cacheKey, res.toJson());
+      return res;
     } catch (_) {
       final cached = await _cache.read(_cacheKey);
       if (cached != null) {
         try {
-          final decoded = jsonDecode(cached.blob);
-          return DataQualitySignal.fromJson(decoded, syncedAt: cached.syncedAt);
+          final decoded = jsonDecode(cached.blob) as Map<String, dynamic>;
+          return DataQualitySignal.fromJson(decoded);
         } catch (_) {}
       }
       // Safety Rule R5: Total miss (no network + no cache) defaults to BLIND state
@@ -34,7 +34,6 @@ class DataQualityRepository {
       return const DataQualitySignal(
         isBlind: true,
         suppressionReason: 'No cached data available. Connect to network to verify pond health.',
-        syncedAt: null,
       );
     }
   }

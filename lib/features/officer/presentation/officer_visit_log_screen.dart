@@ -18,6 +18,8 @@ class OfficerVisitLogScreen extends ConsumerStatefulWidget {
 
 class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
   String _selectedPond = 'TN-01-001';
+  String _selectedCategory = 'Feed Adjustment';
+  bool _sendSmsNotification = true;
   final _observationsCtrl = TextEditingController();
   final _suggestionsCtrl = TextEditingController();
   final List<String> _photos = [];
@@ -30,6 +32,15 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
     {'id': 'TN-01-003', 'name': 'K. Priya (Pond 3)'},
     {'id': 'TN-01-004', 'name': 'S. Murugan (Pond 4)'},
     {'id': 'TN-01-005', 'name': 'A. Ramesh (Pond 5)'},
+  ];
+
+  static const List<String> _categories = [
+    'Feed Adjustment',
+    'Aeration Schedule',
+    'Water Quality Warning',
+    'Disease Treatment',
+    'Harvest Timing',
+    'General Advisory',
   ];
 
   @override
@@ -46,11 +57,12 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
     try {
       final api = ref.read(apiClientProvider);
       final res = await api.getUploadUrl({
+        'pond_id': '00000000-0000-0000-0001-000000000001',
         'filename': 'visit_photo_$nextIdx.jpg',
-        'content_type': 'image/jpeg',
+        'mime_type': 'image/jpeg',
       });
-      final String mediaId = (res is Map<String, dynamic> && res.containsKey('media_id'))
-          ? res['media_id']
+      final String mediaId = res.mediaId.isNotEmpty
+          ? res.mediaId
           : 'visit_media_$nextIdx';
 
       await api.commitMedia(mediaId);
@@ -113,17 +125,18 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    currentLang == 'ta' ? 'பார்வைப் பதிவு சேமிக்கப்பட்டது' : 'Field Visit Log Saved',
+                    currentLang == 'ta' ? 'பார்வை & ஆலோசனை சேமிக்கப்பட்டது' : 'Field Visit & Advisory Saved',
                     style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     currentLang == 'ta'
-                        ? 'குளம் $_selectedPond பார்வை அறிக்கை இணைக்கப்பட்டது.'
-                        : 'Pond $_selectedPond visit report queued for sync.',
+                        ? 'குளம் $_selectedPond பார்வை அறிக்கை இணைக்கப்பட்டது. $_selectedCategory ஆலோசனை விவசாயிக்கு அறிவிக்கப்பட்டது.'
+                        : 'Pond $_selectedPond visit report queued for sync. $_selectedCategory advisory broadcast to farmer.',
                     style: const TextStyle(
                         fontSize: 14, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
@@ -238,6 +251,7 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
             const SizedBox(height: 12),
 
             // Farmer Recommendations
+            // Farmer Recommendations & Advisory
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,13 +262,48 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
                   const SizedBox(height: 8),
+                  Text(
+                    currentLang == 'ta'
+                        ? 'விவசாயிக்கான செயல்பாட்டுப் பரிந்துரைகள் & ஆலோசனை'
+                        : 'Farmer Advice & Recommendations',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedCategory,
+                    decoration: InputDecoration(
+                      labelText: currentLang == 'ta' ? 'ஆலோசனை வகை' : 'Advisory Category',
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.inputRadius),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.inputRadius),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                    ),
+                    items: _categories
+                        .map((cat) => DropdownMenuItem(
+                              value: cat,
+                              child: Text(cat),
+                            ))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedCategory = v!),
+                  ),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _suggestionsCtrl,
                     maxLines: 3,
                     decoration: InputDecoration(
                       hintText: currentLang == 'ta'
                           ? 'பார்வையின் போது விவசாயிக்கு வழங்கப்பட்ட குறிப்பிட்ட நடவடிக்கைகள்…'
-                          : 'Specific action steps given to farmer during visit…',
+                          : 'Specific action steps and advice given to farmer…',
                       filled: true,
                       fillColor: AppColors.surface,
                       border: OutlineInputBorder(
@@ -263,6 +312,23 @@ class _OfficerVisitLogScreenState extends ConsumerState<OfficerVisitLogScreen> {
                         borderSide: const BorderSide(color: AppColors.border),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      currentLang == 'ta' ? 'விவசாயிக்கு SMS மூலம் அனுப்பு' : 'Notify Farmer via SMS',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      currentLang == 'ta'
+                          ? 'பரிந்துரையை உடனடி SMS ஆக அனுப்புகிறது'
+                          : 'Broadcasts this advisory directly to farmer\'s mobile',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                    value: _sendSmsNotification,
+                    activeTrackColor: AppColors.seaGreen,
+                    onChanged: (v) => setState(() => _sendSmsNotification = v),
                   ),
                 ],
               ),

@@ -1,19 +1,21 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import '../../../core/services/demo_data_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/models/models.dart';
+import '../../../core/providers/data_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/staleness_badge.dart';
 import '../../../shared/widgets/status_disc.dart';
 
-class PondDetailsScreen extends StatefulWidget {
+class PondDetailsScreen extends ConsumerStatefulWidget {
   const PondDetailsScreen({super.key});
 
   @override
-  State<PondDetailsScreen> createState() => _PondDetailsScreenState();
+  ConsumerState<PondDetailsScreen> createState() => _PondDetailsScreenState();
 }
 
-class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTickerProviderStateMixin {
+class _PondDetailsScreenState extends ConsumerState<PondDetailsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -30,9 +32,19 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final pond   = DemoDataService.pond;
-    final params = DemoDataService.params;
-    final trend  = DemoDataService.weeklyTrend();
+    final currentPondAsync = ref.watch(currentPondProvider);
+    final pond = currentPondAsync.valueOrNull ?? const Pond(
+      id: 'TN-01-001',
+      name: 'North Pond 1',
+      status: PondStatus.good,
+    );
+    final logsAsync = ref.watch(pondLogsProvider);
+    final logs = logsAsync.valueOrNull ?? const [];
+    final latestLog = logs.isNotEmpty ? logs.first : null;
+
+    final ph = latestLog?.ph ?? 7.8;
+    final dissolvedOxygen = latestLog?.dissolvedOxygen ?? 5.4;
+    final temperature = latestLog?.temperature ?? 28.5;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
@@ -53,12 +65,12 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
                       children: [
                         Text(pond.id, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
                         const SizedBox(width: 10),
-                        StatusDisc(status: PondStatusLevel.good, showLabel: true),
+                        const StatusDisc(status: PondStatusLevel.good, showLabel: true),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(pond.name, style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.8))),
-                    Text(pond.location, style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.6))),
+                    Text(pond.location ?? '', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.6))),
                   ],
                 ),
               ),
@@ -92,17 +104,17 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
                   AppCard(
                     child: Column(
                       children: [
-                        _InfoRow('Species', pond.species),
+                        _InfoRow('Species', pond.species ?? '—'),
                         const Divider(height: 1),
-                        _InfoRow('Area', '${pond.areaSqM.toInt()} m²'),
+                        _InfoRow('Area', '${pond.areaSqM?.toInt() ?? 0} m²'),
                         const Divider(height: 1),
-                        _InfoRow('Depth', '${pond.depthM} m'),
+                        _InfoRow('Depth', '${pond.depthM ?? 0} m'),
                         const Divider(height: 1),
-                        _InfoRow('Liner Type', pond.linerType),
+                        _InfoRow('Liner Type', pond.linerType ?? '—'),
                         const Divider(height: 1),
-                        _InfoRow('Water Source', pond.waterSource),
+                        _InfoRow('Water Source', pond.waterSource ?? '—'),
                         const Divider(height: 1),
-                        _InfoRow('Stocking Date', _dateStr(pond.stockingDate)),
+                        _InfoRow('Stocking Date', _dateStr(pond.stockingDate ?? DateTime.now())),
                       ],
                     ),
                   ),
@@ -118,9 +130,9 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _ParamDisc(label: 'pH', value: params.ph.toStringAsFixed(1), color: AppColors.seaGreen),
-                            _ParamDisc(label: 'DO', value: '${params.dissolvedOxygen} mg/L', color: params.dissolvedOxygen < 4.0 ? AppColors.critical : AppColors.success),
-                            _ParamDisc(label: 'Temp', value: '${params.temperature}°C', color: AppColors.aqua),
+                            _ParamDisc(label: 'pH', value: ph.toStringAsFixed(1), color: AppColors.seaGreen),
+                            _ParamDisc(label: 'DO', value: '${dissolvedOxygen.toStringAsFixed(1)} mg/L', color: dissolvedOxygen < 4.0 ? AppColors.critical : AppColors.success),
+                            _ParamDisc(label: 'Temp', value: '${temperature.toStringAsFixed(1)}°C', color: AppColors.aqua),
                           ],
                         ),
                       ],
@@ -144,7 +156,7 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
                       child: LineChart(
                         LineChartData(
                           minY: 0, maxY: 9,
-                          gridData: FlGridData(show: false),
+                          gridData: const FlGridData(show: false),
                           borderData: FlBorderData(show: false),
                           titlesData: FlTitlesData(
                             leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 3, reservedSize: 24, getTitlesWidget: (v, _) => Text(v.toInt().toString(), style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)))),
@@ -159,7 +171,9 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
                           ),
                           lineBarsData: [
                             LineChartBarData(
-                              spots: trend.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['do']!)).toList(),
+                              spots: logs.isNotEmpty
+                                  ? logs.take(7).toList().reversed.toList().asMap().entries.map((e) => FlSpot(e.key.toDouble(), (e.value.dissolvedOxygen ?? 5.5).clamp(0.0, 9.0))).toList()
+                                  : const [FlSpot(0, 5.5), FlSpot(1, 5.8), FlSpot(2, 5.3), FlSpot(3, 5.7), FlSpot(4, 5.4), FlSpot(5, 5.6), FlSpot(6, 5.5)],
                               isCurved: true,
                               color: AppColors.seaGreen,
                               barWidth: 2.5,
@@ -180,12 +194,14 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
                       child: LineChart(
                         LineChartData(
                           minY: 6, maxY: 10,
-                          gridData: FlGridData(show: false),
+                          gridData: const FlGridData(show: false),
                           borderData: FlBorderData(show: false),
                           titlesData: const FlTitlesData(show: false),
                           lineBarsData: [
                             LineChartBarData(
-                              spots: trend.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value['ph']!)).toList(),
+                              spots: logs.isNotEmpty
+                                  ? logs.take(7).toList().reversed.toList().asMap().entries.map((e) => FlSpot(e.key.toDouble(), (e.value.ph ?? 7.8).clamp(6.0, 10.0))).toList()
+                                  : const [FlSpot(0, 7.8), FlSpot(1, 7.9), FlSpot(2, 7.7), FlSpot(3, 8.0), FlSpot(4, 7.8), FlSpot(5, 7.9), FlSpot(6, 7.8)],
                               isCurved: true,
                               color: AppColors.aqua,
                               barWidth: 2.5,
@@ -201,38 +217,45 @@ class _PondDetailsScreenState extends State<PondDetailsScreen> with SingleTicker
             ),
 
             // ── Logs tab ──────────────────────────────────────────────────────
-            ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: 5,
-              separatorBuilder: (_, _) => const SizedBox(height: 8),
-              itemBuilder: (context, i) {
-                final day = DateTime.now().subtract(Duration(days: i));
-                return AppCard(
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.seaGreen.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.edit_note_rounded, color: AppColors.seaGreen, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            logs.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text('No logs recorded yet for this pond.', style: TextStyle(color: AppColors.textSecondary)),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: logs.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) {
+                      final l = logs[i];
+                      return AppCard(
+                        child: Row(
                           children: [
-                            Text('Log — ${_dateStr(day)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                            Text('Feed: ${(18 - i * 0.5).toStringAsFixed(1)} kg · DO: ${(5.2 - i * 0.1).toStringAsFixed(1)} mg/L', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.seaGreen.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.edit_note_rounded, color: AppColors.seaGreen, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Log — ${_dateStr(l.loggedAt)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                  Text('Feed: ${(l.feedGivenKg ?? 0).toStringAsFixed(1)} kg · DO: ${(l.dissolvedOxygen ?? 0).toStringAsFixed(1)} mg/L · Mortalities: ${l.mortalityCount ?? 0}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ],
         ),
       ),

@@ -29,7 +29,9 @@ class LanguageSelectScreen extends ConsumerWidget {
 
   void _onContinue(BuildContext context) {
     if (context.mounted) {
-      context.push('/onboarding/mobile');
+      // Navigate to Role Selection (Step 1 of 2-screen auth flow),
+      // not directly to /onboarding/mobile.
+      context.push('/onboarding/role');
     }
   }
 

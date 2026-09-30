@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/localization/app_translations.dart';
 import '../../../core/models/models.dart';
-import '../../../core/services/demo_data_service.dart';
+import '../../../core/providers/data_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -22,7 +22,25 @@ class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen>
   @override
   Widget build(BuildContext context) {
     final currentLang = ref.watch(appLanguageProvider);
-    final ponds = DemoDataService.officerPonds;
+    final pondsAsync = ref.watch(allPondsProvider);
+    final rawPonds = pondsAsync.valueOrNull ?? const [];
+
+    final ponds = rawPonds.map((pond) {
+      final risk = pond.status == PondStatus.critical
+          ? 'High'
+          : (pond.status == PondStatus.caution ? 'Medium' : 'Low');
+      return {
+        'pondId': pond.id,
+        'farmerName': pond.name,
+        'location': pond.location ?? 'Nagapattinam',
+        'status': pond.status,
+        'risk': risk,
+        'lastVisit': pond.lastUpdated != null
+            ? '${pond.lastUpdated!.day}/${pond.lastUpdated!.month}/${pond.lastUpdated!.year}'
+            : 'Not visited yet',
+      };
+    }).toList();
+
     final filtered = ponds.where((p) {
       final matchFilter =
           _filter == 'All' || p['risk'] == _filter.replaceAll(' Risk', '');
@@ -64,7 +82,7 @@ class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen>
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            onPressed: () => context.push('/notifications'),
+            onPressed: () => context.go('/alerts'),
             icon: const Icon(Icons.notifications_outlined),
           ),
           GestureDetector(
@@ -142,16 +160,16 @@ class _OfficerDashboardScreenState extends ConsumerState<OfficerDashboardScreen>
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _QuickAction(
-                  icon: Icons.send_rounded,
-                  label: currentLang == 'ta' ? 'ஆலோசனை அனுப்பு' : 'Send Advice',
+                  icon: Icons.assignment_rounded,
+                  label: currentLang == 'ta' ? 'பார்வை & ஆலோசனை' : 'Visit & Advice',
                   color: AppColors.langAccentPrimary,
-                  onTap: () => context.push('/officer/send-advice'),
+                  onTap: () => context.push('/officer/visit-log'),
                 ),
                 _QuickAction(
-                  icon: Icons.add_location_alt_rounded,
-                  label: currentLang == 'ta' ? 'பார்வை பதிவு' : 'Add Visit',
+                  icon: Icons.water_rounded,
+                  label: currentLang == 'ta' ? 'குளங்கள் பட்டியல்' : 'All Ponds',
                   color: AppColors.primary700,
-                  onTap: () => context.push('/officer/visit-log'),
+                  onTap: () => context.push('/ponds'),
                 ),
                 _QuickAction(
                   icon: Icons.bar_chart_rounded,

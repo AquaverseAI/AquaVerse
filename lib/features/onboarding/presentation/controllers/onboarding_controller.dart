@@ -8,20 +8,27 @@ class OnboardingState {
   final String mobileNumber;
   final String otpCode;
   final String selectedRole;
+  final String? verifiedRole;
   final bool isLoading;
   final String? errorMessage;
   final int resendCountdown;
   final bool isOtpInvalid;
+
+  /// True when the user has explicitly tapped a role card on RoleSelectionScreen.
+  /// False on fresh app launch (before role is chosen).
+  final bool isRoleExplicitlySet;
 
   const OnboardingState({
     this.selectedLanguage = 'ta',
     this.mobileNumber = '',
     this.otpCode = '',
     this.selectedRole = 'farmer',
+    this.verifiedRole,
     this.isLoading = false,
     this.errorMessage,
     this.resendCountdown = 30,
     this.isOtpInvalid = false,
+    this.isRoleExplicitlySet = false,
   });
 
   static const _sentinel = Object();
@@ -31,26 +38,34 @@ class OnboardingState {
     String? mobileNumber,
     String? otpCode,
     String? selectedRole,
+    String? verifiedRole,
     bool? isLoading,
     Object? errorMessage = _sentinel,
     int? resendCountdown,
     bool? isOtpInvalid,
+    bool? isRoleExplicitlySet,
   }) {
     return OnboardingState(
       selectedLanguage: selectedLanguage ?? this.selectedLanguage,
       mobileNumber: mobileNumber ?? this.mobileNumber,
       otpCode: otpCode ?? this.otpCode,
       selectedRole: selectedRole ?? this.selectedRole,
+      verifiedRole: verifiedRole ?? this.verifiedRole,
       isLoading: isLoading ?? this.isLoading,
       errorMessage: errorMessage == _sentinel ? this.errorMessage : errorMessage as String?,
       resendCountdown: resendCountdown ?? this.resendCountdown,
       isOtpInvalid: isOtpInvalid ?? this.isOtpInvalid,
+      isRoleExplicitlySet: isRoleExplicitlySet ?? this.isRoleExplicitlySet,
     );
   }
 
   bool get isMobileValid => mobileNumber.replaceAll(RegExp(r'\D'), '').length == 10;
   bool get isOtpValid => otpCode.trim().length == 6;
+
+  /// True when Continue can be tapped on the Role Selection screen.
+  bool get canContinueFromRoleSelection => isRoleExplicitlySet;
 }
+
 
 class OnboardingController extends StateNotifier<OnboardingState> {
   final AuthApiService _authApiService;
@@ -81,10 +96,27 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     );
   }
 
+  /// Marks the role as explicitly selected by the user on RoleSelectionScreen.
+  /// This enables the Continue button. selectedRole is user intent only —
+  /// never use it for authorization after authentication.
   void selectRole(String role) async {
-    state = state.copyWith(selectedRole: role);
+    state = state.copyWith(selectedRole: role, isRoleExplicitlySet: true);
     final flagStore = await OnboardingFlagStore.create();
     await flagStore.setSelectedRole(role);
+  }
+
+  /// Clears session state on logout.
+  /// Preserves: selectedLanguage, mobileNumber (for UX convenience).
+  /// Clears: verifiedRole, isRoleExplicitlySet, otpCode, errorMessage.
+  /// The next login must go through RoleSelectionScreen to re-select a role.
+  void clearOnLogout() {
+    state = state.copyWith(
+      verifiedRole: null,
+      otpCode: '',
+      errorMessage: null,
+      isOtpInvalid: false,
+      isRoleExplicitlySet: false,
+    );
   }
 
   Future<bool> sendOtp() async {
@@ -135,13 +167,31 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       );
       return false;
     }
-
     state = state.copyWith(isLoading: true, errorMessage: null, isOtpInvalid: false);
     try {
-      final response = await _authApiService.verifyOtp(state.mobileNumber, state.otpCode);
+      final response = await _authApiService.verifyOtp(
+        state.mobileNumber,
+        state.otpCode,
+        role: state.selectedRole,
+      );
       state = state.copyWith(isLoading: false);
 
       if (response.success) {
+        if (response.role == null || response.role!.isEmpty) {
+          state = state.copyWith(
+            errorMessage: 'Authentication failed: No verified role assigned by server.',
+            isOtpInvalid: true,
+          );
+          return false;
+        }
+
+        final verifiedRole = response.role!;
+        state = state.copyWith(
+          verifiedRole: verifiedRole,
+          selectedRole: verifiedRole,
+        );
+        final flagStore = await OnboardingFlagStore.create();
+        await flagStore.setSelectedRole(verifiedRole);
         return true;
       } else {
         state = state.copyWith(
@@ -163,17 +213,23 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   Future<String> completeOnboarding() async {
     final flagStore = await OnboardingFlagStore.create();
     await flagStore.setSelectedLanguage(state.selectedLanguage);
-    await flagStore.setSelectedRole(state.selectedRole);
+    final role = state.verifiedRole;
+    if (role != null) {
+      await flagStore.setSelectedRole(role);
+    }
     await flagStore.setMobileNumber(state.mobileNumber);
     await flagStore.setHasOnboarded(true);
 
-    return state.selectedRole == 'officer' ? '/officer/dashboard' : '/today';
+    if (role == 'officer') {
+      return '/officer/dashboard';
+    } else if (role == 'farmer') {
+      return '/today';
+    } else {
+      // Missing or unrecognized verified role → role selection for safe re-login.
+      return '/onboarding/role';
+    }
   }
 }
-
-final authApiServiceProvider = Provider<AuthApiService>((ref) {
-  return AuthApiService();
-});
 
 final onboardingControllerProvider =
     StateNotifierProvider<OnboardingController, OnboardingState>((ref) {

@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-table';
 import { Database, ShieldAlert, AlertTriangle, CheckCircle2, Wrench, Activity } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { dataQualityApi, riskApi } from '../api/client';
 
 interface DataQualityProps {
   theme?: 'light' | 'dark';
@@ -30,18 +31,12 @@ export const DataQuality: React.FC<DataQualityProps> = ({ theme = 'light' }) => 
 
   const { data: dqSummary } = useQuery({
     queryKey: ['data-quality'],
-    queryFn: async () => {
-      const res = await fetch('/v1/data-quality');
-      return res.json();
-    },
+    queryFn: () => dataQualityApi.getDataQuality(),
   });
 
   const { data: worklistData } = useQuery({
     queryKey: ['worklist'],
-    queryFn: async () => {
-      const res = await fetch('/v1/risk/worklist?limit=100');
-      return res.json();
-    },
+    queryFn: () => riskApi.getWorklist({ limit: 100 }),
   });
 
   const sensors: SensorRow[] = useMemo(() => {

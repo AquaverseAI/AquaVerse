@@ -1,50 +1,94 @@
-# AquaVerse AI — Backend Service
+# AquaVerse AI
 
 Predictive analytics backend for fish/shrimp aquaculture in Tamil Nadu.
 Modular monolith: FastAPI + PostgreSQL 16 + TimescaleDB + PostGIS + Redis + vLLM.
 
-## Quick Start
+## Requirements
+
+- Docker with Compose v2 (full stack and infrastructure dependencies)
+- Python 3.11 and `uv` (host backend development)
+- Node.js 20 and npm (host frontend development)
+
+Copy `.env.example` to `.env` and replace every `CHANGE_ME` value. Local `.env` files are
+ignored by Git. The real FastAPI backend is the default; MSW is enabled only when
+`VITE_USE_MSW=true` is set explicitly.
+
+## Full Docker stack
 
 ```bash
-# 1. Clone and configure
-git clone <repo>
-cd aquaverse-backend
 cp .env.example .env
-# Edit .env with your real secrets
-
-# 2. Boot the full stack
-docker compose -f infra/docker-compose.yml up -d
-
-# 3. Run migrations
-docker compose -f infra/docker-compose.yml exec app alembic upgrade head
-
-# 4. Seed the database
+docker compose -f infra/docker-compose.yml up -d --build
 docker compose -f infra/docker-compose.yml exec app python scripts/seed_db.py
-
-# 5. Verify
+docker compose -f infra/docker-compose.yml ps
 curl http://localhost:8000/v1/health
-curl http://localhost:8000/openapi.json | python -m json.tool | head -20
 ```
 
-## Development Setup (without Docker)
+The app container runs `alembic upgrade head` before FastAPI starts. The seed is idempotent.
+
+## Local development
 
 ```bash
-# Python 3.11+
-python -m venv .venv
+# Infrastructure
+cp .env.example .env
+docker compose -f infra/docker-compose.yml up -d db redis minio minio-init
+
+# Backend terminal
+make install
+make migrate
+make seed
+make run
+
+# Worker terminal
 source .venv/bin/activate
-pip install -e ".[dev]"
-pre-commit install
+python -m arq app.worker.WorkerSettings
 
-# Run tests (testcontainers spins up PG + Redis automatically)
-pytest tests/ -x --timeout=120
-
-# Type check
-mypy app/
-
-# Lint
-ruff check app/ tests/
-ruff format app/ tests/
+# Frontend terminal (Vite proxies /v1 to localhost:8000)
+cd frontend
+cp .env.example .env
+npm ci
+npm run dev
 ```
+
+Seeded development logins:
+
+- Admin: `aquaverse_admin` / `AquaAdmin@2026!`
+- Staff: `priya_officer` / `Officer@Nagapattinam2026`
+- Farmer OTP: use the seeded farmer phone printed by `make seed`; development mode returns
+  `dev_otp` from `POST /v1/auth/otp/request`.
+
+## Validation
+
+```bash
+make lint
+make typecheck
+make test-unit
+make test-integration
+make test-cov
+make smoke
+
+cd frontend
+npm ci
+npm run build
+npm run lint
+npm run test:contract
+
+# Against a running, migrated, seeded stack
+cd ..
+python scripts/e2e_smoke.py
+```
+
+Override smoke credentials with `AQUAVERSE_SMOKE_USERNAME`,
+`AQUAVERSE_SMOKE_PASSWORD`, and `AQUAVERSE_BASE_URL`.
+
+Local URLs: frontend `http://localhost:5173`, FastAPI `http://localhost:8000`, Swagger
+`http://localhost:8000/docs`, ReDoc `http://localhost:8000/redoc`, MinIO console
+`http://localhost:9001`, Prometheus `http://localhost:9090`, and Grafana
+`http://localhost:3000`.
+
+If migrations fail because extensions are unavailable, use the Compose `db` image; it bundles
+TimescaleDB and PostGIS. If reports remain queued, verify Redis and the `worker` service are
+healthy. Translation and outbound notification delivery require their external credentials;
+the base application does not require them.
 
 ## Architecture
 
@@ -61,7 +105,7 @@ FastAPI (uvicorn, async)
   ├── /v1/logs            ← water-quality log ingestion
   ├── /v1/media/*         ← presigned upload / commit
   ├── /v1/risk/*          ← ML risk scores (LightGBM/EBM)
-  ├── /v1/forecast/*      ← temporal model forecasts (TFT/TCN/PatchTST)
+  ├── /v1/ponds/*/forecast/do ← empirical seasonal DO baseline
   ├── /v1/geo/*           ← GeoJSON endpoints, space-time clustering
   ├── /v1/twin/*          ← digital twin state + what-if simulation
   ├── /v1/reason          ← internal-only: Qwen3-8B + LoRA advisory

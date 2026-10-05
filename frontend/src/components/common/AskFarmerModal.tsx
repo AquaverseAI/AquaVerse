@@ -31,15 +31,13 @@ export const AskFarmerModal: React.FC<AskFarmerModalProps> = ({ pondId, isOpen, 
         const presign = await mediaApi.presignUpload({
           pond_id: pondId,
           filename: mediaFile.name,
-          content_type: mediaFile.type || 'image/jpeg',
-          category: 'water_sample',
+          mime_type: mediaFile.type || 'application/octet-stream',
+          size_bytes: mediaFile.size,
+          client_log_id: crypto.randomUUID(),
         });
         setUploadStatus('Uploading asset to object storage...');
-        await mediaApi.commitUpload({
-          pond_id: pondId,
-          asset_key: presign.asset_key || 'uploads/asset.jpg',
-          caption: question,
-        });
+        await mediaApi.uploadToStorage(presign.upload_url, mediaFile);
+        await mediaApi.commitUpload(presign.media_id, pondId);
         setUploadStatus('Media committed!');
       }
 
@@ -122,7 +120,7 @@ export const AskFarmerModal: React.FC<AskFarmerModalProps> = ({ pondId, isOpen, 
           <div className="flex items-center justify-between text-xs font-mono">
             <label className="flex items-center gap-2 text-slate-500 cursor-pointer hover:text-teal-700">
               <Upload className="w-4 h-4 text-teal-600" />
-              <span>{mediaFile ? mediaFile.name : 'Attach Image/Video (/v1/media/presign)'}</span>
+              <span>{mediaFile ? mediaFile.name : 'Attach Image/Video'}</span>
               <input
                 type="file"
                 accept="image/*,video/*"

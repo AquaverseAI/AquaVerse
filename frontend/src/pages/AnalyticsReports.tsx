@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { FileText, Download, BarChart2, TrendingUp, Activity, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { reportsApi } from '../api/client';
 
 interface AnalyticsReportsProps {
   theme?: 'light' | 'dark';
@@ -24,8 +25,7 @@ export const AnalyticsReports: React.FC<AnalyticsReportsProps> = ({ theme = 'lig
     if (exportJob.jobId && (exportJob.status === 'queued' || exportJob.status === 'in_progress')) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/v1/reports/export/${exportJob.jobId}`);
-          const data = await res.json();
+          const data = await reportsApi.getExportStatus(exportJob.jobId!);
           if (data.status === 'completed') {
             setExportJob(prev => ({ ...prev, status: 'completed', downloadUrl: data.download_url }));
             clearInterval(interval);
@@ -47,8 +47,7 @@ export const AnalyticsReports: React.FC<AnalyticsReportsProps> = ({ theme = 'lig
   const handleExport = async (fmt: 'pdf' | 'xlsx') => {
     try {
       setExportJob({ jobId: null, status: 'queued', downloadUrl: null, error: null });
-      const res = await fetch(`/v1/reports/export?format=${fmt}`);
-      const data = await res.json();
+      const data = await reportsApi.exportReport(fmt);
       if (data.job_id) {
         setExportJob({ jobId: data.job_id, status: data.status, downloadUrl: null, error: null });
       } else {

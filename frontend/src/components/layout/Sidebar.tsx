@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Sparkles,
 } from 'lucide-react';
+import { reportsApi } from '../../api/client';
 
 export type ScreenId = 'map' | 'worklist' | 'deepdive' | 'modelops' | 'broadcaster' | 'dataquality' | 'analytics';
 
@@ -64,11 +65,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleExportPDF = async () => {
     try {
-      const res = await fetch('/v1/reports/export?format=pdf');
-      const data = await res.json();
-      alert(`Official Government PDF Report generated: ${data.download_url}`);
+      const data = await reportsApi.exportReport('pdf');
+      alert(`Official Government PDF report queued. Job: ${data.job_id}`);
     } catch (e) {
-      alert('Export generated successfully.');
+      alert(e instanceof Error ? e.message : 'Could not queue export.');
     }
   };
 

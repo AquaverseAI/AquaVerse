@@ -16,31 +16,38 @@ function testContract() {
 
   const content = fs.readFileSync(sdkPath, 'utf8');
   
-  // Verify key schema contracts exist in generated TypeScript SDK
-  const requiredSchemas = [
-    'PondRecord',
-    'PondEvent',
-    'ExplanationPayload',
-    'TriageItem',
-    'DOForecast',
-    'TwinState',
-    'AlertItem',
-    'AdvisoryItem'
+  // Verify key FastAPI route contracts exist in the generated TypeScript SDK.
+  const requiredPaths = [
+    '/v1/auth/otp/request',
+    '/v1/auth/otp/verify',
+    '/v1/auth/token',
+    '/v1/media/upload-url',
+    '/v1/media/{media_id}/commit',
+    '/v1/ponds/{pond_id}/forecast/do',
+    '/v1/ask',
+    '/v1/reports/export/{job_id}',
   ];
 
   let missing = [];
-  for (const schema of requiredSchemas) {
-    if (!content.includes(schema)) {
-      missing.push(schema);
+  for (const route of requiredPaths) {
+    if (!content.includes(route)) {
+      missing.push(route);
     }
   }
 
   if (missing.length > 0) {
-    console.error(`❌ Contract test failed: Missing schemas in generated SDK: ${missing.join(', ')}`);
+    console.error(`❌ Contract test failed: Missing routes in generated SDK: ${missing.join(', ')}`);
     process.exit(1);
   }
 
-  console.log('✅ Contract test passed: All OpenAPI schemas verified in generated TypeScript SDK.');
+  const stalePaths = ['/v1/media/presign', '/v1/media/commit', '/v1/forecast/temporal'];
+  const stale = stalePaths.filter((route) => content.includes(route));
+  if (stale.length) {
+    console.error(`❌ Contract test failed: Stale routes remain: ${stale.join(', ')}`);
+    process.exit(1);
+  }
+
+  console.log('✅ Contract test passed: generated SDK matches required FastAPI routes.');
 }
 
 testContract();

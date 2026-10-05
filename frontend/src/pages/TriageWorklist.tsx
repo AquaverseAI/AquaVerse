@@ -28,6 +28,7 @@ import {
 } from '../components/ui/dropdown-menu';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
+import { pondsApi, riskApi } from '../api/client';
 
 interface TriageWorklistProps {
   onSelectPondForDeepDive: (pondId: string) => void;
@@ -42,18 +43,12 @@ export const TriageWorklist: React.FC<TriageWorklistProps> = ({
 }) => {
   const { data: pondsData = { items: [] } } = useQuery({
     queryKey: ['ponds'],
-    queryFn: async () => {
-      const res = await fetch('/v1/ponds');
-      return res.json();
-    },
+    queryFn: () => pondsApi.listPonds(),
   });
 
   const { data: worklistData = { items: [] } } = useQuery({
     queryKey: ['worklist'],
-    queryFn: async () => {
-      const res = await fetch('/v1/risk/worklist');
-      return res.json();
-    },
+    queryFn: () => riskApi.getWorklist(),
   });
 
   // Join data on pond_id

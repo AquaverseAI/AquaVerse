@@ -498,16 +498,28 @@ export const handlers = [
 
   http.get('/v1/reports/export', () => {
     return HttpResponse.json({
-      download_url: '/exports/aquaverse_coimbatore_3_lakes_report_20260813.pdf',
+      job_id: 'mock-report-job',
+      status: 'queued',
+      download_url: null,
     });
   }),
+
+  http.get('/v1/reports/export/:job_id', ({ params }: { params: any }) => HttpResponse.json({
+    job_id: params.job_id,
+    status: 'completed',
+    format: 'pdf',
+    download_url: '/exports/aquaverse_coimbatore_3_lakes_report_20260813.pdf',
+    error: null,
+  })),
 
   // Farmer Phone OTP Auth
   http.post('/v1/auth/otp/request', async ({ request }: { request: Request }) => {
     const body = (await request.json()) as any;
     return HttpResponse.json({
-      status: `OTP sent successfully to ${body.phone || 'farmer phone'}`,
-      txn_id: `txn_otp_${Date.now()}`,
+      message: `OTP sent successfully to ${body.phone || 'farmer phone'}`,
+      request_id: `request_otp_${Date.now()}`,
+      expires_in_seconds: 300,
+      dev_otp: '123456',
     });
   }),
 
@@ -517,7 +529,9 @@ export const handlers = [
       access_token: `mock-jwt-farmer-${Date.now()}`,
       token_type: 'Bearer',
       role: 'farmer',
-      farmer_name: `Farmer (${body.phone || '9876543210'})`,
+      name: `Farmer (${body.phone || '+919876543210'})`,
+      expires_in: 3600,
+      is_new_user: false,
     });
   }),
 
@@ -536,73 +550,28 @@ export const handlers = [
   }),
 
   // Presigned S3/MinIO Object Storage & Media Commit
-  http.post('/v1/media/presign', async ({ request }: { request: Request }) => {
+  http.post('/v1/media/upload-url', async ({ request }: { request: Request }) => {
     const body = (await request.json()) as any;
     const key = `uploads/${body.pond_id || 'CBE-003'}/${Date.now()}-${body.filename || 'image.jpg'}`;
     return HttpResponse.json({
-      upload_url: `https://minio.aquaverse.internal/uploads/${key}?presigned=true&sig=abc123xyz`,
-      asset_key: key,
+      upload_url: `/mock-object-storage/${key}`,
+      media_id: `media-${Date.now()}`,
       expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     });
   }),
 
-  http.post('/v1/media/commit', async ({ request }: { request: Request }) => {
-    const body = (await request.json()) as any;
+  http.put('/mock-object-storage/*', () => new HttpResponse(null, { status: 200 })),
+
+  http.post('/v1/media/:media_id/commit', async ({ params }: { params: any }) => {
     return HttpResponse.json({
-      asset_id: `asset-${Date.now()}`,
+      media_id: params.media_id,
       status: 'committed',
-      asset_key: body.asset_key,
-    });
-  }),
-
-  // Multi-variable Temporal Model Forecasts (TFT / TCN / PatchTST)
-  http.get('/v1/forecast/temporal', ({ request }: { request: Request }) => {
-    const url = new URL(request.url);
-    const pondId = url.searchParams.get('pond_id') || 'CBE-003';
-    const modelFamily = url.searchParams.get('model_family') || 'TFT';
-    const horizon = parseInt(url.searchParams.get('horizon_hours') || '72', 10);
-
-    const now = new Date();
-    const timestamps: string[] = [];
-    const forecast_do: number[] = [];
-    const forecast_ph: number[] = [];
-    const forecast_temp: number[] = [];
-    const do_p10: number[] = [];
-    const do_p90: number[] = [];
-
-    for (let i = 1; i <= horizon; i++) {
-      const t = new Date(now.getTime() + i * 3600 * 1000);
-      timestamps.push(t.toISOString().slice(0, 16));
-      const hour = t.getHours();
-      const baseDO = 5.2 + 2.1 * Math.sin(((hour - 10) / 24) * 2 * Math.PI);
-      const doVal = Number(Math.max(0.8, baseDO).toFixed(2));
-      forecast_do.push(doVal);
-      do_p10.push(Number(Math.max(0.4, doVal - 0.7).toFixed(2)));
-      do_p90.push(Number((doVal + 0.6).toFixed(2)));
-
-      forecast_ph.push(Number((8.0 + 0.3 * Math.sin(((hour - 12) / 24) * 2 * Math.PI)).toFixed(2)));
-      forecast_temp.push(Number((29.0 + 1.8 * Math.sin(((hour - 14) / 24) * 2 * Math.PI)).toFixed(2)));
-    }
-
-    return HttpResponse.json({
-      pond_id: pondId,
-      model_family: modelFamily,
-      horizon_hours: horizon,
-      timestamps,
-      forecast_do,
-      forecast_ph,
-      forecast_temp,
-      confidence_interval: {
-        do_p10,
-        do_p90,
-      },
     });
   }),
 
   // Farmer-Facing Conversational Q&A (vLLM Qwen3-8B + IndicTrans2 + TTS)
   http.post('/v1/ask', async ({ request }: { request: Request }) => {
     const body = (await request.json()) as any;
-    const question = body.question || 'How is my pond DO tonight?';
     const lang = body.lang || 'en';
 
     const englishAnswer = `For pond ${body.pond_id || 'CBE-003'} (Valankulam Tank), predicted 04:00 AM DO is 2.8 mg/L. Run aerator 2 between 03:00 AM and 06:00 AM. Maintain feeding at normal rate.`;

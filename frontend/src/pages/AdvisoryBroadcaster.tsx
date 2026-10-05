@@ -12,6 +12,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
 import { Button } from '../components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
+import { advisoriesApi, translateApi } from '../api/client';
 
 interface AdvisoryBroadcasterProps {
   initialPondId?: string;
@@ -28,23 +29,13 @@ export const AdvisoryBroadcaster: React.FC<AdvisoryBroadcasterProps> = ({ initia
 
   const { data: translationData, isLoading: isTranslating } = useQuery({
     queryKey: ['translate', textEn, targetLang],
-    queryFn: async () => {
-      const res = await fetch('/v1/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textEn, target_lang: targetLang }),
-      });
-      return res.json();
-    },
+    queryFn: () => translateApi.translate(textEn, targetLang),
     enabled: !!textEn,
   });
 
   const { data: advisoriesPage, refetch: refetchHistory } = useQuery({
     queryKey: ['advisories-history'],
-    queryFn: async () => {
-      const res = await fetch('/v1/advisories?limit=5');
-      return res.json();
-    },
+    queryFn: () => advisoriesApi.getAdvisories({ limit: 5 }),
   });
 
   const advisoriesHistory = advisoriesPage?.items || [];
@@ -56,20 +47,14 @@ export const AdvisoryBroadcaster: React.FC<AdvisoryBroadcasterProps> = ({ initia
     }
 
     try {
-      const res = await fetch('/v1/advisories/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          target_segment: targetSegment,
-          title: 'Advisory Broadcast',
-          body: textEn,
-          language: targetLang,
-        }),
+      await advisoriesApi.broadcast({
+        target_segment: targetSegment,
+        title: 'Advisory Broadcast',
+        body: textEn,
+        language: targetLang,
       });
-      if (res.ok) {
-        alert(`Advisory Broadcast Submitted Successfully!`);
-        refetchHistory();
-      }
+      alert('Advisory Broadcast Submitted Successfully!');
+      refetchHistory();
     } catch (e) {
       alert('Broadcast request failed.');
     }

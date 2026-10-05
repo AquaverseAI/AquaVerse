@@ -1,0 +1,176 @@
+import 'package:flutter/material.dart';
+
+/// Locked theme color tokens for AquaVerse AI.
+/// Full palette per AquaVerse_AI_Design_System.md visual design system.
+abstract class AppColors {
+  // ── Brand Primary (Aqua/Teal) ──────────────────────────────────────────────
+  static const Color primary900 = Color(0xFF124C73);
+  static const Color primary800 = Color(0xFF075B86);
+  static const Color primary700 = Color(0xFF08749A);
+  static const Color primary600 = Color(0xFF1495AE);
+  static const Color primary500 = Color(0xFF27AFC0); // Primary CTA
+  static const Color primary400 = Color(0xFF55C4C8);
+  static const Color primary300 = Color(0xFF8DD9DB);
+  static const Color primary200 = Color(0xFFB9E8EA);
+  static const Color primary100 = Color(0xFFDDF3F4);
+
+  // ── Brand Mountain (Deep Blue) ─────────────────────────────────────────────
+  static const Color mountain900 = Color(0xFF123F68);
+  static const Color mountain700 = Color(0xFF176F9C);
+  static const Color mountain500 = Color(0xFF4BA8C1);
+  static const Color mountain200 = Color(0xFFCBEAF0);
+
+  // ── Natural Green Accent ───────────────────────────────────────────────────
+  static const Color green700 = Color(0xFF24866F);
+  static const Color green600 = Color(0xFF35A58A); // Success
+  static const Color green200 = Color(0xFFCDEEE3);
+  static const Color green100 = Color(0xFFEAF8F3);
+
+  // ── Surface / Background ───────────────────────────────────────────────────
+  static const Color background = Color(0xFFF7FBFC);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color border = Color(0xFFD8E8ED);
+  static const Color borderStrong = Color(0xFFB9D6DF);
+  
+  static const Color surfaceSoft = Color(0xFFF5FAFB);
+  static const Color surfaceAqua = Color(0xFFEDF8FA);
+  static const Color surfaceGreen = Color(0xFFEFF9F5);
+
+  // ── Text ───────────────────────────────────────────────────────────────────
+  static const Color textPrimary = Color(0xFF153B56);
+  static const Color textSecondary = Color(0xFF557384);
+  static const Color textMuted = Color(0xFF7D949F);
+  static const Color textDisabled = Color(0xFFA9B9BF);
+
+  // ── Semantic ───────────────────────────────────────────────────────────────
+  static const Color warning = Color(0xFFE8A33A);
+  static const Color critical = Color(0xFFE45D67);
+  static const Color info = Color(0xFF3189D2);
+  
+  static const Color criticalSurface = Color(0xFFFFF0F1);
+  static const Color criticalBorder = Color(0xFFF2C0C5);
+  
+  static const Color warningSurface = Color(0xFFFFF7E8);
+  static const Color warningBorder = Color(0xFFF2D7A5);
+  
+  static const Color infoSurface = Color(0xFFEEF7FF);
+  static const Color infoBorder = Color(0xFFC6E0F5);
+
+  // ── Risk Tier Tokens ───────────────────────────────────────────────────────
+  static const Color riskLow = Color(0xFF14B8A6); // Teal (in-palette)
+  static const Color riskMedium = Color(0xFFF59E0B); // Amber
+  static const Color riskHigh = Color(0xFFEF4444); // Red
+
+  // ── Language Select Tokens (PRD-AV Language Picker Palette) ──────────────
+  static const Color langBgPrimary = Color(0xFFFFFFFF);
+  static const Color langBgSurface = Color(0xFFF4FBF9);
+  static const Color langBgSelected = Color(0xFFE4F6F1);
+  static const Color langBorderDefault = Color(0xFFE0EEEA);
+  static const Color langBorderSelected = Color(0xFF14B8A6);
+  static const Color langAccentPrimary = Color(0xFF0E9488);
+  static const Color langAccentSeagreen = Color(0xFF2E8B77);
+  static const Color langTextPrimary = Color(0xFF031622);
+  static const Color langTextSecondary = Color(0xFF123447);
+  static const Color langTextOnAccent = Color(0xFFFFFFFF);
+  static const Color langCheckIcon = Color(0xFF0E9488);
+  static const Color langSearchBg = Color(0xFFF0F7F5);
+  static const Color langSearchPlaceholder = Color(0xFF294E63);
+  static const Color langFlagCodeText = Color(0xFF123447);
+
+  static const LinearGradient langCtaGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [Color(0xFF2E8B77), Color(0xFF14B8A6)],
+  );
+
+  // ── 3D Depth Gradient System ──────────────────────────────────────────────
+  /// Primary 3D gradient: deepest seagreen → mid teal → accent.
+  /// Used on risk disc, primary CTA, elevated cards.
+  static const LinearGradient gradient3DPrimary = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 0.50, 1.0],
+    colors: [
+      Color(0xFF2E8B77), // langAccentSeagreen
+      Color(0xFF14B8A6), // riskLow / teal mid
+      Color(0xFF0E9488), // langAccentPrimary
+    ],
+  );
+
+  /// Medium-risk variant: amber family, same gradient structure.
+  static const LinearGradient gradient3DMediumRisk = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 0.50, 1.0],
+    colors: [
+      Color(0xFFD97706), // amber-700
+      Color(0xFFF59E0B), // riskMedium
+      Color(0xFFFFBB34), // amber-300
+    ],
+  );
+
+  /// High-risk variant: red family, same gradient structure.
+  static const LinearGradient gradient3DHighRisk = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 0.50, 1.0],
+    colors: [
+      Color(0xFFB91C1C), // red-700
+      Color(0xFFEF4444), // riskHigh
+      Color(0xFFF87171), // red-400
+    ],
+  );
+
+  /// Soft ambient background: very faint underwater-light feel.
+  static const RadialGradient gradientBgAmbient = RadialGradient(
+    center: Alignment(0.0, -0.8),
+    radius: 1.4,
+    colors: [
+      Color(0xFFF0FBF9), // light mint wash at top
+      Color(0xFFFFFFFF), // pure white at bottom
+    ],
+    stops: [0.0, 0.55],
+  );
+
+  /// Aqua glow: radial, used as a halo behind risk disc, mic button, bell.
+  static const RadialGradient gradientAquaGlow = RadialGradient(
+    center: Alignment.center,
+    radius: 1.0,
+    colors: [
+      Color(0x5914B8A6), // 35% alpha teal
+      Color(0x0014B8A6), // 0% alpha (transparent)
+    ],
+    stops: [0.0, 0.70],
+  );
+
+  /// Glass card gradient: semi-transparent white frosted surface.
+  static const LinearGradient gradientCardGlass = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    stops: [0.0, 1.0],
+    colors: [
+      Color(0xBFFFFFFF), // white 75% alpha
+      Color(0x8CF4FBF9), // surface 55% alpha
+    ],
+  );
+
+  /// Tier shadows: palette-tinted, not gray/black.
+  static const Color shadowTier1 = Color(0x1A0E9488); // ~10% primary accent
+  static const Color shadowTier2 = Color(0x2E0E9488); // ~18% primary accent
+
+  // ===========================================================================
+  // LEGACY ALIASES (Do not use for new UI, mapped to prevent compilation errors)
+  // ===========================================================================
+  static const Color deepNavy = mountain900;
+  static const Color midBlue = primary700;
+  static const Color seaGreen = green600;
+  static const Color brightMint = primary400;
+  static const Color aqua = primary500;
+  static const Color lightCyan = primary300;
+  static const Color paleSky = mountain200;
+  static const Color scaffoldBg = background;
+  static const Color cardBg = surface;
+  static const Color paleSkyBg = surfaceAqua;
+  static const Color success = green600;
+  static const Color divider = border;
+}

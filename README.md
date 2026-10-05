@@ -1,19 +1,114 @@
 # AquaVerse AI
 
-Predictive analytics backend for fish/shrimp aquaculture in Tamil Nadu.
-Modular monolith: FastAPI + PostgreSQL 16 + TimescaleDB + PostGIS + Redis + vLLM.
+> Predictive analytics backend + offline-first Flutter mobile app for aquaculture farmers and extension officers in Tamil Nadu.
 
-## Requirements
+---
+
+## Frontend — Flutter Mobile Application
+
+AquaVerse AI mobile is an offline-first, voice-guided Flutter application that enables seamless pond management, daily water parameter logging, AI voice assistance, automated risk alerts, and extension officer supervision.
+
+### 🌟 Tech Stack
+
+- **Framework**: Flutter 3.8 / Dart SDK `^3.8.0`
+- **State Management**: `flutter_riverpod` (`^2.5.1`) with `riverpod_annotation`
+- **Routing**: `go_router` (`^14.2.0`)
+- **Database & Offline Queue**: `drift` (`^2.34.3`) + `sqlite3_flutter_libs` (SQLite outbox pattern)
+- **Secure Secret Storage**: `flutter_secure_storage` (`^9.2.2`)
+- **Simple Launch Gating**: `shared_preferences` (`^2.3.2`) — restricted strictly to `has_onboarded` flag
+- **Networking**: `dio` (`^5.7.0`) + `retrofit` (`^4.4.1`)
+- **Audio & Media**: `just_audio` (`^0.9.40`) for TTS voice guidance
+- **Push Notifications**: `firebase_messaging` (`^15.1.3`) + `flutter_local_notifications` (`^17.2.3`)
+
+### 🔒 3-Layer Storage Contract
+
+| Storage Layer | Allowed Usage | Constraints |
+|---|---|---|
+| **Drift (SQLite)** | Structured data (ponds, water logs, risk alerts, sync outbox) | Offline-first, reactive query streams |
+| **`flutter_secure_storage`** | Auth tokens, refresh tokens, API credentials | Encrypted device keychain/keystore |
+| **`shared_preferences`** | Simple launch-gating flag (`has_onboarded`) | Strictly restricted to `has_onboarded` only |
+
+### 🔀 Onboarding & Routing Matrix
+
+| `has_onboarded` | Valid/refreshable Token | Navigation Target |
+|---|---|---|
+| `false` | — | Full Onboarding (`/onboarding/language` ➔ `/mobile` ➔ `/otp` ➔ `/role`) |
+| `true` | Yes | Today Dashboard (`/today` for Farmers, `/officer/dashboard` for Officers) |
+| `true` | No | Re-login (`/login` — OTP only, no language/role pickers) |
+
+### 📁 Directory Structure
+
+```
+lib/
+├── app/                  # Application root & Riverpod config
+├── core/                 # Core utilities & cross-cutting concerns
+│   ├── config/           # App config & environment constants
+│   ├── database/         # Drift SQLite database, tables, & connections
+│   ├── errors/           # Failure & exception handling
+│   ├── network/          # Dio HTTP client, Retrofit services, & auth API
+│   ├── repositories/     # Offline-first repository implementations
+│   ├── router/           # GoRouter route definitions & auth guards
+│   ├── services/         # Audio TTS, connectivity monitoring, push notifications
+│   ├── storage/          # SharedPreferences flag store & SecureStorage
+│   ├── sync/             # Offline queue manager & auto-sync worker
+│   └── theme/            # AquaVerse design system tokens & colors
+├── features/             # Feature modules
+│   ├── alerts/           # Risk alerts & warning center
+│   ├── ask/              # Voice-first AI assistant & speech queries
+│   ├── crop/             # Crop cycle management & stocking history
+│   ├── help/             # Help center & FAQ resources
+│   ├── log/              # Offline-first pond parameter logging
+│   ├── notifications/    # Broadcast & targeted alert history
+│   ├── officer/          # Extension officer dashboard & farmer list
+│   ├── onboarding/       # Language selection, mobile entry, OTP, role picker
+│   ├── ponds/            # Pond management & parameter thresholds
+│   ├── profile/          # User profile & farm setup
+│   ├── settings/         # App preferences & offline sync status
+│   ├── splash/           # Animated splash screen & route guard
+│   └── today/            # Farmer daily summary & task action cards
+└── shared/               # Reusable UI widgets & components
+    ├── models/           # Shared domain entities & enums
+    └── widgets/          # AppCard, ActionCard, SpeakerButton, StatusDisc, StalenessBadge
+```
+
+### 🚀 Getting Started
+
+```bash
+# 1. Clone the repository
+git clone -b farmer-application https://github.com/AquaverseAI/AquaVerse.git
+cd AquaVerse
+
+# 2. Install dependencies
+flutter pub get
+
+# 3. Run code generation (if updating Drift / Retrofit / Freezed schemas)
+dart run build_runner build --delete-conflicting-outputs
+
+# 4. Lint & test
+flutter analyze
+flutter test
+
+# 5. Run the app
+flutter run
+```
+
+---
+
+## Backend — FastAPI Service
+
+Predictive analytics backend for fish/shrimp aquaculture. Modular monolith: FastAPI + PostgreSQL 16 + TimescaleDB + PostGIS + Redis + vLLM.
+
+### Requirements
 
 - Docker with Compose v2 (full stack and infrastructure dependencies)
 - Python 3.11 and `uv` (host backend development)
-- Node.js 20 and npm (host frontend development)
+- Node.js 20 and npm (web frontend development)
 
 Copy `.env.example` to `.env` and replace every `CHANGE_ME` value. Local `.env` files are
 ignored by Git. The real FastAPI backend is the default; MSW is enabled only when
 `VITE_USE_MSW=true` is set explicitly.
 
-## Full Docker stack
+### Full Docker Stack
 
 ```bash
 cp .env.example .env
@@ -25,7 +120,7 @@ curl http://localhost:8000/v1/health
 
 The app container runs `alembic upgrade head` before FastAPI starts. The seed is idempotent.
 
-## Local development
+### Local Development
 
 ```bash
 # Infrastructure
@@ -56,7 +151,7 @@ Seeded development logins:
 - Farmer OTP: use the seeded farmer phone printed by `make seed`; development mode returns
   `dev_otp` from `POST /v1/auth/otp/request`.
 
-## Validation
+### Validation
 
 ```bash
 make lint
@@ -90,7 +185,7 @@ TimescaleDB and PostGIS. If reports remain queued, verify Redis and the `worker`
 healthy. Translation and outbound notification delivery require their external credentials;
 the base application does not require them.
 
-## Architecture
+### Architecture
 
 ```
 Client
@@ -123,7 +218,7 @@ FastAPI (uvicorn, async)
   └── vLLM (Qwen3-8B + 3 LoRA adapters) / llama.cpp fallback
 ```
 
-## Two-Layer Architecture (Non-Negotiable)
+### Two-Layer Architecture (Non-Negotiable)
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -142,26 +237,7 @@ FastAPI (uvicorn, async)
 └─────────────────────────────────────────────────────┘
 ```
 
-## Number Validator
-
-Every response from the reasoning layer is checked by `app/advisory/number_validator.py`:
-
-1. Regex-extract every numeral from LLM output
-2. Check each against the tool-call payload
-3. Reject + regenerate on any mismatch (server-side, in request path)
-4. Increment `rejected_attempts` counter
-5. `GET /v1/models/metrics` exposes this counter — must read **0** in steady state
-
-## Key Conventions
-
-- **Timestamps**: stored UTC, served `Asia/Kolkata`. Never naive.
-- **Pagination**: cursor-based everywhere (`?cursor=&limit=` → `{items, next_cursor}`).
-- **Errors**: RFC 9457 Problem Details (`{type, title, status, detail, instance}`).
-- **Idempotency**: write endpoints accept `client_log_id`; replays return `200` + original record.
-- **Forecasts**: always return uncertainty bands — never bare point estimates.
-- **Blind-state suppression**: always visible on the response payload — never silent.
-
-## Project Structure
+### Project Structure
 
 ```
 aquaverse-backend/
@@ -186,7 +262,7 @@ aquaverse-backend/
 └── .github/workflows/ # CI: lint, mypy, pytest, openapi-diff; sdk-gen
 ```
 
-## CI / CD
+### CI / CD
 
 Every pull request runs:
 1. `ruff check` + `ruff format --check`
@@ -198,7 +274,7 @@ Every pull request runs:
 Merges to `main` additionally run:
 6. SDK regeneration (`.github/workflows/sdk-gen.yml`)
 
-## Free Tier Compliance
+### Free Tier Compliance
 
 Every infrastructure component runs on a single VPS with no paid cloud services required:
 - PostgreSQL 16 + TimescaleDB + PostGIS: self-hosted

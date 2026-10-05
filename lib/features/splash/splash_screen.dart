@@ -8,39 +8,40 @@ import '../../l10n/app_localizations.dart';
 import 'splash_controller.dart';
 
 // =============================================================================
-// TIMING CONSTANTS
+// TIMING CONSTANTS — Faithfully mapped from reference video
 //
-// Reference motion choreography (Slack-inspired rhythm adapted for AquaVerse):
+// STATE 01 (0ms - 400ms):    Deep tranquil solid ocean canvas
+// STATE 02 (300ms - 700ms):  White/cyan seed dot appears in center
+// STATE 03 (600ms - 1500ms): 4 Nano-Banana generated circular icons burst outward:
+//                            • Top: Farmer inspecting pond (Amber-Yellow)
+//                            • Left: IoT Pond Metrics (Emerald-Green)
+//                            • Right: Extension Officer (Coral-Magenta)
+//                            • Bottom: Water Ecosystem (Cyan-Blue)
+// STATE 04 (1500ms - 2400ms):Circular icons hover & float with subtle micro-scale
+// STATE 05 (2300ms - 3200ms):Icons accelerate inward, converging to Logo Mark position
+// STATE 06 (3000ms - 3800ms):AquaVerse Logo Mark emerges prominently from fusion
+// STATE 07 (3400ms - 4300ms):Wordmark "AquaVerse" letters slide in from right
+// STATE 08 (4100ms - 4800ms):Tagline resolves ("Better decisions, better harvest")
+// STATE 09 (5000ms):         Automatic navigation handoff
 //
-// STATE 01 (0ms - 400ms):    Deep tranquil ocean canvas
-// STATE 02 (400ms - 800ms):  Luminous aquatic seed emerges at center
-// STATE 03 (700ms - 1700ms): 4 pure liquid droplets burst outward in cardinal cross
-//                            Water ripples radiate outward across the canvas
-// STATE 04 (1600ms - 2600ms):Droplets hover in buoyant equilibrium (breathing micro-motion)
-// STATE 05 (2500ms - 3300ms):Droplets accelerate inward, converging to center
-// STATE 06 (3200ms - 4100ms):HERO LOGO emerges from fusion with majestic scale & glow
-// STATE 07 (3700ms - 4600ms):"AquaVerse" wordmark slides up with crisp typography
-// STATE 08 (4300ms - 5000ms):Tagline resolves ("Better decisions, better harvest")
-// STATE 09 (5200ms):         Seamless navigation handoff
-//
-// Total timeline: 5400ms (can also tap anywhere to advance immediately)
+// Total timeline: 5200ms (tap anywhere to skip immediately)
 // =============================================================================
 
-const int _kTotalMs = 5400;
+const int _kTotalMs = 5200;
 
-const double _kSeedStart     = 400  / _kTotalMs;
-const double _kSeedEnd       = 800  / _kTotalMs;
-const double _kBurstStart    = 700  / _kTotalMs;
-const double _kBurstEnd      = 1700 / _kTotalMs;
-const double _kConvergeStart = 2500 / _kTotalMs;
-const double _kConvergeEnd   = 3300 / _kTotalMs;
-const double _kLogoStart     = 3100 / _kTotalMs;
-const double _kLogoEnd       = 4100 / _kTotalMs;
-const double _kWordmarkStart = 3700 / _kTotalMs;
-const double _kWordmarkEnd   = 4600 / _kTotalMs;
-const double _kTaglineStart  = 4300 / _kTotalMs;
-const double _kTaglineEnd    = 5000 / _kTotalMs;
-const double _kNavTrigger    = 5200 / _kTotalMs;
+const double _kSeedStart     = 300  / _kTotalMs;
+const double _kSeedEnd       = 700  / _kTotalMs;
+const double _kBurstStart    = 600  / _kTotalMs;
+const double _kBurstEnd      = 1500 / _kTotalMs;
+const double _kConvergeStart = 2300 / _kTotalMs;
+const double _kConvergeEnd   = 3200 / _kTotalMs;
+const double _kLogoStart     = 3000 / _kTotalMs;
+const double _kLogoEnd       = 3800 / _kTotalMs;
+const double _kWordmarkStart = 3400 / _kTotalMs;
+const double _kWordmarkEnd   = 4300 / _kTotalMs;
+const double _kTaglineStart  = 4100 / _kTotalMs;
+const double _kTaglineEnd    = 4800 / _kTotalMs;
+const double _kNavTrigger    = 5000 / _kTotalMs;
 
 // =============================================================================
 // SPLASH SCREEN
@@ -56,27 +57,26 @@ class SplashScreen extends ConsumerStatefulWidget {
 class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _timelineCtrl;
-  late final AnimationController _floatCtrl;
+  late final AnimationController _hoverCtrl;
 
-  // State 02: Seed droplet
+  // State 02: Seed Dot
   late final Animation<double> _seedScale;
   late final Animation<double> _seedOpacity;
 
-  // State 03-05: Droplet burst & convergence
-  late final Animation<double> _dropletSpread;
-  late final Animation<double> _dropletConverge;
-  late final Animation<double> _dropletsOpacity;
+  // State 03-05: 4 Circular Icons Burst & Convergence
+  late final Animation<double> _iconsSpread;
+  late final Animation<double> _iconsConverge;
+  late final Animation<double> _iconsOpacity;
 
-  // State 06: Hero Logo reveal
+  // State 06: Logo Mark Reveal
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
-  late final Animation<double> _logoGlow;
 
-  // State 07: Wordmark reveal
+  // State 07: Wordmark Reveal
   late final Animation<double> _wordmarkSlide;
   late final Animation<double> _wordmarkOpacity;
 
-  // State 08: Tagline reveal
+  // State 08: Tagline Reveal
   late final Animation<double> _taglineSlide;
   late final Animation<double> _taglineOpacity;
 
@@ -90,7 +90,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: Color(0xFF061A2B),
+        systemNavigationBarColor: Color(0xFF072033),
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
@@ -100,13 +100,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: _kTotalMs),
     );
 
-    // Continuous subtle floating / breathing motion
-    _floatCtrl = AnimationController(
+    // Subtle breathing micro-motion during hover phase
+    _hoverCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 2200),
     )..repeat(reverse: true);
 
-    // ── Seed Droplet ─────────────────────────────────────────────────────────
+    // ── Seed Dot ─────────────────────────────────────────────────────────────
     _seedScale = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _timelineCtrl,
@@ -120,28 +120,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
 
-    // ── 4 Liquid Droplets: Burst outward ─────────────────────────────────────
-    _dropletSpread = CurvedAnimation(
+    // ── 4 Circular Icons: Burst outward ──────────────────────────────────────
+    _iconsSpread = CurvedAnimation(
       parent: _timelineCtrl,
       curve: const Interval(_kBurstStart, _kBurstEnd, curve: Curves.easeOutBack),
     );
 
-    // ── 4 Liquid Droplets: Converge inward ───────────────────────────────────
-    _dropletConverge = CurvedAnimation(
+    // ── 4 Circular Icons: Converge inward ────────────────────────────────────
+    _iconsConverge = CurvedAnimation(
       parent: _timelineCtrl,
       curve: const Interval(_kConvergeStart, _kConvergeEnd, curve: Curves.easeInOutCubic),
     );
 
-    // Droplets vanish as logo takes over
-    _dropletsOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
+    // Icons fade as logo mark takes over
+    _iconsOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _timelineCtrl,
-        curve: const Interval(_kConvergeEnd - 0.03, _kLogoStart + 0.08, curve: Curves.easeOut),
+        curve: const Interval(_kConvergeEnd - 0.04, _kLogoStart + 0.08, curve: Curves.easeOut),
       ),
     );
 
-    // ── Hero Logo (Majestic scale, prominent presence) ───────────────────────
-    _logoScale = Tween<double>(begin: 0.65, end: 1.0).animate(
+    // ── Logo Mark Reveal ─────────────────────────────────────────────────────
+    _logoScale = Tween<double>(begin: 0.4, end: 1.0).animate(
       CurvedAnimation(
         parent: _timelineCtrl,
         curve: const Interval(_kLogoStart, _kLogoEnd, curve: Curves.easeOutBack),
@@ -150,18 +150,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _timelineCtrl,
-        curve: const Interval(_kLogoStart, _kLogoStart + 0.10, curve: Curves.easeIn),
-      ),
-    );
-    _logoGlow = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _timelineCtrl,
-        curve: const Interval(_kLogoStart, _kLogoEnd + 0.08, curve: Curves.easeOut),
+        curve: const Interval(_kLogoStart, _kLogoStart + 0.08, curve: Curves.easeIn),
       ),
     );
 
-    // ── Wordmark "AquaVerse" ────────────────────────────────────────────────
-    _wordmarkSlide = Tween<double>(begin: 24.0, end: 0.0).animate(
+    // ── Wordmark "AquaVerse" Letter Reveal ───────────────────────────────────
+    _wordmarkSlide = Tween<double>(begin: 45.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _timelineCtrl,
         curve: const Interval(_kWordmarkStart, _kWordmarkEnd, curve: Curves.easeOutCubic),
@@ -174,7 +168,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
 
-    // ── Tagline ─────────────────────────────────────────────────────────────
+    // ── Tagline Reveal ───────────────────────────────────────────────────────
     _taglineSlide = Tween<double>(begin: 16.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _timelineCtrl,
@@ -212,7 +206,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void dispose() {
     _timelineCtrl.removeListener(_onTimelineTick);
     _timelineCtrl.dispose();
-    _floatCtrl.dispose();
+    _hoverCtrl.dispose();
     super.dispose();
   }
 
@@ -224,13 +218,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final tagline =
         l10n?.betterDecisionsBetterHarvest ?? 'Better decisions, better harvest';
 
-    // If accessibility reduced motion is active, jump directly to completed state
+    // If reduced motion is requested, snap to end state
     if (disableAnimations && !_timelineCtrl.isCompleted) {
       _timelineCtrl.value = 1.0;
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF061A2B),
+      backgroundColor: const Color(0xFF072033),
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
@@ -240,51 +234,72 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           }
         },
         child: AnimatedBuilder(
-          animation: Listenable.merge([_timelineCtrl, _floatCtrl]),
+          animation: Listenable.merge([_timelineCtrl, _hoverCtrl]),
           builder: (context, _) {
-            final spread = _dropletSpread.value;
-            final converge = _dropletConverge.value;
-            final floatOffset = math.sin(_floatCtrl.value * math.pi) * 3.5;
+            final spread = _iconsSpread.value;
+            final converge = _iconsConverge.value;
+            final hoverOffset = math.sin(_hoverCtrl.value * math.pi) * 3.5;
+
+            // Geometry setup matching reference video:
+            // Centered lockup containing [Logo Mark] + [Wordmark]
+            const logoSize = 72.0;
+            const gap = 16.0;
+            // Estimated text width for "AquaVerse" at 38sp bold is ~195dp
+            const textWidth = 195.0;
+            const totalLockupWidth = logoSize + gap + textWidth;
+
+            final cx = size.width * 0.5;
+            final cy = size.height * 0.48; // Centered visual sweet spot
+
+            // Target center for the logo mark
+            final targetLogoCenterX = cx - (totalLockupWidth / 2) + (logoSize / 2);
+            final targetLogoCenterY = cy;
 
             return Stack(
               fit: StackFit.expand,
               children: [
-                // ── 1. Deep Ocean Ambience & Radial Glow ────────────────────
+                // ── 1. Deep Solid Ocean Backdrop ────────────────────────────
                 const Positioned.fill(
-                  child: _OceanBackdrop(),
+                  child: ColoredBox(color: Color(0xFF072033)),
                 ),
 
-                // ── 2. Subtle Water Ripple Dynamics ────────────────────────
+                // ── 2. Subtle Radial Light Depth ────────────────────────────
                 Positioned.fill(
-                  child: CustomPaint(
-                    painter: _WaterRipplesPainter(
-                      progress: _timelineCtrl.value,
-                      spread: spread,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0.0, -0.1),
+                        radius: 1.2,
+                        colors: [
+                          const Color(0xFF144D6B).withValues(alpha: 0.35),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.75],
+                      ),
                     ),
                   ),
                 ),
 
-                // ── 3. Central Seed Droplet (Initial Pulse) ─────────────────
+                // ── 3. Central Seed Dot (Initial Pulse) ─────────────────────
                 if (_seedOpacity.value > 0.01 && spread < 0.15)
-                  Center(
+                  Positioned(
+                    left: cx - 9,
+                    top: cy - 9,
                     child: Opacity(
                       opacity: _seedOpacity.value.clamp(0.0, 1.0),
                       child: Transform.scale(
                         scale: _seedScale.value,
                         child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
+                          width: 18,
+                          height: 18,
+                          decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: const RadialGradient(
-                              colors: [Colors.white, AppColors.primary500],
-                              stops: [0.3, 1.0],
-                            ),
+                            color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary500.withValues(alpha: 0.6),
-                                blurRadius: 16,
-                                spreadRadius: 4,
+                                color: AppColors.primary500,
+                                blurRadius: 14,
+                                spreadRadius: 3,
                               ),
                             ],
                           ),
@@ -293,86 +308,98 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     ),
                   ),
 
-                // ── 4. Four Liquid Droplets (Cardinal Cross Formation) ─────
-                // Pure minimalist liquid beads with brand gradient & glass depth.
-                // NO cartoon clip art, NO ai slop illustrations.
-                if (_dropletsOpacity.value > 0.01 && spread > 0.05)
+                // ── 4. Four Circular Icons (Burst & Convergence) ───────────
+                // Using high-fidelity Nano-Banana generated circular illustrations
+                if (_iconsOpacity.value > 0.01 && spread > 0.05)
                   Positioned.fill(
                     child: Opacity(
-                      opacity: _dropletsOpacity.value.clamp(0.0, 1.0),
-                      child: _CardinalDroplets(
-                        size: size,
+                      opacity: _iconsOpacity.value.clamp(0.0, 1.0),
+                      child: _ReferenceOrbs(
+                        originX: cx,
+                        originY: cy,
+                        targetX: targetLogoCenterX,
+                        targetY: targetLogoCenterY,
                         spread: spread,
                         converge: converge,
-                        floatOffset: floatOffset,
+                        hoverOffset: hoverOffset,
+                        size: size,
                       ),
                     ),
                   ),
 
-                // ── 5. Hero Logo & AquaVerse Brand Lockup ────────────────────
-                // Centered, prominent, large-scale, authoritative.
+                // ── 5. Main Brand Lockup (Logo Mark + "AquaVerse") ──────────
+                // Settles horizontally exactly like Slack reference video
                 if (_logoOpacity.value > 0.01)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                  Positioned(
+                    left: cx - (totalLockupWidth / 2),
+                    top: cy - (logoSize / 2),
+                    child: SizedBox(
+                      width: totalLockupWidth + 20,
+                      height: logoSize,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // ── HERO LOGO (Large, majestic app emblem) ────────
+                          // ── PROMINENT LOGO MARK ───────────────────────────
                           Transform.scale(
                             scale: _logoScale.value,
                             child: Opacity(
                               opacity: _logoOpacity.value.clamp(0.0, 1.0),
-                              child: _HeroLogoEmblem(
-                                glowProgress: _logoGlow.value,
-                                size: size.shortestSide * 0.34, // ~130-145dp
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 22),
-
-                          // ── HERO WORDMARK "AquaVerse" ─────────────────────
-                          Transform.translate(
-                            offset: Offset(0, _wordmarkSlide.value),
-                            child: Opacity(
-                              opacity: _wordmarkOpacity.value.clamp(0.0, 1.0),
-                              child: const Text(
-                                'AquaVerse',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontFamily: 'Palatino',
-                                  fontFamilyFallback: [
-                                    'Palatino Linotype',
-                                    'Georgia',
-                                    'serif'
+                              child: Container(
+                                width: logoSize,
+                                height: logoSize,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.35),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                    BoxShadow(
+                                      color: AppColors.primary500.withValues(alpha: 0.35),
+                                      blurRadius: 16,
+                                      spreadRadius: 1,
+                                    ),
                                   ],
-                                  fontSize: 36,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  letterSpacing: 0.8,
-                                  height: 1.1,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: Image.asset(
+                                    'assets/icons/app_icon.png',
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
 
-                          const SizedBox(height: 10),
+                          const SizedBox(width: gap),
 
-                          // ── LOCALIZED TAGLINE ─────────────────────────────
-                          Transform.translate(
-                            offset: Offset(0, _taglineSlide.value),
-                            child: Opacity(
-                              opacity: _taglineOpacity.value.clamp(0.0, 1.0),
-                              child: Text(
-                                tagline,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white.withValues(alpha: 0.78),
-                                  letterSpacing: 0.3,
-                                  height: 1.35,
+                          // ── WORDMARK "AquaVerse" (Slide In from Right) ────
+                          Expanded(
+                            child: ClipRect(
+                              child: Transform.translate(
+                                offset: Offset(_wordmarkSlide.value, 0),
+                                child: Opacity(
+                                  opacity: _wordmarkOpacity.value.clamp(0.0, 1.0),
+                                  child: const Text(
+                                    'AquaVerse',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.visible,
+                                    style: TextStyle(
+                                      fontFamily: 'Palatino',
+                                      fontFamilyFallback: [
+                                        'Palatino Linotype',
+                                        'Georgia',
+                                        'serif'
+                                      ],
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.6,
+                                      height: 1.0,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -382,40 +409,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     ),
                   ),
 
-                // ── 6. Bottom Brand Indicator ───────────────────────────────
-                Positioned(
-                  bottom: MediaQuery.paddingOf(context).bottom + 20,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Opacity(
-                      opacity: _taglineOpacity.value.clamp(0.0, 1.0) * 0.65,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF14B8A6),
-                              shape: BoxShape.circle,
-                            ),
+                // ── 6. Localized Tagline ────────────────────────────────────
+                if (_taglineOpacity.value > 0.01)
+                  Positioned(
+                    top: cy + (logoSize / 2) + 18,
+                    left: 24,
+                    right: 24,
+                    child: Transform.translate(
+                      offset: Offset(0, _taglineSlide.value),
+                      child: Opacity(
+                        opacity: _taglineOpacity.value.clamp(0.0, 1.0),
+                        child: Text(
+                          tagline,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.80),
+                            letterSpacing: 0.3,
+                            height: 1.3,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'AI FOR SUSTAINABLE AQUACULTURE',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.4,
-                              color: Colors.white.withValues(alpha: 0.65),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             );
           },
@@ -426,278 +443,139 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 }
 
 // =============================================================================
-// HERO LOGO EMBLEM
-// Renders the authentic high-resolution AquaVerse app icon with an ambient
-// aqua glow, rounded corner styling, and subtle glass depth border.
+// REFERENCE ORBS
+// Renders the 4 circular icons bursting outward from center, floating, then
+// converging with acceleration directly into the target Logo Mark position.
 // =============================================================================
 
-class _HeroLogoEmblem extends StatelessWidget {
-  final double glowProgress;
-  final double size;
-
-  const _HeroLogoEmblem({
-    required this.glowProgress,
-    required this.size,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final clampedSize = size.clamp(120.0, 150.0);
-
-    return SizedBox(
-      width: clampedSize + 48,
-      height: clampedSize + 48,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Ambient aquatic bloom glow behind logo
-          Opacity(
-            opacity: (glowProgress * 0.85).clamp(0.0, 1.0),
-            child: Container(
-              width: clampedSize + 36,
-              height: clampedSize + 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF14B8A6).withValues(alpha: 0.45),
-                    const Color(0xFF27AFC0).withValues(alpha: 0.20),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
-                ),
-              ),
-            ),
-          ),
-
-          // Authentic AquaVerse App Icon
-          Container(
-            width: clampedSize,
-            height: clampedSize,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(clampedSize * 0.24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  blurRadius: 28,
-                  offset: const Offset(0, 12),
-                ),
-                BoxShadow(
-                  color: const Color(0xFF0E9488).withValues(alpha: 0.30 * glowProgress),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(clampedSize * 0.24),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/icons/app_icon.png',
-                    fit: BoxFit.cover,
-                  ),
-                  // Subtle top-edge glass rim highlight
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(clampedSize * 0.24),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.28),
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// CARDINAL DROPLETS (4 PURE LIQUID ORBS)
-// Clean minimalist liquid glass beads inspired by the Slack reference motion.
-// No cartoon illustrations or clip art.
-// =============================================================================
-
-class _CardinalDroplets extends StatelessWidget {
-  final Size size;
+class _ReferenceOrbs extends StatelessWidget {
+  final double originX;
+  final double originY;
+  final double targetX;
+  final double targetY;
   final double spread;
   final double converge;
-  final double floatOffset;
+  final double hoverOffset;
+  final Size size;
 
-  const _CardinalDroplets({
-    required this.size,
+  const _ReferenceOrbs({
+    required this.originX,
+    required this.originY,
+    required this.targetX,
+    required this.targetY,
     required this.spread,
     required this.converge,
-    required this.floatOffset,
+    required this.hoverOffset,
+    required this.size,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cx = size.width * 0.5;
-    final cy = size.height * 0.5;
+    // Orbit spread distance (~85dp on mobile)
+    final maxRadius = size.shortestSide * 0.24;
 
-    // Radius of the orbit: reaches ~85dp, then snaps back to center
-    final maxOrbit = size.shortestSide * 0.25;
-    final currentOrbit = maxOrbit * (spread - converge).clamp(0.0, 1.0);
+    // Size of each circular icon: ~64dp
+    const orbSize = 64.0;
+    const halfOrb = orbSize / 2;
 
-    // Droplet size: ~26-30dp
-    const dropletR = 14.0;
-
-    // 4 Cardinal positions: North, East, South, West
-    // Each with its own brand-aligned liquid gradient
-    final droplets = [
-      // Top (North) — Vibrant Aqua
-      _DropletData(
-        offset: Offset(cx, cy - currentOrbit - floatOffset),
-        colors: const [Color(0xFF55C4C8), Color(0xFF1495AE)],
-        shadowColor: const Color(0xFF27AFC0),
+    // 4 Cardinal positions: Top, Left, Right, Bottom (matching reference video)
+    final orbConfigs = [
+      // Top: Farmer inspecting pond (Amber-Yellow)
+      _OrbConfig(
+        assetPath: 'assets/images/orb_farmer.png',
+        directionX: 0.0,
+        directionY: -1.0,
+        hoverX: 0.0,
+        hoverY: -hoverOffset,
       ),
-      // Right (East) — Luminous Teal
-      _DropletData(
-        offset: Offset(cx + currentOrbit + floatOffset * 0.7, cy),
-        colors: const [Color(0xFF2DD4BF), Color(0xFF0E9488)],
-        shadowColor: const Color(0xFF14B8A6),
+      // Left: IoT Pond Metrics (Emerald-Green)
+      _OrbConfig(
+        assetPath: 'assets/images/orb_metrics.png',
+        directionX: -1.0,
+        directionY: 0.0,
+        hoverX: -hoverOffset * 0.7,
+        hoverY: 0.0,
       ),
-      // Bottom (South) — Deep Ocean Blue
-      _DropletData(
-        offset: Offset(cx, cy + currentOrbit + floatOffset),
-        colors: const [Color(0xFF4BA8C1), Color(0xFF124C73)],
-        shadowColor: const Color(0xFF176F9C),
+      // Right: Extension Officer (Coral-Magenta)
+      _OrbConfig(
+        assetPath: 'assets/images/orb_officer.png',
+        directionX: 1.0,
+        directionY: 0.0,
+        hoverX: hoverOffset * 0.7,
+        hoverY: 0.0,
       ),
-      // Left (West) — Vital Spring Green
-      _DropletData(
-        offset: Offset(cx - currentOrbit - floatOffset * 0.7, cy),
-        colors: const [Color(0xFF34D399), Color(0xFF059669)],
-        shadowColor: const Color(0xFF10B981),
+      // Bottom: Water Ecosystem (Cyan-Blue)
+      _OrbConfig(
+        assetPath: 'assets/images/orb_ecosystem.png',
+        directionX: 0.0,
+        directionY: 1.0,
+        hoverX: 0.0,
+        hoverY: hoverOffset,
       ),
     ];
 
+    // Scale of orbs: expands on burst (0.2 -> 1.0), collapses on converge (1.0 -> 0.3)
+    final orbScale = (spread * (1.0 - converge * 0.7)).clamp(0.0, 1.0);
+
     return Stack(
       children: [
-        for (final d in droplets)
-          Positioned(
-            left: d.offset.dx - dropletR,
-            top: d.offset.dy - dropletR,
-            child: Container(
-              width: dropletR * 2,
-              height: dropletR * 2,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: d.colors,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: d.shadowColor.withValues(alpha: 0.55),
-                    blurRadius: 14,
-                    spreadRadius: 2,
+        for (final orb in orbConfigs)
+          Builder(
+            builder: (context) {
+              // Outward position from center
+              final burstX = originX + (orb.directionX * maxRadius * spread) + orb.hoverX;
+              final burstY = originY + (orb.directionY * maxRadius * spread) + orb.hoverY;
+
+              // Converge smoothly to target logo position
+              final currentX = burstX + (targetX - burstX) * converge;
+              final currentY = burstY + (targetY - burstY) * converge;
+
+              return Positioned(
+                left: currentX - halfOrb,
+                top: currentY - halfOrb,
+                child: Transform.scale(
+                  scale: orbScale,
+                  child: Container(
+                    width: orbSize,
+                    height: orbSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.30),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Image.asset(
+                        orb.assetPath,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              child: Center(
-                // Specular liquid reflection dot
-                child: Container(
-                  width: 5,
-                  height: 5,
-                  margin: const EdgeInsets.only(bottom: 5, right: 5),
-                  decoration: const BoxDecoration(
-                    color: Colors.white70,
-                    shape: BoxShape.circle,
-                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
       ],
     );
   }
 }
 
-class _DropletData {
-  final Offset offset;
-  final List<Color> colors;
-  final Color shadowColor;
+class _OrbConfig {
+  final String assetPath;
+  final double directionX;
+  final double directionY;
+  final double hoverX;
+  final double hoverY;
 
-  const _DropletData({
-    required this.offset,
-    required this.colors,
-    required this.shadowColor,
+  const _OrbConfig({
+    required this.assetPath,
+    required this.directionX,
+    required this.directionY,
+    required this.hoverX,
+    required this.hoverY,
   });
-}
-
-// =============================================================================
-// OCEAN BACKDROP
-// Premium deep ocean gradient with soft aquatic atmospheric lighting
-// =============================================================================
-
-class _OceanBackdrop extends StatelessWidget {
-  const _OceanBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0.0, -0.15),
-          radius: 1.25,
-          colors: [
-            Color(0xFF0E3854), // Ambient aqua center
-            Color(0xFF0A263D), // Mid ocean blue
-            Color(0xFF061A2B), // Deep abyss foundation
-          ],
-          stops: [0.0, 0.55, 1.0],
-        ),
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// WATER RIPPLES PAINTER
-// Fine concentric ripples that expand outwards from center like water droplets
-// =============================================================================
-
-class _WaterRipplesPainter extends CustomPainter {
-  final double progress;
-  final double spread;
-
-  const _WaterRipplesPainter({
-    required this.progress,
-    required this.spread,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (spread <= 0.05) return;
-
-    final center = Offset(size.width * 0.5, size.height * 0.5);
-    final maxRadius = size.shortestSide * 0.45;
-
-    final ripplePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    for (int i = 0; i < 3; i++) {
-      final waveOffset = (spread * 1.5 - i * 0.28).clamp(0.0, 1.0);
-      if (waveOffset > 0.0 && waveOffset < 1.0) {
-        final currentR = waveOffset * maxRadius;
-        final opacity = ((1.0 - waveOffset) * 0.22).clamp(0.0, 1.0);
-
-        ripplePaint.color = const Color(0xFF27AFC0).withValues(alpha: opacity);
-        canvas.drawCircle(center, currentR, ripplePaint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_WaterRipplesPainter old) =>
-      old.progress != progress || old.spread != spread;
 }

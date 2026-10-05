@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from '@tanstack/react-router';
 import { Sidebar, ScreenId } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
+import { clearSession, setSession } from './api/client';
 
 export interface UserSession {
   username: string;
@@ -52,6 +53,12 @@ export function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    const handleUnauthorized = () => setUser(null);
+    window.addEventListener('aquaverse:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('aquaverse:unauthorized', handleUnauthorized);
+  }, []);
+
   const handleToggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -72,8 +79,7 @@ export function App() {
   if (!user) {
     return <LoginPage 
       onLoginSuccess={(u) => {
-        localStorage.setItem('auth_token', u.token);
-        localStorage.setItem('auth_user', JSON.stringify(u));
+        setSession(u.token, u);
         setUser(u);
       }} 
       theme={theme} 
@@ -90,7 +96,7 @@ export function App() {
         selectedDistrict={selectedDistrict}
         onDistrictChange={setSelectedDistrict}
         user={user}
-        onLogout={() => setUser(null)}
+        onLogout={() => { clearSession(); setUser(null); }}
         theme={theme}
         onToggleTheme={handleToggleTheme}
         mobileMenuOpen={mobileMenuOpen}

@@ -37,6 +37,24 @@ def test_openapi_schema_valid() -> None:
 
 
 @pytest.mark.contract
+def test_committed_openapi_matches_fastapi() -> None:
+    """Fail when route source changes without regenerating the committed contract."""
+    from pathlib import Path
+
+    import yaml
+
+    from app.main import create_app
+
+    openapi_path = Path(__file__).parent.parent.parent / "openapi.yaml"
+    with openapi_path.open() as f:
+        committed = yaml.safe_load(f)
+
+    assert committed == create_app().openapi(), (
+        "openapi.yaml has drifted from FastAPI; regenerate it from app.main:create_app"
+    )
+
+
+@pytest.mark.contract
 def test_schemathesis_contract() -> None:
     """
     Schemathesis contract test — property-based fuzzing of all stub endpoints.

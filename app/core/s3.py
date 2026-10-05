@@ -30,13 +30,13 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 
-def get_s3_client() -> S3Client:
+def get_s3_client(endpoint_url: str | None = None) -> S3Client:
     import boto3
 
     settings = get_settings()
     return boto3.client(
         "s3",
-        endpoint_url=settings.s3_endpoint_url,
+        endpoint_url=endpoint_url or settings.s3_endpoint_url,
         aws_access_key_id=settings.s3_access_key_id,
         aws_secret_access_key=settings.s3_secret_access_key,
         # MinIO/R2 don't use AWS regions, but boto3's client requires one
@@ -48,7 +48,7 @@ def get_s3_client() -> S3Client:
 def generate_presigned_put_url(s3_key: str, mime_type: str) -> str:
     """Real presigned PUT URL — local signing only, no network call."""
     settings = get_settings()
-    client = get_s3_client()
+    client = get_s3_client(settings.s3_public_endpoint_url)
     url: str = client.generate_presigned_url(
         "put_object",
         Params={
@@ -66,7 +66,7 @@ def generate_presigned_get_url(s3_key: str) -> str:
     to hand a finished report (app/reporting/jobs.py) to the client
     without making the bucket itself public."""
     settings = get_settings()
-    client = get_s3_client()
+    client = get_s3_client(settings.s3_public_endpoint_url)
     url: str = client.generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.s3_bucket_name, "Key": s3_key},

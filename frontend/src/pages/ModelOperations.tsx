@@ -2,6 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import ReactECharts from 'echarts-for-react';
 import { ShieldCheck, Database, CheckCircle2, Zap, AlertTriangle } from 'lucide-react';
+import { modelsApi } from '../api/client';
 
 interface ModelOperationsProps {
   theme?: 'light' | 'dark';
@@ -12,18 +13,12 @@ export const ModelOperations: React.FC<ModelOperationsProps> = ({ theme = 'light
 
   const { data: metricsData } = useQuery({
     queryKey: ['model-metrics'],
-    queryFn: async () => {
-      const res = await fetch('/v1/models/metrics');
-      return res.json();
-    },
+    queryFn: () => modelsApi.getMetrics(),
   });
 
   const { data: driftData } = useQuery({
     queryKey: ['model-drift'],
-    queryFn: async () => {
-      const res = await fetch('/v1/models/drift');
-      return res.json();
-    },
+    queryFn: () => modelsApi.getDrift(),
   });
 
   // Mock calibration points if not provided by backend metrics

@@ -49,6 +49,7 @@ WORKDIR /app
 # Runtime system deps only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    libgomp1 \
     gdal-bin \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -60,7 +61,9 @@ COPY --from=builder /opt/venv /opt/venv
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
+COPY scripts/ ./scripts/
 COPY ml/artifacts/ ./ml/artifacts/
+COPY ml/serving/ ./ml/serving/
 
 # Set ownership
 RUN chown -R aquaverse:aquaverse /app

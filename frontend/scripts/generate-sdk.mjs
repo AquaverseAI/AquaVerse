@@ -8,7 +8,8 @@ const __dirname = path.dirname(__filename);
 
 async function generateSDK() {
   console.log('Generating typed SDK from openapi.yaml...');
-  const openapiPath = path.resolve(__dirname, '../openapi.yaml');
+  // The FastAPI-generated repository root schema is the only contract source.
+  const openapiPath = path.resolve(__dirname, '../../openapi.yaml');
   const outputPath = path.resolve(__dirname, '../src/api/generated-sdk.ts');
 
   if (!fs.existsSync(openapiPath)) {

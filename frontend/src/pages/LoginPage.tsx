@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Mail, ArrowRight, Sparkles, Sun, Moon, ShieldCheck, Phone } from 'lucide-react';
+import { authApi } from '../api/client';
 
 interface LoginPageProps {
   onLoginSuccess: (user: { username: string; role: string; token: string }) => void;
@@ -9,11 +10,11 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'light', onToggleTheme }) => {
   const [authMode, setAuthMode] = useState<'keycloak' | 'otp'>('keycloak');
-  const [username, setUsername] = useState('suchit.analyst@aquaverse.gov.tn');
-  const [password, setPassword] = useState('••••••••••••');
-  const [phone, setPhone] = useState('9876543210');
+  const [username, setUsername] = useState('aquaverse_admin');
+  const [password, setPassword] = useState('AquaAdmin@2026!');
+  const [phone, setPhone] = useState('+919876543210');
   const [otpCode, setOtpCode] = useState('');
-  const [txnId, setTxnId] = useState('');
+  const [requestId, setRequestId] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [role, setRole] = useState<'analyst' | 'extension_officer' | 'farmer'>('analyst');
   const [isLoading, setIsLoading] = useState(false);
@@ -23,16 +24,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch('/v1/auth/otp/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      setTxnId(data.txn_id || `txn_${Date.now()}`);
+      const data = await authApi.requestOTP(phone);
+      setRequestId(data.request_id);
+      if (data.dev_otp) setOtpCode(data.dev_otp);
       setOtpSent(true);
-    } catch (err: any) {
-      setErrorMsg('Failed to send OTP code');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to send OTP code');
     } finally {
       setIsLoading(false);
     }
@@ -43,27 +40,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch('/v1/auth/otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp: otpCode, txn_id: txnId }),
-      });
-      const data = await res.json();
+      const data = await authApi.verifyOTP(phone, requestId, otpCode);
       onLoginSuccess({
-        username: data.farmer_name || `Farmer (${phone})`,
-        role: 'farmer',
-        token: data.access_token || 'mock-jwt-farmer-token',
+        username: data.name || `Farmer (${phone})`,
+        role: data.role,
+        token: data.access_token,
       });
-    } catch (err: any) {
-      setErrorMsg('Invalid OTP code. Try again.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Invalid OTP code. Try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleFillDemo = () => {
-    setUsername('suchit.analyst@aquaverse.gov.tn');
-    setPassword('AquaVerse2026!');
+    setUsername('aquaverse_admin');
+    setPassword('AquaAdmin@2026!');
     setRole('analyst');
     setErrorMsg('');
   };
@@ -74,24 +66,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
     setErrorMsg('');
 
     try {
-      const res = await fetch('/v1/auth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Invalid credentials or unauthorized Keycloak realm');
-      }
-
-      const data = await res.json();
+      const data = await authApi.loginToken(username, password);
       onLoginSuccess({
-        username: username.split('@')[0] || 'analyst',
-        role: data.role || role,
-        token: data.access_token || 'mock-jwt-token-12345',
+        username: data.name || username,
+        role: data.role,
+        token: data.access_token,
       });
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please verify credentials.');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Authentication failed. Please verify credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -210,11 +192,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, theme = 'l
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 font-mono text-xs">
             <div className="space-y-1.5">
-              <label className="text-slate-600 dark:text-slate-300">Institutional Username (Email)</label>
+              <label className="text-slate-600 dark:text-slate-300">Institutional Username</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="email"
+                  type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required

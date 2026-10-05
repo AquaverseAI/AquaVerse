@@ -7,6 +7,7 @@ import { LogIngestionModal } from '../components/common/LogIngestionModal';
 import { AskFarmerModal } from '../components/common/AskFarmerModal';
 import { PondDigitalTwin3D } from '../components/common/PondDigitalTwin3D';
 import { RiskStatusBadge } from '../components/common/RiskStatusBadge';
+import { forecastApi, pondsApi, twinApi } from '../api/client';
 
 interface PondDeepDiveProps {
   pondId: string;
@@ -28,54 +29,35 @@ export const PondDeepDive: React.FC<PondDeepDiveProps> = ({ pondId, theme = 'lig
   // TanStack Query for Timeseries
   const { data: timeseriesData } = useQuery({
     queryKey: ['pond-timeseries', pondId],
-    queryFn: async () => {
-      const res = await fetch(`/v1/ponds/${pondId}/timeseries?agg=hourly`);
-      return res.json();
-    },
+    queryFn: () => pondsApi.getPondTimeseries(pondId, { agg: 'hourly' }),
   });
 
   // Query for DO Forecast
   const { data: forecastData } = useQuery({
     queryKey: ['pond-forecast', pondId],
-    queryFn: async () => {
-      const res = await fetch(`/v1/ponds/${pondId}/forecast/do`);
-      return res.json();
-    },
+    queryFn: () => forecastApi.getDOForecast(pondId),
   });
 
   // Query for Explanation Risk Payload
   const { data: riskPayload } = useQuery({
     queryKey: ['pond-risk', pondId],
-    queryFn: async () => {
-      const res = await fetch(`/v1/ponds/${pondId}/risk`);
-      return res.json();
-    },
+    queryFn: () => pondsApi.getPondRisk(pondId),
   });
 
   // Query for Events
   const { data: eventsData } = useQuery({
     queryKey: ['pond-events', pondId],
-    queryFn: async () => {
-      const res = await fetch(`/v1/ponds/${pondId}/events`);
-      return res.json();
-    },
+    queryFn: () => pondsApi.getPondEvents(pondId),
   });
 
   // Query for What-If Simulator Endpoint
   const { data: twinState } = useQuery({
     queryKey: ['twin-state', pondId, aerationHours, waterExchangePct, feedReductionPct],
-    queryFn: async () => {
-      const res = await fetch(`/v1/twin/${pondId}/whatif`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          aeration_hours: aerationHours,
-          water_exchange_rate: waterExchangePct,
-          feed_reduction_pct: feedReductionPct,
-        }),
-      });
-      return res.json();
-    },
+    queryFn: () => twinApi.runWhatIf(pondId, {
+      aeration_hours: aerationHours,
+      water_exchange_rate: waterExchangePct,
+      feed_reduction_pct: feedReductionPct,
+    }),
   });
 
   const timestamps = timeseriesData?.timestamps || [];

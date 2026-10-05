@@ -17,9 +17,10 @@ paths:
     post:
       tags:
       - Auth
-      summary: Request an OTP for farmer login/registration
-      description: Sends a 6-digit OTP to the farmer's registered phone number via
-        SMS. Rate-limited to 5 requests/minute per phone number.
+      summary: Request an OTP for farmer / staff login
+      description: Sends a 6-digit OTP to the farmer's registered phone number. In
+        development mode the OTP is returned in the response as `dev_otp`. Rate-limited
+        to 5 requests/minute per phone number.
       operationId: otp_request_v1_auth_otp_request_post
       requestBody:
         content:
@@ -45,9 +46,6 @@ paths:
       tags:
       - Auth
       summary: Verify OTP and receive a JWT
-      description: 'Phase 1: return fixture JWT.
-
-        Phase 3: verify HMAC hash from Redis, issue pond-scoped JWT.'
       operationId: otp_verify_v1_auth_otp_verify_post
       requestBody:
         content:
@@ -72,10 +70,9 @@ paths:
     post:
       tags:
       - Auth
-      summary: Staff/admin token via Keycloak credentials or code exchange
-      description: 'Phase 1: return fixture token.
-
-        Phase 3: verify against Keycloak, embed district claims.'
+      summary: Staff/admin login via username + password
+      description: Password-based login for staff and admin accounts. Farmers should
+        use the OTP flow instead.
       operationId: token_v1_auth_token_post
       requestBody:
         content:
@@ -96,14 +93,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/auth/me:
+    get:
+      tags:
+      - Auth
+      summary: Return the current user's identity from the JWT
+      operationId: me_v1_auth_me_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMeOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/logs:
     post:
       tags:
       - Ingest
       summary: Submit a water quality log entry
-      description: Submit a water quality measurement for a pond. Accepts a `client_log_id`
-        for idempotency — replays return `200` with the original record.
+      description: "Submit a water quality measurement for a pond. Accepts a `client_log_id`\
+        \ for idempotency \u2014 replays return `200` with the original record."
       operationId: create_log_v1_logs_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -127,7 +159,9 @@ paths:
       tags:
       - Ingest
       summary: List water quality logs
-      description: 'Phase 1: return empty cursor page fixture.'
+      description: Keyset-paginated on `(recorded_at, id)` DESC. Pass the previous
+        page's `next_cursor` back as `cursor` to fetch the next page; a `null` `next_cursor`
+        means there is no further page.
       operationId: list_logs_v1_logs_get
       parameters:
       - name: pond_id
@@ -151,11 +185,17 @@ paths:
         in: query
         required: false
         schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 50
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -177,12 +217,20 @@ paths:
       description: Returns a presigned S3/R2 PUT URL. The client uploads directly
         to object storage, then calls POST /v1/media/{media_id}/commit to finalise.
       operationId: media_upload_url_v1_media_upload_url_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/MediaUploadUrlIn'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -201,8 +249,10 @@ paths:
       tags:
       - Ingest
       summary: Commit an uploaded media file
-      description: Mark an upload as committed after the client has PUT the file to
-        the presigned URL.
+      description: "Mark an upload as committed after the client has PUT the file\
+        \ to the presigned URL. HEADs the real object in S3/MinIO first \u2014 never\
+        \ marks `committed` without confirming the object actually exists. Returns\
+        \ 409 if it can't be found or the store is unreachable."
       operationId: media_commit_v1_media__media_id__commit_post
       parameters:
       - name: media_id
@@ -212,6 +262,13 @@ paths:
           type: string
           format: uuid
           title: Media Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -231,13 +288,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ingest/sensor/{pond_id}:
+    post:
+      tags:
+      - Ingest
+      summary: Push a reading from a pond's IoT sensor unit
+      description: "Webhook for pond-side sensor hardware \u2014 accepts the device's\
+        \ raw JSON shape (`ph`, `air_temperature`, `humidity`, `water_temperature`,\
+        \ `turbidity`) directly, no farmer/staff login required. Persisted as a `Log`\
+        \ row with `source=\"sensor\"`, timestamped at server receipt time, and immediately\
+        \ visible via GET /v1/logs and GET /v1/ponds/{pond_id}/timeseries. Optionally\
+        \ gated by a shared `X-Device-Key` header \u2014 see app/config.py."
+      operationId: ingest_sensor_reading_v1_ingest_sensor__pond_id__post
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      - name: x-device-key
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Device-Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorIngestIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorIngestOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/ponds:
     get:
       tags:
       - Ponds & ML
       summary: List accessible ponds
+      description: "Real keyset pagination \u2014 sorted by created_at DESC, id DESC.\n\
+        \nScoping:\n  * admin \u2014 unrestricted, or filtered to `district` if given.\n\
+        \  * staff \u2014 filtered to `district` (validated via rbac.require_district)\n\
+        \    if given, else defaulted to the caller's own district claim; a\n    staff\
+        \ token with no district claim gets an empty page (fail closed).\n  * farmer\
+        \ \u2014 always scoped to ponds they own; `district` is ignored."
       operationId: list_ponds_v1_ponds_get
       parameters:
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
       - name: cursor
         in: query
         required: false
@@ -250,11 +368,17 @@ paths:
         in: query
         required: false
         schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 50
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -282,6 +406,13 @@ paths:
           type: string
           format: uuid
           title: Pond Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -348,11 +479,17 @@ paths:
         in: query
         required: false
         schema:
-          type: integer
-          maximum: 1000
-          minimum: 1
-          default: 200
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -371,6 +508,11 @@ paths:
       tags:
       - Ponds & ML
       summary: Get event timeline for a pond
+      description: "Synthesizes events from real Log rows.\n\nThere is no dedicated\
+        \ events table. `Alert` (app/db/models/alert.py) is a\nreal table but nothing\
+        \ populates it yet \u2014 raising real alerts is P2.1's\njob. The alert-sourced\
+        \ half of this endpoint's `event_type` space is\nintentionally deferred, not\
+        \ forgotten; today every event is\n`event_type=\"log\"`."
       operationId: get_pond_events_v1_ponds__pond_id__events_get
       parameters:
       - name: pond_id
@@ -392,11 +534,17 @@ paths:
         in: query
         required: false
         schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 50
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -415,9 +563,11 @@ paths:
       tags:
       - Ponds & ML
       summary: Get current risk score for a pond
-      description: Returns a composite risk score (0–1) produced by the LightGBM/EBM
-        quantitative layer, with per-feature SHAP attributions. Suppression state
-        is always visible.
+      description: "Returns a composite risk score (0\u20131) from the real M2 LightGBM\
+        \ mortality-risk booster, with real per-feature SHAP attributions. This model\
+        \ predicts environmental-stress-driven mortality risk only \u2014 NOT a disease/pathogen\
+        \ classifier (see app/ml_inference/numeric/m2_risk_engine.py module docstring).\
+        \ Suppression state is always visible."
       operationId: get_pond_risk_v1_ponds__pond_id__risk_get
       parameters:
       - name: pond_id
@@ -427,6 +577,13 @@ paths:
           type: string
           format: uuid
           title: Pond Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -444,7 +601,18 @@ paths:
     get:
       tags:
       - Ponds & ML
-      summary: Risk worklist for staff — all ponds ranked by risk
+      summary: "Risk worklist for staff \u2014 all ponds ranked by risk"
+      description: "Ranks every pond visible to the caller by the real M2 risk score,\
+        \ descending. Computed live, in-process, per request \u2014 fine at current\
+        \ demo scale, but does NOT scale to a large ward/district: a real deployment\
+        \ would need to pre-compute/cache these scores (e.g. a periodic job writing\
+        \ to a risk-scores table) rather than scoring every pond synchronously inside\
+        \ the request. Because ranking is computed fresh per request rather than sourced\
+        \ from a stable DB sort key, this endpoint uses a simple offset-encoded cursor\
+        \ (core.pagination.encode_cursor/decode_cursor) instead of the keyset-pagination\
+        \ convention used elsewhere in this module \u2014 keyset pagination requires\
+        \ a stable persisted ordering to page against, which an in-request live ranking\
+        \ doesn't have."
       operationId: get_risk_worklist_v1_risk_worklist_get
       parameters:
       - name: district
@@ -480,6 +648,13 @@ paths:
           minimum: 1
           default: 50
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -498,9 +673,13 @@ paths:
       tags:
       - Ponds & ML
       summary: Dissolved oxygen forecast with uncertainty bands
-      description: 'Returns a 24-hour dissolved oxygen forecast with 10th/50th/90th
-        percentile bands from the temporal model (TCN/TFT/PatchTST). RULE: Bare point
-        estimates are forbidden — bands are always returned.'
+      description: "Returns a dissolved oxygen forecast (default 24h, up to 168h)\
+        \ with 10th/50th/90th percentile bands computed from this pond's own real\
+        \ historical DO readings, bucketed by hour-of-day. This is an honest empirical\
+        \ seasonal-naive baseline, NOT a trained temporal model \u2014 no TCN/TFT/PatchTST\
+        \ exists anywhere in this repo (see app/ml_inference/numeric/do_forecast.py\
+        \ module docstring). RULE: Bare point estimates are forbidden \u2014 bands\
+        \ are always returned."
       operationId: get_do_forecast_v1_ponds__pond_id__forecast_do_get
       parameters:
       - name: pond_id
@@ -519,6 +698,13 @@ paths:
           minimum: 1
           default: 24
           title: Horizon Hours
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -538,6 +724,10 @@ paths:
       - Ponds & ML
       - Models
       summary: List registered ML models
+      description: "Real keyset pagination over `model_registry`, same shape as\n\
+        `list_ponds`. `ensure_active_model_registered` keeps that table\nsynced to\
+        \ whatever M2 bundle is actually loaded before every read \u2014\nsee app/ml_inference/model_registry_sync.py\
+        \ for why this can't just\nbe a one-time seed."
       operationId: list_models_v1_models_get
       parameters:
       - name: cursor
@@ -557,6 +747,13 @@ paths:
           minimum: 1
           default: 50
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -576,10 +773,18 @@ paths:
       - Ponds & ML
       - Models
       summary: Operational metrics for the model serving layer
-      description: Exposes `rejected_attempts` — the count of LLM responses that were
-        rejected because they contained a numeral not present in the quantitative
-        tool-call payload. This MUST read 0 in steady state.
+      description: "Exposes `rejected_attempts` \u2014 the count of LLM responses\
+        \ that were rejected because they contained a numeral not present in the quantitative\
+        \ tool-call payload. This MUST read 0 in steady state."
       operationId: get_model_metrics_v1_models_metrics_get
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -587,12 +792,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ModelMetricsOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/models/drift:
     get:
       tags:
       - Ponds & ML
       - Models
       summary: Model drift reports
+      description: "Real PSI-based drift signal for the one actively-served model\
+        \ \u2014 see\napp/ml_inference/drift.py for what this does and doesn't measure.\n\
+        `cursor`/`limit` are accepted for response-shape compatibility; there\nis\
+        \ exactly one active model to report on, so this never actually\npaginates."
       operationId: get_model_drift_v1_models_drift_get
       parameters:
       - name: cursor
@@ -612,6 +827,13 @@ paths:
           minimum: 1
           default: 20
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -631,6 +853,13 @@ paths:
       - Ponds & ML
       - Data Quality
       summary: Data quality signals across all ponds
+      description: "Real signals over real `Log` rows from the last 7 days, scoped\
+        \ the\nsame way GET /v1/ponds is: a specific `pond_id` if given, else a\n\
+        staff caller's own district (fail closed if their token has none),\nelse \u2014\
+        \ for admin \u2014 every pond.\n\n`sensor_offline_ponds` reuses `_STALE_LOG_THRESHOLD_HOURS`,\
+        \ the exact\nthreshold Alerts' blind-state suppression already uses (see that\n\
+        constant's docstring) \u2014 one \"how old is too old\" answer per\ncodebase,\
+        \ not a second invented number."
       operationId: get_data_quality_v1_data_quality_get
       parameters:
       - name: pond_id
@@ -642,6 +871,13 @@ paths:
             format: uuid
           - type: 'null'
           title: Pond Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -649,6 +885,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DataQualityOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/ponds/{pond_id}/multimodal_risk:
+    post:
+      tags:
+      - Ponds & ML
+      summary: Compute multimodal risk score using PyTorch Fusion (M2)
+      description: Fuses Tabular Sensor Data with Image Concept Bottleneck outputs.
+      operationId: compute_multimodal_risk_v1_ponds__pond_id__multimodal_risk_post
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      - name: image_age_hours
+        in: query
+        required: false
+        schema:
+          type: number
+          default: 0.0
+          title: Image Age Hours
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_compute_multimodal_risk_v1_ponds__pond_id__multimodal_risk_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -673,6 +955,14 @@ paths:
             format: uuid
           - type: 'null'
           title: Pond Id
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
       - name: severity
         in: query
         required: false
@@ -701,11 +991,17 @@ paths:
         in: query
         required: false
         schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 50
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -733,6 +1029,13 @@ paths:
           type: string
           format: uuid
           title: Alert Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -766,6 +1069,13 @@ paths:
           type: string
           format: uuid
           title: Alert Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -831,12 +1141,20 @@ paths:
         pipeline: quantitative scores are fetched first, then the reasoning layer
         generates an explanation using only those numbers. Rate-limited to 30 requests/minute.'
       operationId: ask_v1_ask_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AskIn'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -855,6 +1173,9 @@ paths:
       tags:
       - Advisory
       summary: List published advisories
+      description: "Advisories that have not expired. target_district=None ('all-district')\
+        \ advisories are always included alongside any district filter \u2014 a state-wide\
+        \ advisory is still relevant to a farmer viewing their own district."
       operationId: list_advisories_v1_advisories_get
       parameters:
       - name: district
@@ -877,11 +1198,17 @@ paths:
         in: query
         required: false
         schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 50
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Limit
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -901,12 +1228,20 @@ paths:
       - Advisory
       summary: Broadcast an advisory to farmers (staff only)
       operationId: broadcast_advisory_v1_advisories_broadcast_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/BroadcastIn'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -920,14 +1255,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/advisories/multimodal_reason:
+    post:
+      tags:
+      - Advisory
+      summary: Generate farmer-facing reasoning from GMU output
+      operationId: multimodal_reason_v1_advisories_multimodal_reason_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MultimodalReasonIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MultimodalReasonOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/twin/{pond_id}/state:
     get:
       tags:
       - Digital Twin
       summary: Get the current digital twin state for a pond
-      description: 'Returns the current state vector. RULE: The response is identical
-        whether backed by real sensors or the simulator. The source is never revealed
-        in the response schema.'
+      description: "Returns the current state vector. RULE: The response is identical\
+        \ whether backed by real sensors or the simulator. The source is never revealed\
+        \ in the response schema \u2014 only suppressed/suppression_reason hint at\
+        \ data quality, and are always populated when the pond is blind-state."
       operationId: get_twin_state_v1_twin__pond_id__state_get
       parameters:
       - name: pond_id
@@ -937,6 +1298,13 @@ paths:
           type: string
           format: uuid
           title: Pond Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -950,14 +1318,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/twin/{pond_id}/view:
+    get:
+      tags:
+      - Digital Twin
+      summary: Get a visual dashboard of the digital twin state
+      operationId: get_twin_view_v1_twin__pond_id__view_get
+      parameters:
+      - name: pond_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Pond Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /v1/twin/{pond_id}/whatif:
     post:
       tags:
       - Digital Twin
       summary: Run a what-if simulation
-      description: Applies the given scenario deltas to the current twin state and
-        returns the simulated outcome. Risk delta indicates how much the risk score
-        would change.
+      description: "Applies the given scenario deltas to the current twin state and\
+        \ returns the simulated outcome. risk_delta is computed by re-running the\
+        \ real M2 risk-scoring model (app/ml_inference/numeric/m2_risk_engine.py)\
+        \ against the pond's actual recent chemistry with the scenario's deltas applied\
+        \ \u2014 not a hardcoded estimate. delta_feed_rate_pct currently has no effect:\
+        \ no feed-log ingestion pipeline exists to translate a feed-rate change into\
+        \ a chemistry or risk effect."
       operationId: whatif_v1_twin__pond_id__whatif_post
       parameters:
       - name: pond_id
@@ -967,6 +1373,13 @@ paths:
           type: string
           format: uuid
           title: Pond Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
         required: true
         content:
@@ -991,9 +1404,11 @@ paths:
       tags:
       - Geo
       summary: GeoJSON FeatureCollection of all accessible ponds
-      description: Returns a GeoJSON FeatureCollection. Properties include risk_score
-        and suppressed flag. Spatial queries use PostGIS — 'ponds within 2km of shared
-        water source' returns in <200ms.
+      description: "Returns a GeoJSON FeatureCollection. Properties include risk_score\
+        \ and suppressed flag. Ponds with no recorded location (Pond.geom) are omitted\
+        \ \u2014 never plotted with a fabricated coordinate. Spatial queries use real\
+        \ PostGIS ST_DWithin (geography cast, so within_km is an accurate great-circle\
+        \ distance, not a planar approximation)."
       operationId: geo_ponds_v1_geo_ponds_get
       parameters:
       - name: district
@@ -1044,6 +1459,13 @@ paths:
             minimum: -180
           - type: 'null'
           title: Lon
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -1063,9 +1485,13 @@ paths:
     get:
       tags:
       - Geo
-      summary: Space-time outbreak clusters
-      description: Returns detected outbreak clusters using a space-time scan statistic.
-        Each cluster includes the bounding polygon and affected pond IDs.
+      summary: Spatial outbreak clusters
+      description: "Detects spatial clusters of ponds with a recent alert using DBSCAN\
+        \ (real, standard density-based clustering \u2014 see app/geo/clustering.py's\
+        \ module docstring for why this is not literally the space-time scan statistic\
+        \ (SaTScan) the original spec named, and why no p_value is returned). Each\
+        \ cluster includes an approximate circular bounding polygon and the affected\
+        \ pond IDs."
       operationId: geo_clusters_v1_geo_clusters_get
       parameters:
       - name: district
@@ -1085,6 +1511,13 @@ paths:
           minimum: 1
           default: 30
           title: Days Back
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
@@ -1105,16 +1538,24 @@ paths:
       tags:
       - i18n
       summary: Translate text using IndicTrans2 / Bhashini
-      description: Translate text between Indian languages using IndicTrans2 (via
-        Bhashini API). Results are cached in Redis by hash of (source_lang, target_lang,
-        text) with ~90% hit rate target.
+      description: Translate text between Indian languages via the real Bhashini ULCA
+        pipeline. Results are cached in Redis by hash of (source_lang, target_lang,
+        text).
       operationId: translate_v1_translate_post
+      parameters:
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/TranslateIn'
-        required: true
       responses:
         '200':
           description: Successful Response
@@ -1133,8 +1574,9 @@ paths:
       tags:
       - Reports
       summary: Export pond data as PDF or XLSX
-      description: Triggers an async export job. Returns a job_id and a download_url
-        once the export is ready (polled by the client or delivered via SSE).
+      description: Enqueues a real async export job on the ARQ worker (app/reporting/jobs.py).
+        Poll GET /v1/reports/export/{job_id} for status and a download URL once it's
+        ready.
       operationId: export_report_v1_reports_export_get
       parameters:
       - name: pond_id
@@ -1146,6 +1588,14 @@ paths:
             format: uuid
           - type: 'null'
           title: Pond Id
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
       - name: format
         in: query
         required: false
@@ -1175,18 +1625,79 @@ paths:
           description: YYYY-MM-DD
           title: To Date
         description: YYYY-MM-DD
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
-              schema: {}
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Export Report V1 Reports Export Get
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /v1/reports/export/{job_id}:
+    get:
+      tags:
+      - Reports
+      summary: Poll a report export job
+      description: Real status of a previously queued export job, with a presigned
+        download URL once it has completed.
+      operationId: get_export_status_v1_reports_export__job_id__get
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Job Id
+      - name: authorization
+        in: header
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Authorization
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Export Status V1 Reports Export  Job Id  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      tags:
+      - Utility
+      summary: Landing Page
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/html:
+              schema:
+                type: string
   /v1/health:
     get:
       tags:
@@ -1261,6 +1772,12 @@ components:
             maxLength: 500
           - type: 'null'
           title: Note
+        client_log_id:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Client Log Id
       type: object
       title: AlertAckIn
     AlertAckOut:
@@ -1368,8 +1885,8 @@ components:
         suppressed:
           type: boolean
           title: Suppressed
-          description: True if this alert is suppressed due to blind state (e.g. sensor
-            offline). Always surfaced — never hidden from the client.
+          description: "True if this alert is suppressed due to blind state (e.g.\
+            \ sensor offline). Always surfaced \u2014 never hidden from the client."
         suppression_reason:
           anyOf:
           - type: string
@@ -1467,6 +1984,16 @@ components:
       - generated_at
       - rejected_attempts_this_request
       title: AskOut
+    Body_compute_multimodal_risk_v1_ponds__pond_id__multimodal_risk_post:
+      properties:
+        image:
+          anyOf:
+          - type: string
+            contentMediaType: application/octet-stream
+          - type: 'null'
+          title: Image
+      type: object
+      title: Body_compute_multimodal_risk_v1_ponds__pond_id__multimodal_risk_post
     BroadcastIn:
       properties:
         title:
@@ -1503,6 +2030,12 @@ components:
             format: date-time
           - type: 'null'
           title: Expires At
+        client_log_id:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Client Log Id
       type: object
       required:
       - title
@@ -1527,8 +2060,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1552,8 +2085,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1577,8 +2110,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1602,8 +2135,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1627,8 +2160,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1652,8 +2185,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1677,8 +2210,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1702,8 +2235,8 @@ components:
           - type: integer
           - type: 'null'
           title: Total Hint
-          description: Optional approximate total — use for progress bars only, not
-            for exact counts (may be stale).
+          description: "Optional approximate total \u2014 use for progress bars only,\
+            \ not for exact counts (may be stale)."
       type: object
       required:
       - items
@@ -1806,8 +2339,8 @@ components:
         uncertainty_note:
           type: string
           title: Uncertainty Note
-          default: Forecast bands represent the 10th–90th percentile range from the
-            ensemble. Do not use the median alone for management decisions.
+          default: "Forecast bands represent the 10th\u201390th percentile range from\
+            \ the ensemble. Do not use the median alone for management decisions."
       type: object
       required:
       - pond_id
@@ -2009,6 +2542,16 @@ components:
           - type: number
           - type: 'null'
           title: Hardness Mgl
+        air_temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Air Temperature C
+        humidity_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Humidity Pct
         source:
           type: string
           title: Source
@@ -2031,6 +2574,10 @@ components:
       title: LogOut
     MediaCommitIn:
       properties:
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
         client_log_id:
           anyOf:
           - type: string
@@ -2038,6 +2585,8 @@ components:
           - type: 'null'
           title: Client Log Id
       type: object
+      required:
+      - pond_id
       title: MediaCommitIn
     MediaOut:
       properties:
@@ -2219,6 +2768,47 @@ components:
       - dataset_hash
       - created_at
       title: ModelOut
+    MultimodalReasonIn:
+      properties:
+        calibrated_risk_score:
+          type: number
+          title: Calibrated Risk Score
+        gate_vision:
+          type: number
+          title: Gate Vision
+        gate_temporal:
+          type: number
+          title: Gate Temporal
+        concept_activations:
+          additionalProperties:
+            type: number
+          type: object
+          title: Concept Activations
+        stress_hours:
+          type: number
+          title: Stress Hours
+        stocking_density:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Stocking Density
+      type: object
+      required:
+      - calibrated_risk_score
+      - gate_vision
+      - gate_temporal
+      - concept_activations
+      - stress_hours
+      title: MultimodalReasonIn
+    MultimodalReasonOut:
+      properties:
+        advisory_text:
+          type: string
+          title: Advisory Text
+      type: object
+      required:
+      - advisory_text
+      title: MultimodalReasonOut
     OtpRequestIn:
       properties:
         phone:
@@ -2245,6 +2835,13 @@ components:
         request_id:
           type: string
           title: Request Id
+        dev_otp:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dev Otp
+          description: Only present in development mode. Use this OTP to test without
+            SMS.
       type: object
       required:
       - message
@@ -2285,6 +2882,9 @@ components:
         role:
           type: string
           title: Role
+        name:
+          type: string
+          title: Name
         is_new_user:
           type: boolean
           title: Is New User
@@ -2293,6 +2893,7 @@ components:
       - access_token
       - expires_in
       - role
+      - name
       - is_new_user
       title: OtpVerifyOut
     PondEventOut:
@@ -2448,6 +3049,16 @@ components:
           - type: number
           - type: 'null'
           title: Turbidity Ntu
+        air_temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Air Temperature C
+        humidity_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Humidity Pct
       type: object
       required:
       - recorded_at
@@ -2500,8 +3111,9 @@ components:
         explanation:
           type: string
           title: Explanation
-          description: Explanation from the reasoning layer. Health/disease language
-            uses 'consistent with X, confirm by Y' phrasing — never a confident diagnosis.
+          description: "Explanation from the reasoning layer. Health/disease language\
+            \ uses 'consistent with X, confirm by Y' phrasing \u2014 never a confident\
+            \ diagnosis."
         rejected_attempts_this_request:
           type: integer
           title: Rejected Attempts This Request
@@ -2534,7 +3146,7 @@ components:
           maximum: 1.0
           minimum: 0.0
           title: Risk Score
-          description: 0–1 composite risk score
+          description: "0\u20131 composite risk score"
         risk_level:
           type: string
           title: Risk Level
@@ -2559,8 +3171,8 @@ components:
         suppressed:
           type: boolean
           title: Suppressed
-          description: True if sensor data is stale / in blind state. Score may be
-            unreliable — always surface this to the user.
+          description: "True if sensor data is stale / in blind state. Score may be\
+            \ unreliable \u2014 always surface this to the user."
         suppression_reason:
           anyOf:
           - type: string
@@ -2577,6 +3189,98 @@ components:
       - scored_at
       - suppressed
       title: RiskOut
+    SensorIngestIn:
+      properties:
+        ph:
+          type: number
+          maximum: 14.0
+          minimum: 0.0
+          title: Ph
+        air_temperature:
+          type: number
+          maximum: 60.0
+          minimum: -10.0
+          title: Air Temperature
+          description: "Ambient air temperature, \xB0C"
+        humidity:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Humidity
+          description: Relative humidity, %
+        water_temperature:
+          type: number
+          maximum: 45.0
+          minimum: 0.0
+          title: Water Temperature
+          description: "Water temperature, \xB0C"
+        turbidity:
+          type: number
+          minimum: 0.0
+          title: Turbidity
+          description: Turbidity, NTU
+      type: object
+      required:
+      - ph
+      - air_temperature
+      - humidity
+      - water_temperature
+      - turbidity
+      title: SensorIngestIn
+      description: "Raw payload shape as pushed by the pond sensor unit's firmware.\n\
+        \nField names intentionally mirror the device's own JSON keys (not the\n`_c`\
+        \ / `_mgl` / `_ntu`-suffixed DB column names used elsewhere in this\nmodule)\
+        \ \u2014 this schema accepts exactly what the hardware already sends,\nno\
+        \ firmware changes required."
+    SensorIngestOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        pond_id:
+          type: string
+          format: uuid
+          title: Pond Id
+        recorded_at:
+          type: string
+          format: date-time
+          title: Recorded At
+        ph:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Ph
+        air_temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Air Temperature C
+        humidity_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Humidity Pct
+        water_temperature_c:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Water Temperature C
+        turbidity_ntu:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Turbidity Ntu
+        source:
+          type: string
+          title: Source
+      type: object
+      required:
+      - id
+      - pond_id
+      - recorded_at
+      - source
+      title: SensorIngestOut
     ShapContribution:
       properties:
         feature:
@@ -2651,8 +3355,8 @@ components:
         suppressed:
           type: boolean
           title: Suppressed
-          description: True if the state vector is in blind state. Always surfaced
-            — never hidden.
+          description: "True if the state vector is in blind state. Always surfaced\
+            \ \u2014 never hidden."
         suppression_reason:
           anyOf:
           - type: string
@@ -2672,7 +3376,7 @@ components:
         grant_type:
           type: string
           title: Grant Type
-          description: password | refresh_token | keycloak_code
+          description: password | refresh_token
           default: password
         username:
           anyOf:
@@ -2689,11 +3393,6 @@ components:
           - type: string
           - type: 'null'
           title: Refresh Token
-        code:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Code
       type: object
       title: TokenIn
     TokenOut:
@@ -2716,6 +3415,9 @@ components:
         role:
           type: string
           title: Role
+        name:
+          type: string
+          title: Name
         district:
           anyOf:
           - type: string
@@ -2726,6 +3428,7 @@ components:
       - access_token
       - expires_in
       - role
+      - name
       title: TokenOut
     ToolCallPayload:
       properties:
@@ -2840,6 +3543,35 @@ components:
       - cached
       - translated_at
       title: TranslateOut
+    UserMeOut:
+      properties:
+        sub:
+          type: string
+          title: Sub
+        role:
+          type: string
+          title: Role
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+        pond_ids:
+          items:
+            type: string
+          type: array
+          title: Pond Ids
+          default: []
+      type: object
+      required:
+      - sub
+      - role
+      title: UserMeOut
     ValidationError:
       properties:
         loc:

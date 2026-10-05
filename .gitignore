@@ -14,7 +14,6 @@ flutter_*.log
 *.swp
 .DS_Store
 Thumbs.db
-4
 
 # IDE & Editor files
 .idea/
@@ -31,6 +30,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 local.properties
 
 # Android specific

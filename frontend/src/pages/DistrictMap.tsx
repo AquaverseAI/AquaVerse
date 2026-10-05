@@ -6,6 +6,7 @@ import { ScatterplotLayer, GeoJsonLayer, ArcLayer } from '@deck.gl/layers';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MapPin, Navigation, Filter, Sparkles, Activity, Layers } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { geoApi } from '../api/client';
 
 interface DistrictMapProps {
   selectedDistrict: string;
@@ -38,21 +39,13 @@ export const DistrictMap: React.FC<DistrictMapProps> = ({
   // Fetch Ponds
   const { data: pondsData } = useQuery({
     queryKey: ['geo-ponds', filterDistrict],
-    queryFn: async () => {
-      const url = filterDistrict !== 'All' ? `/v1/geo/ponds?district=${filterDistrict}` : '/v1/geo/ponds';
-      const res = await fetch(url);
-      return res.json();
-    },
+    queryFn: () => geoApi.getPondsGeoJSON(filterDistrict !== 'All' ? { district: filterDistrict } : undefined),
   });
 
   // Fetch Clusters
   const { data: clustersData } = useQuery({
     queryKey: ['geo-clusters', filterDistrict],
-    queryFn: async () => {
-      const url = filterDistrict !== 'All' ? `/v1/geo/clusters?district=${filterDistrict}` : '/v1/geo/clusters';
-      const res = await fetch(url);
-      return res.json();
-    },
+    queryFn: () => geoApi.getClustersTopology(filterDistrict !== 'All' ? { district: filterDistrict } : undefined),
   });
 
   // Process data & mock biomass / topology
